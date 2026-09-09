@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central operativa - Base madre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Firebase (compat SDK: se puede usar con etiquetas script normales, sin bundler) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --ink:#16232C;
+    --ink-soft:#51636B;
+    --paper:#F2F5F4;
+    --panel:#FFFFFF;
+    --line:#D9E1DF;
+    --line-soft:#E7ECEA;
+    --teal:#1F6F63;
+    --teal-dark:#154F46;
+    --teal-bg:#E7F1EE;
+    --amber:#B4761E;
+    --amber-bg:#FBF1E0;
+    --amber-line:#E9CE9C;
+    --rust:#A8493C;
+    --rust-bg:#FAEBE8;
+    --rust-line:#E9BEB6;
+    --plum:#6B4A78;
+    --plum-bg:#F0E9F2;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    padding:32px 20px 80px;
+  }
+  h1,h2,h3{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    margin:0;
+    color:var(--ink);
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  .top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    gap:24px;flex-wrap:wrap;margin-bottom:24px;padding-bottom:20px;
+    border-bottom:1px solid var(--line);
+  }
+  .top h1{font-size:26px;letter-spacing:-0.01em;}
+  .top p{margin:6px 0 0;color:var(--ink-soft);font-size:14px;max-width:56ch;}
+
+  .user-badge{
+    display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-soft);
+  }
+  .user-badge b{color:var(--ink);}
+  .user-badge a{color:var(--teal-dark);cursor:pointer;font-weight:600;text-decoration:none;}
+  .user-badge a:hover{text-decoration:underline;}
+
+  section{margin-bottom:36px;}
+
+  .step{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;}
+  .step-num{
+    flex:none;width:26px;height:26px;border-radius:50%;
+    background:var(--ink);color:#fff;font-size:13px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;margin-top:2px;
+  }
+  .step-body{flex:1;min-width:0;}
+  .step-title{font-family:'Fraunces', serif;font-size:18px;font-weight:600;margin-bottom:4px;}
+  .step-sub{color:var(--ink-soft);font-size:13.5px;}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;
+  }
+  .panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .panel-head h3{font-size:15.5px;}
+  .file-tag{
+    font-size:12px;color:var(--teal-dark);background:var(--teal-bg);
+    padding:3px 8px;border-radius:20px;font-weight:600;
+  }
+
+  .panel-compact{padding:12px 16px;}
+  .course-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+  .course-tabs:empty{display:none;margin:0;}
+  .course-tab{
+    font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:20px;
+    border:1px solid transparent;cursor:pointer;background:#EEF1F0;color:var(--ink-soft);
+  }
+  .course-tab.active{color:#fff;}
+  .course-tab.c0{background:var(--teal-bg);color:var(--teal-dark);}
+  .course-tab.c0.active{background:var(--teal);color:#fff;}
+  .course-tab.c1{background:var(--amber-bg);color:var(--amber);}
+  .course-tab.c1.active{background:var(--amber);color:#fff;}
+  .course-tab.c2{background:var(--rust-bg);color:var(--rust);}
+  .course-tab.c2.active{background:var(--rust);color:#fff;}
+  .course-tab.c3{background:var(--plum-bg);color:var(--plum);}
+  .course-tab.c3.active{background:var(--plum);color:#fff;}
+  .course-tabs-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .course-tabs-row .course-tabs{margin-bottom:0;flex:1;}
+
+  .upload-actions{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:28px;}
+  .upload-action{display:flex;flex-direction:column;gap:6px;align-items:flex-start;max-width:320px;}
+  .upload-action-hint{font-size:12px;color:var(--ink-soft);}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(22,35,44,0.45);
+    display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-overlay.hidden{display:none !important;}
+  .modal-box{
+    background:var(--panel);border-radius:12px;padding:24px;max-width:560px;width:100%;
+    max-height:86vh;overflow-y:auto;position:relative;box-shadow:0 24px 60px rgba(0,0,0,0.28);
+  }
+  .modal-title{font-family:'Fraunces', serif;font-size:19px;font-weight:600;margin:0 0 4px;color:var(--ink);}
+  .modal-sub{color:var(--ink-soft);font-size:13px;margin:0 0 16px;max-width:60ch;}
+  .modal-close{
+    position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;line-height:1;
+    cursor:pointer;color:var(--ink-soft);padding:4px;
+  }
+  .modal-close:hover{color:var(--ink);}
+
+  .course-head{
+    margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;
+  }
+  .course-head h2{font-size:20px;}
+  .course-meta-list{display:flex;flex-wrap:wrap;gap:18px;margin-top:8px;}
+  .course-meta-item{font-size:12.5px;color:var(--ink-soft);}
+  .course-meta-item b{color:var(--ink);display:block;font-size:15px;font-family:'Fraunces',serif;font-weight:600;}
+  .save-status{font-size:12px;color:var(--teal-dark);min-height:16px;}
+
+  .drop{
+    border:1.5px dashed var(--line);border-radius:8px;padding:26px 16px;
+    text-align:center;cursor:pointer;transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--teal);background:var(--teal-bg);}
+  .drop .drop-icon{font-size:22px;margin-bottom:8px;color:var(--teal);}
+  .drop .drop-main{font-weight:600;font-size:14px;}
+  .drop .drop-sub{font-size:12.5px;color:var(--ink-soft);margin-top:3px;}
+  input[type=file]{display:none;}
+
+  .field-row{margin-bottom:12px;}
+  .field-row label{display:block;font-size:12.5px;color:var(--ink-soft);font-weight:500;margin-bottom:5px;}
+  select, .input-text{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+    background:#fff;color:var(--ink);font-family:inherit;font-size:13.5px;
+  }
+  select:focus, .input-text:focus, input:focus-visible, button:focus-visible{
+    outline:2px solid var(--teal);outline-offset:1px;
+  }
+
+  .radio-row{display:flex;gap:16px;margin-bottom:10px;}
+  .radio-opt{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;}
+  .radio-opt input{accent-color:var(--teal);}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  .chip-list{
+    max-height:120px;overflow-y:auto;border:1px solid var(--line-soft);border-radius:6px;
+    padding:8px;display:flex;flex-wrap:wrap;gap:6px;background:#FCFDFD;
+  }
+  .chip{
+    font-size:12.5px;border:1px solid var(--line);background:#fff;padding:4px 9px;
+    border-radius:20px;cursor:pointer;user-select:none;color:var(--ink-soft);
+  }
+  .chip.on{background:var(--teal);border-color:var(--teal);color:#fff;}
+  .chip.watch.on{background:var(--plum);border-color:var(--plum);}
+  .chip-tools{display:flex;gap:10px;margin-top:6px;}
+  .chip-tools button{background:none;border:none;color:var(--teal-dark);font-size:12px;cursor:pointer;padding:0;font-weight:600;}
+  .chip-tools button:hover{text-decoration:underline;}
+
+  .status-line{font-size:12.5px;color:var(--ink-soft);margin-top:10px;}
+  .status-line b{color:var(--ink);}
+
+  .btn{
+    font-family:inherit;font-weight:600;font-size:14px;border-radius:7px;
+    padding:11px 20px;border:1px solid transparent;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn-primary{background:var(--teal);color:#fff;}
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-primary:disabled{background:#B9C4C1;cursor:not-allowed;}
+  .btn-ghost{background:#fff;color:var(--ink);border-color:var(--line);}
+  .btn-ghost:hover{border-color:var(--ink-soft);}
+  .btn-danger{background:#fff;color:var(--rust);border-color:var(--rust-line);}
+  .btn-danger:hover{background:var(--rust-bg);}
+  .btn-small{font-size:12.5px;padding:7px 12px;border-radius:6px;}
+
+  .cross-cta{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0 4px;}
+
+  .stat-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px;}
+  .stat-strip-progress{grid-template-columns:repeat(4,1fr);margin-bottom:20px;}
+  @media (max-width:820px){ .stat-strip{grid-template-columns:repeat(2,1fr);} .stat-strip-progress{grid-template-columns:repeat(2,1fr);} .grid2{grid-template-columns:1fr !important;} }
+  .stat{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 14px 12px;}
+  .stat .n{font-family:'Fraunces', serif;font-size:26px;font-weight:600;}
+  .stat .l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .stat.amber{border-color:var(--amber-line);background:var(--amber-bg);}
+  .stat.amber .n{color:var(--amber);}
+  .stat.rust{border-color:var(--rust-line);background:var(--rust-bg);}
+  .stat.rust .n{color:var(--rust);}
+  .stat.teal .n{color:var(--teal-dark);}
+  .stat.plum{border-color:#DCC9E1;background:var(--plum-bg);}
+  .stat.plum .n{color:var(--plum);}
+
+  .quick-filters{display:flex;gap:6px;flex-wrap:wrap;}
+  .filter-chip{
+    font-family:inherit;font-size:12px;font-weight:600;padding:6px 11px;border-radius:20px;
+    border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer;
+  }
+  .filter-chip:hover{border-color:var(--ink-soft);}
+  .filter-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  .badge-progreso{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);}
+  .badge-progreso.p0{background:var(--rust-bg);color:var(--rust);}
+  .badge-progreso.p1{background:var(--amber-bg);color:var(--amber);}
+  .badge-progreso.p2{background:#FCEFC7;color:#8A6D1D;}
+  .badge-progreso.p3{background:var(--teal-bg);color:var(--teal-dark);}
+
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap;}
+  .tab{
+    padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--ink-soft);
+    border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;
+    cursor:pointer;background:none;margin-bottom:-1px;
+  }
+  .tab.active{color:var(--ink);background:var(--panel);border-color:var(--line);}
+  .tab .badge{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:20px;background:#E3E9E7;color:var(--ink-soft);}
+  .tab[data-tab="madre"] .badge{background:var(--teal-bg);color:var(--teal-dark);}
+  .tab[data-tab="alta"] .badge{background:var(--amber-bg);color:var(--amber);}
+  .tab[data-tab="revisar"] .badge{background:var(--rust-bg);color:var(--rust);}
+  .tab[data-tab="nuevos"] .badge, .tab[data-tab="cambios"] .badge{background:var(--plum-bg);color:var(--plum);}
+  .tab[data-tab="historial"] .badge{background:#E3E9E7;color:var(--ink-soft);}
+
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  .panel-note{font-size:13.5px;padding:12px 14px;border-radius:8px;margin-bottom:14px;}
+  .panel-note.amber{background:var(--amber-bg);color:#7A511A;border:1px solid var(--amber-line);}
+  .panel-note.rust{background:var(--rust-bg);color:#7A362C;border:1px solid var(--rust-line);}
+  .panel-note.teal{background:var(--teal-bg);color:var(--teal-dark);border:1px solid #C7DED9;}
+  .panel-note.plum{background:var(--plum-bg);color:var(--plum);border:1px solid #DCC9E1;}
+
+  .table-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;}
+  .search-box{flex:1;min-width:180px;max-width:320px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13.5px;font-family:inherit;}
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-height:520px;}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  thead th{
+    text-align:left;background:#F7F9F8;color:var(--ink-soft);font-weight:600;font-size:11.5px;
+    padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;
+  }
+  tbody td{padding:8px 12px;border-bottom:1px solid var(--line-soft);white-space:nowrap;}
+  tbody tr:hover{background:#FAFBFB;}
+  tbody tr:last-child td{border-bottom:none;}
+  .badge-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;}
+  .badge-status.ok{background:var(--teal-bg);color:var(--teal-dark);}
+  .badge-status.falta{background:var(--amber-bg);color:var(--amber);}
+  .badge-yesno{font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);}
+  .badge-yesno.si{background:var(--teal-bg);color:var(--teal-dark);}
+
+  .empty{text-align:center;padding:40px 20px;color:var(--ink-soft);font-size:14px;}
+  .hidden{display:none !important;}
+  .muted{color:var(--ink-soft);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+
+  footer{text-align:center;color:var(--ink-soft);font-size:12px;margin-top:50px;}
+
+  /* sign-in gate */
+  #gate{
+    min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;gap:16px;
+  }
+  #gate h1{font-size:24px;}
+  #gate p{color:var(--ink-soft);max-width:44ch;font-size:14px;}
+  .g-btn{
+    display:inline-flex;align-items:center;gap:10px;
+    background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:11px 20px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;color:var(--ink);
+  }
+  .g-btn:hover{border-color:var(--ink-soft);}
+  #gate-error{color:var(--rust);font-size:13px;max-width:44ch;}
+</style>
+</head>
+<body>
+
+<!-- ======================= SIGN-IN GATE ======================= -->
+<div id="gate" class="wrap">
+  <h1>Central operativa - Base madre</h1>
+  <p>Herramienta compartida del equipo para dar seguimiento a los cursos. Inicia sesión con tu cuenta de Google para ver y actualizar el histórico.</p>
+  <button class="g-btn" id="btn-signin">Iniciar sesión con Google</button>
+  <div id="gate-error"></div>
+</div>
+
+<!-- ======================= APP (oculta hasta iniciar sesión) ======================= -->
+<div class="wrap hidden" id="app-root">
+
+  <div class="top">
+    <div>
+      <h1>Central operativa - Base madre</h1>
+    </div>
+    <div class="user-badge">
+      <span>Sesión: <b id="user-email">—</b></span>
+      <a id="btn-signout">Cerrar sesión</a>
+    </div>
+  </div>
+
+  <section id="section-course">
+    <div class="panel panel-compact">
+      <div class="course-tabs-row">
+        <div class="course-tabs" id="course-tabs"></div>
+        <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
+      </div>
+      <select id="course-select" class="hidden"><option value="">Cargando...</option></select>
+
+      <div id="course-head" class="course-head hidden">
+        <div>
+          <h2 id="course-name-display"></h2>
+          <div class="course-meta-list">
+            <div class="course-meta-item"><b id="cm-santander-count">0</b>en tabla madre</div>
+            <div class="course-meta-item"><b id="cm-last-santander">—</b>última carga Santander</div>
+            <div class="course-meta-item"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
+          </div>
+          <div class="save-status" id="save-status"></div>
+        </div>
+        <button class="btn btn-danger btn-small" id="btn-delete-course">Eliminar este curso</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="course-dependent" class="hidden">
+
+    <div class="upload-actions">
+      <div class="upload-action">
+        <button class="btn btn-primary" id="btn-open-santander" type="button">1. Actualizar base de Santander</button>
+        <span class="upload-action-hint">Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.</span>
+      </div>
+      <div class="upload-action">
+        <button class="btn btn-primary" id="btn-open-plataforma" type="button">2. Actualizar plataforma</button>
+        <span class="upload-action-hint">Se cruza contra toda la tabla madre y se refresca el progreso de todos.</span>
+      </div>
+    </div>
+
+    <section id="section-results">
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Tabla madre y resultados</div>
+          <div class="step-sub" id="results-sub">Aquí vive todo el histórico del curso.</div>
+        </div>
+      </div>
+
+      <div class="stat-strip stat-strip-progress">
+        <div class="stat rust"><div class="n" id="st-p0">0</div><div class="l">No ha iniciado (0%)</div></div>
+        <div class="stat amber"><div class="n" id="st-p1">0</div><div class="l">Iniciando (1–39%)</div></div>
+        <div class="stat amber"><div class="n" id="st-p2">0</div><div class="l">A medio camino (40–79%)</div></div>
+        <div class="stat teal"><div class="n" id="st-p3">0</div><div class="l">Finalizado (80%+)</div></div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="madre">Tabla madre <span class="badge" id="badge-madre">0</span></button>
+        <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
+        <button class="tab" data-tab="nuevos">Nuevos <span class="badge" id="badge-nuevos">0</span></button>
+        <button class="tab" data-tab="cambios">Cambios de estatus <span class="badge" id="badge-cambios">0</span></button>
+        <button class="tab" data-tab="revisar">En plataforma, no en Santander <span class="badge" id="badge-revisar">0</span></button>
+        <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
+      </div>
+
+      <div class="tab-panel active" data-panel="madre">
+        <div class="panel-note teal">Todo el histórico del curso: cada persona vista alguna vez en Santander, con su información más reciente y su estatus en plataforma.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="madre">
+          <div class="quick-filters" id="filters-madre">
+            <button type="button" class="filter-chip active" data-filter-key="madre" data-filter-value="all">Todos</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p0">No ha iniciado (0%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p1">Iniciando (1–39%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p2">A medio camino (40–79%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p3">Finalizado (80%+)</button>
+          </div>
+          <button class="btn btn-ghost btn-small" data-download="madre">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="alta">
+        <div class="panel-note amber">Están en la tabla madre pero no aparecen en la plataforma. Hay que darlos de alta.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="alta">
+          <button class="btn btn-ghost btn-small" data-download="alta">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="nuevos">
+        <div class="panel-note plum">Registros que aparecieron por primera vez en la última carga de Santander.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="nuevos">
+          <button class="btn btn-ghost btn-small" data-download="nuevos">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="cambios">
+        <div class="panel-note plum">Registros donde alguna columna vigilada cambió respecto a la carga anterior.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="cambios">
+          <button class="btn btn-ghost btn-small" data-download="cambios">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="revisar">
+        <div class="panel-note rust">Aparecen en la plataforma pero no están en la tabla madre de Santander. Vale la pena revisar por qué.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="revisar">
+          <button class="btn btn-ghost btn-small" data-download="revisar">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="historial">
+        <div class="panel-note teal">Cada actualización que se ha corrido para este curso, la haya subido quien la haya subido.</div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>El cruce ocurre en tu navegador. El histórico se guarda en Firestore, compartido por todo el equipo con la sesión de Google.</footer>
+
+  <!-- ======================= MODAL: nuevo curso ======================= -->
+  <div class="modal-overlay hidden" id="modal-course">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-course">&times;</button>
+      <h3 class="modal-title">Crear un curso nuevo</h3>
+      <div class="field-row" style="margin-top:14px;">
+        <label for="course-new-name">Nombre del curso</label>
+        <input id="course-new-name" type="text" class="input-text" placeholder="p. ej. Matemáticamente">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
+        <button class="btn btn-ghost btn-small" type="button" data-close-modal="modal-course">Cancelar</button>
+        <button class="btn btn-primary btn-small" id="btn-new-course">Crear curso</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: cargar Santander ======================= -->
+  <div class="modal-overlay hidden" id="modal-santander">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-santander">&times;</button>
+      <h3 class="modal-title">Actualizar base de Santander</h3>
+      <p class="modal-sub">Sube el archivo más reciente. Se compara contra la tabla madre: solo se destacan los registros nuevos y los que cambiaron.</p>
+      <div class="panel-head">
+        <h3>Archivo de Santander</h3>
+        <span class="file-tag hidden" id="tag-santander"></span>
+      </div>
+      <div class="drop" id="drop-santander">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx</div>
+      </div>
+      <input type="file" id="file-santander" accept=".xlsx,.xls">
+      <div id="mapping-santander" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-santander">
+        <button class="btn btn-primary" id="btn-process-santander" disabled>Procesar actualización</button>
+        <div class="status-line" id="santander-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: cargar plataforma ======================= -->
+  <div class="modal-overlay hidden" id="modal-plataforma">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-plataforma">&times;</button>
+      <h3 class="modal-title">Actualizar plataforma</h3>
+      <p class="modal-sub">Sube el archivo de avance de plataforma. Se cruza contra toda la tabla madre y se refresca el progreso de todos.</p>
+      <div class="panel-head">
+        <h3>Archivo de plataforma</h3>
+        <span class="file-tag hidden" id="tag-plataforma"></span>
+      </div>
+      <div class="drop" id="drop-plataforma">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx</div>
+      </div>
+      <input type="file" id="file-plataforma" accept=".xlsx,.xls">
+      <div id="mapping-plataforma" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-plataforma">
+        <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
+        <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   CONFIGURACIÓN DE FIREBASE
+   Reemplaza este objeto con el de tu proyecto (Firebase console →
+   Configuración del proyecto → tus apps → SDK setup and configuration).
+   Este objeto NO es secreto: la protección real la dan las reglas de
+   Firestore + el inicio de sesión, no ocultar esta configuración.
+   ====================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCvepgubWBt2bPxcidQ78FKerUa7_9NV9Y",
+  authDomain: "base-madre-operaciones.firebaseapp.com",
+  projectId: "base-madre-operaciones",
+  storageBucket: "base-madre-operaciones.firebasestorage.app",
+  messagingSenderId: "870642700168",
+  appId: "1:870642700168:web:6206512f76a7961cd0743d",
+  measurementId: "G-C0V8P7W4MQ"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+(function(){
+
+  // ---------- generic helpers ----------
+  function normalize(s){
+    if(s === null || s === undefined) return "";
+    return String(s).trim().toLowerCase().normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  }
+  function slugify(s){
+    return normalize(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "curso";
+  }
+  function sanitizeDocId(s){
+    return String(s).replace(/\//g, "_").slice(0, 400) || "sin-clave";
+  }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function nowISO(){ return new Date().toISOString(); }
+  function fmtDate(iso){
+    if(!iso) return "—";
+    try{
+      const d = new Date(iso);
+      return d.toLocaleDateString("es-MX", {day:"2-digit", month:"short", year:"numeric"});
+    }catch(e){ return iso; }
+  }
+  function el(tag, attrs, children){
+    const e = document.createElement(tag);
+    if(attrs) for(const k in attrs){
+      if(k === "class") e.className = attrs[k];
+      else if(k === "html") e.innerHTML = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    }
+    (children||[]).forEach(c => e.appendChild(c));
+    return e;
+  }
+  function chunkArray(arr, size){
+    const out = [];
+    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i, i+size));
+    return out;
+  }
+  function setSaveStatus(text){
+    const s = document.getElementById("save-status");
+    if(s) s.textContent = text;
+  }
+
+  // ---------- modales ----------
+  function openModal(id){ document.getElementById(id).classList.remove("hidden"); }
+  function closeModal(id){ document.getElementById(id).classList.add("hidden"); }
+
+  document.getElementById("btn-open-new-course").addEventListener("click", () => {
+    document.getElementById("course-new-name").value = "";
+    openModal("modal-course");
+    document.getElementById("course-new-name").focus();
+  });
+  document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
+  document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
+
+  document.querySelectorAll("[data-close-modal]").forEach(btn => {
+    btn.addEventListener("click", () => closeModal(btn.dataset.closeModal));
+  });
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    overlay.addEventListener("click", (e) => { if(e.target === overlay) closeModal(overlay.id); });
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape"){
+      document.querySelectorAll(".modal-overlay:not(.hidden)").forEach(o => closeModal(o.id));
+    }
+  });
+
+  // ---------- xlsx helpers ----------
+  function readWorkbook(file, cb){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const data = new Uint8Array(e.target.result);
+      cb(XLSX.read(data, {type:"array"}));
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  function sheetToRows(wb, sheetName){
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+    if(!rows.length) return {headers:[], rows:[]};
+    const headers = rows[0].map(h => (h===null||h===undefined) ? "" : String(h));
+    const dataRows = rows.slice(1).filter(r => r.some(v => v !== null && v !== "" && v !== undefined));
+    const objRows = dataRows.map(r => {
+      const o = {};
+      headers.forEach((h,i) => o[h] = r[i] !== undefined ? r[i] : null);
+      return o;
+    });
+    return {headers, rows: objRows};
+  }
+  function guessColumn(headers, candidates){
+    const norm = headers.map(h => normalize(h));
+    for(const c of candidates){ const idx = norm.indexOf(c); if(idx !== -1) return headers[idx]; }
+    for(let i=0;i<norm.length;i++){ for(const c of candidates){ if(norm[i].includes(c)) return headers[i]; } }
+    return headers[0] || "";
+  }
+  function guessColumnOptional(headers, candidates){
+    const norm = headers.map(h => normalize(h));
+    for(const c of candidates){ const idx = norm.indexOf(c); if(idx !== -1) return headers[idx]; }
+    for(let i=0;i<norm.length;i++){ for(const c of candidates){ if(norm[i].includes(c)) return headers[i]; } }
+    return "";
+  }
+  function parsePct(raw){
+    if(raw === null || raw === undefined || raw === "") return null;
+    const hasPercentSign = /%/.test(String(raw));
+    const s = String(raw).trim().replace("%","").replace(",",".");
+    let n = parseFloat(s);
+    if(isNaN(n)) return null;
+    if(!hasPercentSign && n <= 1) n = n * 100;
+    if(n < 0) n = 0;
+    if(n > 100) n = 100;
+    return Math.round(n * 10) / 10;
+  }
+  function makeHeaderSelect(headers, selected){
+    const sel = el("select");
+    headers.forEach(h => {
+      const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+      if(h === selected) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    return sel;
+  }
+  function labeled(text, field){
+    const w = el("div", {});
+    w.appendChild(el("label", {}, [document.createTextNode(text)]));
+    w.appendChild(field);
+    return w;
+  }
+
+  // ---------- app state ----------
+  const app = {
+    coursesIndex: [],
+    slug: null,
+    meta: null,
+    master: [],       // array of records (mirror de la subcolección master en Firestore)
+    log: [],
+    pending: { santander:null, plataforma:null },
+    lastRun: { nuevos:[], cambios:[], alta:[], revisar:[] }
+  };
+
+  function emptyMeta(displayName, slug){
+    return {
+      displayName, slug,
+      createdAt: nowISO(), updatedAt: nowISO(),
+      santanderMapping: null,
+      plataformaMapping: null,
+      lastSantanderUpload: null,
+      lastPlataformaUpload: null,
+      lastSantanderFile: null,
+      lastPlataformaFile: null
+    };
+  }
+
+  function recordKey(email, name){
+    const e = normalize(email);
+    if(e) return "e_" + e;
+    return "n_" + normalize(name);
+  }
+
+  // ================= FIRESTORE DATA LAYER =================
+  const coursesColl = () => db.collection("courses");
+  const courseDoc = (slug) => coursesColl().doc(slug);
+  const masterColl = (slug) => courseDoc(slug).collection("master");
+  const logColl = (slug) => courseDoc(slug).collection("log");
+
+  async function fetchCoursesIndex(){
+    const snap = await coursesColl().get();
+    return snap.docs.map(d => ({slug:d.id, displayName: d.data().displayName || d.id, updatedAt: d.data().updatedAt}));
+  }
+
+  async function createCourseRemote(meta){
+    await courseDoc(meta.slug).set(meta);
+  }
+
+  async function loadCourseRemote(slug){
+    const metaSnap = await courseDoc(slug).get();
+    const meta = metaSnap.exists ? metaSnap.data() : emptyMeta(slug, slug);
+    const masterSnap = await masterColl(slug).get();
+    const master = masterSnap.docs.map(d => Object.assign({_key: d.id}, d.data()));
+    const logSnap = await logColl(slug).orderBy("date", "desc").limit(60).get();
+    const log = logSnap.docs.map(d => d.data());
+    return {meta, master, log};
+  }
+
+  async function saveMetaRemote(slug, meta){
+    await courseDoc(slug).set(meta, {merge:true});
+  }
+
+  async function saveMasterBatched(slug, records){
+    const chunks = chunkArray(records, 400);
+    for(const chunk of chunks){
+      const batch = db.batch();
+      chunk.forEach(record => {
+        const {_key, ...data} = record;
+        batch.set(masterColl(slug).doc(sanitizeDocId(_key)), data);
+      });
+      await batch.commit();
+    }
+  }
+
+  async function addLogRemote(slug, entry){
+    await logColl(slug).add(entry);
+  }
+
+  async function deleteCourseRemote(slug){
+    // Firestore no borra subcolecciones en cascada: hay que borrarlas a mano.
+    for(const coll of [masterColl(slug), logColl(slug)]){
+      let snap = await coll.limit(400).get();
+      while(!snap.empty){
+        const batch = db.batch();
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        snap = await coll.limit(400).get();
+      }
+    }
+    await courseDoc(slug).delete();
+  }
+
+  // ================= AUTH =================
+  document.getElementById("btn-signin").addEventListener("click", () => {
+    document.getElementById("gate-error").textContent = "";
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => {
+      document.getElementById("gate-error").textContent =
+        "No se pudo iniciar sesión (" + err.code + "). Si tu correo no es del equipo, pide acceso.";
+    });
+  });
+  document.getElementById("btn-signout").addEventListener("click", () => auth.signOut());
+
+  auth.onAuthStateChanged(user => {
+    if(user){
+      document.getElementById("gate").classList.add("hidden");
+      document.getElementById("app-root").classList.remove("hidden");
+      document.getElementById("user-email").textContent = user.email;
+      init();
+    } else {
+      document.getElementById("app-root").classList.add("hidden");
+      document.getElementById("gate").classList.remove("hidden");
+    }
+  });
+
+  // ---------- init / course list ----------
+  async function init(){
+    document.getElementById("course-select").innerHTML = '<option value="">Cargando...</option>';
+    try{
+      app.coursesIndex = await fetchCoursesIndex();
+    }catch(e){
+      app.coursesIndex = [];
+      document.getElementById("gate-error").textContent = "";
+      console.error(e);
+    }
+    renderCourseSelect();
+    renderCourseTabs();
+  }
+
+  function renderCourseSelect(){
+    const sel = document.getElementById("course-select");
+    sel.innerHTML = "";
+    sel.appendChild(el("option", {value:""}, [document.createTextNode(app.coursesIndex.length ? "Elige un curso..." : "Aún no hay cursos guardados")]));
+    app.coursesIndex.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach(c => {
+      sel.appendChild(el("option", {value:c.slug}, [document.createTextNode(c.displayName)]));
+    });
+  }
+
+  function renderCourseTabs(){
+    const wrap = document.getElementById("course-tabs");
+    wrap.innerHTML = "";
+    app.coursesIndex.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach((c, i) => {
+      const btn = el("button", {
+        type:"button",
+        class:"course-tab c" + (i % 4) + (c.slug === app.slug ? " active" : "")
+      }, [document.createTextNode(c.displayName)]);
+      btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
+      wrap.appendChild(btn);
+    });
+  }
+
+  document.getElementById("course-select").addEventListener("change", async (e) => {
+    if(e.target.value) await loadCourse(e.target.value);
+  });
+
+  document.getElementById("btn-new-course").addEventListener("click", async () => {
+    const input = document.getElementById("course-new-name");
+    const name = input.value.trim();
+    if(!name) return;
+    const slug = slugify(name);
+    const existing = app.coursesIndex.find(c => c.slug === slug);
+    if(existing){ document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; closeModal("modal-course"); return; }
+
+    const meta = emptyMeta(name, slug);
+    setSaveStatus("Creando curso...");
+    await createCourseRemote(meta);
+    app.coursesIndex.push({slug, displayName:name, updatedAt: meta.updatedAt});
+    renderCourseSelect();
+    document.getElementById("course-select").value = slug;
+    input.value = "";
+    await loadCourse(slug);
+    setSaveStatus("Curso creado.");
+    closeModal("modal-course");
+  });
+
+  document.getElementById("course-new-name").addEventListener("keydown", (e) => {
+    if(e.key === "Enter") document.getElementById("btn-new-course").click();
+  });
+
+  document.getElementById("btn-delete-course").addEventListener("click", async () => {
+    if(!app.slug) return;
+    const ok = confirm('¿Eliminar por completo el curso "' + app.meta.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
+    if(!ok) return;
+    setSaveStatus("Eliminando...");
+    await deleteCourseRemote(app.slug);
+    app.coursesIndex = app.coursesIndex.filter(c => c.slug !== app.slug);
+    app.slug = null; app.meta = null; app.master = []; app.log = [];
+    renderCourseSelect();
+    renderCourseTabs();
+    document.getElementById("course-select").value = "";
+    document.getElementById("course-head").classList.add("hidden");
+    document.getElementById("course-dependent").classList.add("hidden");
+    setSaveStatus("");
+  });
+
+  async function loadCourse(slug){
+    setSaveStatus("Cargando histórico...");
+    const {meta, master, log} = await loadCourseRemote(slug);
+    app.slug = slug;
+    app.meta = meta;
+    app.master = master;
+    app.log = log;
+    app.lastRun = { nuevos:[], cambios:[], alta:[], revisar:[] };
+    setSaveStatus("");
+    renderCourseTabs();
+    resetTableFilter("madre");
+
+    document.getElementById("course-head").classList.remove("hidden");
+    document.getElementById("course-name-display").textContent = app.meta.displayName;
+    document.getElementById("cm-santander-count").textContent = app.master.length;
+    document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
+    document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
+
+    document.getElementById("course-dependent").classList.remove("hidden");
+
+    ["santander","plataforma"].forEach(kind => {
+      document.getElementById("mapping-" + kind).classList.add("hidden");
+      document.getElementById("mapping-" + kind).innerHTML = "";
+      document.getElementById("cta-" + kind).classList.add("hidden");
+      document.getElementById("tag-" + kind).classList.add("hidden");
+      document.getElementById("file-" + kind).value = "";
+      app.pending[kind] = null;
+    });
+
+    renderStats();
+    renderMasterTable();
+    renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
+    renderSideTable("nuevos", []);
+    renderSideTable("cambios", []);
+    renderSideTable("revisar", []);
+    renderHistorial();
+  }
+
+  // ---------- upload wiring ----------
+  function wireUpload(kind){
+    const drop = document.getElementById("drop-" + kind);
+    const input = document.getElementById("file-" + kind);
+    drop.addEventListener("click", () => input.click());
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+    drop.addEventListener("drop", e => {
+      e.preventDefault(); drop.classList.remove("drag");
+      if(e.dataTransfer.files.length) handleFile(kind, e.dataTransfer.files[0]);
+    });
+    input.addEventListener("change", e => {
+      if(e.target.files.length) handleFile(kind, e.target.files[0]);
+    });
+  }
+
+  function handleFile(kind, file){
+    readWorkbook(file, wb => {
+      const sheetNames = wb.SheetNames;
+      const firstSheet = sheetNames[0];
+      const {headers, rows} = sheetToRows(wb, firstSheet);
+      app.pending[kind] = {workbook:wb, sheetName:firstSheet, headers, rows, fileName:file.name};
+
+      const tag = document.getElementById("tag-" + kind);
+      tag.textContent = file.name + " — " + rows.length + " filas";
+      tag.classList.remove("hidden");
+
+      renderMapping(kind, sheetNames);
+    });
+  }
+
+  function reloadSheet(kind, sheetName){
+    const {headers, rows} = sheetToRows(app.pending[kind].workbook, sheetName);
+    app.pending[kind].sheetName = sheetName;
+    app.pending[kind].headers = headers;
+    app.pending[kind].rows = rows;
+  }
+
+  // ---------- mapping UI ----------
+  function renderMapping(kind, sheetNames){
+    const container = document.getElementById("mapping-" + kind);
+    container.innerHTML = "";
+    container.classList.remove("hidden");
+    document.getElementById("cta-" + kind).classList.remove("hidden");
+    const headers = app.pending[kind].headers;
+    const savedMap = kind === "santander" ? app.meta.santanderMapping : app.meta.plataformaMapping;
+
+    if(sheetNames.length > 1){
+      const row = el("div", {class:"field-row"});
+      row.appendChild(el("label", {}, [document.createTextNode("Hoja a usar")]));
+      const sel = el("select");
+      sheetNames.forEach(s => {
+        const opt = el("option", {value:s}, [document.createTextNode(s)]);
+        if(s === app.pending[kind].sheetName) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", () => { reloadSheet(kind, sel.value); renderMapping(kind, sheetNames); });
+      row.appendChild(sel);
+      container.appendChild(row);
+    }
+
+    const emailRow = el("div", {class:"field-row"});
+    emailRow.appendChild(el("label", {}, [document.createTextNode("Columna de correo electrónico")]));
+    const emailDefault = (savedMap && headers.includes(savedMap.emailCol)) ? savedMap.emailCol : guessColumn(headers, ["email","correo","direccion email","e-mail"]);
+    const emailSel = makeHeaderSelect(headers, emailDefault);
+    emailSel.id = "map-" + kind + "-email";
+    emailRow.appendChild(emailSel);
+    container.appendChild(emailRow);
+    emailSel.addEventListener("change", checkReady);
+
+    if(kind === "santander"){
+      const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode : "split";
+      const modeRow = el("div", {class:"radio-row"});
+      const opt1 = el("label", {class:"radio-opt"});
+      const r1 = el("input", {type:"radio", name:"name-mode-santander", value:"split"});
+      r1.checked = mode === "split";
+      opt1.appendChild(r1); opt1.appendChild(document.createTextNode("Nombre y apellido en columnas separadas"));
+      const opt2 = el("label", {class:"radio-opt"});
+      const r2 = el("input", {type:"radio", name:"name-mode-santander", value:"single"});
+      r2.checked = mode === "single";
+      opt2.appendChild(r2); opt2.appendChild(document.createTextNode("Un nombre completo"));
+      modeRow.appendChild(opt1); modeRow.appendChild(opt2);
+      container.appendChild(modeRow);
+
+      const splitWrap = el("div", {class:"two-col" + (mode==="split" ? "" : " hidden"), id:"santander-split-wrap"});
+      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : guessColumn(headers, ["name","nombre"]);
+      const firstSel = makeHeaderSelect(headers, firstDefault);
+      firstSel.id = "map-santander-first";
+      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : guessColumn(headers, ["lastname","apellido"]);
+      const lastSel = makeHeaderSelect(headers, lastDefault);
+      lastSel.id = "map-santander-last";
+      splitWrap.appendChild(labeled("Nombre", firstSel));
+      splitWrap.appendChild(labeled("Apellido", lastSel));
+      container.appendChild(splitWrap);
+
+      const singleWrap = el("div", {class:"field-row" + (mode==="single" ? "" : " hidden"), id:"santander-single-wrap"});
+      const singleDefault = (savedMap && headers.includes(savedMap.fullNameCol)) ? savedMap.fullNameCol : guessColumn(headers, ["nombre completo","full name"]);
+      const singleSel = makeHeaderSelect(headers, singleDefault);
+      singleSel.id = "map-santander-fullname";
+      singleWrap.appendChild(el("label",{},[document.createTextNode("Columna de nombre completo")]));
+      singleWrap.appendChild(singleSel);
+      container.appendChild(singleWrap);
+
+      r1.addEventListener("change", () => { splitWrap.classList.remove("hidden"); singleWrap.classList.add("hidden"); checkReady(); });
+      r2.addEventListener("change", () => { splitWrap.classList.add("hidden"); singleWrap.classList.remove("hidden"); checkReady(); });
+
+      const extraDefault = (savedMap && savedMap.extraCols) ? savedMap.extraCols.filter(c => headers.includes(c)) : [];
+      appendChipSection(container, "santander-extra", headers, extraDefault, "Otras columnas a incluir en la tabla madre", false);
+
+      const watchDefault = (savedMap && savedMap.watchCols) ? savedMap.watchCols.filter(c => headers.includes(c)) : headers.filter(h => /status|estado/.test(normalize(h)));
+      appendChipSection(container, "santander-watch", headers, watchDefault, "Columnas a vigilar por cambios de estatus", true);
+
+    } else {
+      const nameRow = el("div", {class:"field-row"});
+      nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
+      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
+      const nameSel = makeHeaderSelect(headers, nameDefault);
+      nameSel.id = "map-plataforma-fullname";
+      nameRow.appendChild(nameSel);
+      container.appendChild(nameRow);
+      nameSel.addEventListener("change", checkReady);
+
+      const progRow = el("div", {class:"field-row"});
+      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
+      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
+        ? savedMap.progresoCol
+        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
+      const progSel = el("select");
+      progSel.id = "map-plataforma-progreso";
+      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === progDefault) opt.selected = true;
+        progSel.appendChild(opt);
+      });
+      progRow.appendChild(progSel);
+      container.appendChild(progRow);
+
+      const emailHeaderNorm = normalize(emailSel.value);
+      const nameHeaderNorm = normalize(nameSel.value);
+      const progHeaderNorm = normalize(progSel.value);
+      const defaultExtra = (savedMap && savedMap.extraCols)
+        ? savedMap.extraCols.filter(c => headers.includes(c))
+        : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm && normalize(h) !== progHeaderNorm);
+      appendChipSection(container, "plataforma-extra", headers, defaultExtra, "Columnas de plataforma a traer (progreso, hora, etc.)", false);
+    }
+
+    checkReady();
+  }
+
+  function appendChipSection(container, key, headers, defaultOn, label, isWatch){
+    const wrap = el("div", {class:"field-row"});
+    wrap.appendChild(el("label", {}, [document.createTextNode(label)]));
+    const chipList = el("div", {class:"chip-list", id:"chips-" + key});
+    headers.forEach(h => {
+      const chip = el("span", {class:"chip" + (isWatch ? " watch" : "") + (defaultOn.includes(h) ? " on" : "")}, [document.createTextNode(h || "(sin nombre)")]);
+      chip.dataset.value = h;
+      chip.addEventListener("click", () => { chip.classList.toggle("on"); checkReady(); });
+      chipList.appendChild(chip);
+    });
+    wrap.appendChild(chipList);
+    const tools = el("div", {class:"chip-tools"});
+    const allBtn = el("button", {type:"button"}, [document.createTextNode("Todas")]);
+    allBtn.addEventListener("click", () => { chipList.querySelectorAll(".chip").forEach(c=>c.classList.add("on")); checkReady(); });
+    const noneBtn = el("button", {type:"button"}, [document.createTextNode("Ninguna")]);
+    noneBtn.addEventListener("click", () => { chipList.querySelectorAll(".chip").forEach(c=>c.classList.remove("on")); checkReady(); });
+    tools.appendChild(allBtn); tools.appendChild(noneBtn);
+    wrap.appendChild(tools);
+    container.appendChild(wrap);
+  }
+
+  function getSelectedChips(key){
+    const list = document.getElementById("chips-" + key);
+    if(!list) return [];
+    return Array.from(list.querySelectorAll(".chip.on")).map(c => c.dataset.value);
+  }
+
+  function isReady(kind){
+    if(!app.pending[kind] || !app.pending[kind].rows.length) return false;
+    const emailSel = document.getElementById("map-" + kind + "-email");
+    if(!emailSel || !emailSel.value) return false;
+    if(kind === "santander"){
+      const mode = document.querySelector('input[name="name-mode-santander"]:checked');
+      if(!mode) return false;
+      if(mode.value === "split"){
+        const f = document.getElementById("map-santander-first");
+        const l = document.getElementById("map-santander-last");
+        return !!(f && f.value) || !!(l && l.value);
+      } else {
+        const s = document.getElementById("map-santander-fullname");
+        return !!(s && s.value);
+      }
+    } else {
+      const n = document.getElementById("map-plataforma-fullname");
+      return !!(n && n.value);
+    }
+  }
+
+  function checkReady(){
+    ["santander","plataforma"].forEach(kind => {
+      const ready = isReady(kind);
+      const btn = document.getElementById("btn-process-" + kind);
+      if(btn) btn.disabled = !ready;
+      const hint = document.getElementById(kind + "-hint");
+      if(hint) hint.textContent = ready ? "Listo para procesar." : "Configura las columnas para continuar.";
+    });
+  }
+
+  wireUpload("santander");
+  wireUpload("plataforma");
+
+  function getSantanderName(row){
+    const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
+    if(mode === "split"){
+      const f = document.getElementById("map-santander-first").value;
+      const l = document.getElementById("map-santander-last").value;
+      return [f ? row[f] : "", l ? row[l] : ""].filter(Boolean).join(" ").trim();
+    } else {
+      const s = document.getElementById("map-santander-fullname").value;
+      return (row[s] || "").toString().trim();
+    }
+  }
+
+  // ---------- procesar actualización de Santander (diff incremental) ----------
+  document.getElementById("btn-process-santander").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-process-santander");
+    btn.disabled = true; btn.textContent = "Procesando...";
+    setSaveStatus("Comparando contra la tabla madre...");
+
+    const emailCol = document.getElementById("map-santander-email").value;
+    const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
+    const firstCol = mode === "split" ? document.getElementById("map-santander-first").value : null;
+    const lastCol = mode === "split" ? document.getElementById("map-santander-last").value : null;
+    const fullNameCol = mode === "single" ? document.getElementById("map-santander-fullname").value : null;
+    const extraCols = getSelectedChips("santander-extra");
+    const watchCols = getSelectedChips("santander-watch");
+    const allExtra = Array.from(new Set(extraCols.concat(watchCols)));
+
+    const masterByKey = new Map(app.master.map(r => [r._key, r]));
+    const touched = new Set();
+    const nuevos = [];
+    const cambios = [];
+    const today = todayISO();
+
+    app.pending.santander.rows.forEach(row => {
+      const email = row[emailCol];
+      const name = getSantanderName(row);
+      const key = recordKey(email, name);
+      touched.add(key);
+
+      const newVals = {};
+      allExtra.forEach(c => newVals[c] = row[c]);
+
+      let record = masterByKey.get(key);
+      if(!record){
+        record = {
+          _key:key, nombre:name, email:email || "",
+          santanderExtra:{}, plataformaExtra:{},
+          estado:"Falta registrar", progreso:0,
+          primeraVez:today, ultimaCargaSantander:today, presenteUltimaCarga:true,
+          ultimaActualizacionPlataforma:null
+        };
+        record.santanderExtra = newVals;
+        app.master.push(record);
+        masterByKey.set(key, record);
+        nuevos.push(flattenForDiff(record));
+      } else {
+        const changedFields = [];
+        watchCols.forEach(c => {
+          const oldV = record.santanderExtra ? record.santanderExtra[c] : undefined;
+          const newV = row[c];
+          if(normalize(oldV) !== normalize(newV)) changedFields.push({col:c, from:oldV, to:newV});
+        });
+        record.nombre = name || record.nombre;
+        record.email = email || record.email;
+        record.santanderExtra = Object.assign({}, record.santanderExtra, newVals);
+        record.ultimaCargaSantander = today;
+        record.presenteUltimaCarga = true;
+        if(changedFields.length){
+          const diffRow = flattenForDiff(record);
+          diffRow["Cambios"] = changedFields.map(cf => cf.col + ": " + (cf.from ?? "—") + " → " + (cf.to ?? "—")).join(" | ");
+          cambios.push(diffRow);
+        }
+      }
+    });
+
+    app.master.forEach(r => { if(!touched.has(r._key)) r.presenteUltimaCarga = false; });
+
+    app.meta.santanderMapping = {emailCol, nameMode:mode, firstCol, lastCol, fullNameCol, extraCols, watchCols};
+    app.meta.lastSantanderUpload = today;
+    app.meta.lastSantanderFile = app.pending.santander.fileName;
+    app.meta.updatedAt = nowISO();
+
+    const logEntry = {
+      date: nowISO(), tipo:"Santander", archivo: app.pending.santander.fileName,
+      resumen: nuevos.length + " nuevos, " + cambios.length + " cambios, " + (app.pending.santander.rows.length - nuevos.length - cambios.length) + " sin cambios",
+      por: (auth.currentUser && auth.currentUser.email) || ""
+    };
+    app.log.unshift(logEntry);
+
+    setSaveStatus("Guardando en Firestore...");
+    try{
+      await saveMasterBatched(app.slug, app.master);
+      await saveMetaRemote(app.slug, app.meta);
+      await addLogRemote(app.slug, logEntry);
+      setSaveStatus("Guardado.");
+    }catch(err){
+      console.error(err);
+      setSaveStatus("No se pudo guardar en Firestore — revisa la conexión o los permisos.");
+    }
+
+    app.lastRun.nuevos = nuevos;
+    app.lastRun.cambios = cambios;
+
+    document.getElementById("cm-santander-count").textContent = app.master.length;
+    document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
+
+    renderStats();
+    renderMasterTable();
+    renderSideTable("nuevos", app.lastRun.nuevos);
+    renderSideTable("cambios", app.lastRun.cambios);
+    renderHistorial();
+
+    btn.disabled = false; btn.textContent = "Procesar actualización";
+    document.querySelector('.tab[data-tab="nuevos"]').click();
+    closeModal("modal-santander");
+  });
+
+  function flattenForDiff(record){
+    const row = {Nombre: record.nombre, Email: record.email};
+    Object.keys(record.santanderExtra || {}).forEach(c => row[c] = record.santanderExtra[c]);
+    return row;
+  }
+
+  // ---------- procesar actualización de plataforma (refresco completo) ----------
+  document.getElementById("btn-process-plataforma").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-process-plataforma");
+    btn.disabled = true; btn.textContent = "Procesando...";
+    setSaveStatus("Cruzando con la tabla madre...");
+
+    const emailCol = document.getElementById("map-plataforma-email").value;
+    const nameCol = document.getElementById("map-plataforma-fullname").value;
+    const progresoCol = document.getElementById("map-plataforma-progreso").value;
+    const extraCols = getSelectedChips("plataforma-extra");
+    const today = todayISO();
+    let lockedCount = 0;
+
+    const platByEmail = new Map();
+    const platByName = new Map();
+    app.pending.plataforma.rows.forEach(row => {
+      const e = normalize(row[emailCol]);
+      const n = normalize(row[nameCol]);
+      if(e && !platByEmail.has(e)) platByEmail.set(e, row);
+      if(n && !platByName.has(n)) platByName.set(n, row);
+    });
+
+    const usedPlatEmails = new Set();
+    app.master.forEach(record => {
+      const eNorm = normalize(record.email);
+      const nNorm = normalize(record.nombre);
+      let match = null;
+      if(eNorm && platByEmail.has(eNorm)) match = platByEmail.get(eNorm);
+      else if(nNorm && platByName.has(nNorm)) match = platByName.get(nNorm);
+
+      if(match){
+        const vals = {};
+        extraCols.forEach(c => vals[c] = match[c]);
+        record.plataformaExtra = vals;
+        record.estado = "En plataforma";
+        record.ultimaActualizacionPlataforma = today;
+        usedPlatEmails.add(normalize(match[emailCol]));
+
+        if(progresoCol){
+          const parsed = parsePct(match[progresoCol]);
+          if(parsed !== null){
+            const prevProgreso = typeof record.progreso === "number" ? record.progreso : 0;
+            if(parsed < prevProgreso) lockedCount++;
+            record.progreso = Math.max(prevProgreso, parsed);
+          }
+        }
+      } else {
+        record.estado = "Falta registrar";
+      }
+    });
+
+    const revisar = [];
+    app.pending.plataforma.rows.forEach(row => {
+      const e = normalize(row[emailCol]);
+      if(e && usedPlatEmails.has(e)) return;
+      const r = {Nombre: row[nameCol], Email: row[emailCol]};
+      extraCols.forEach(c => { if(c !== nameCol) r[c] = row[c]; });
+      revisar.push(r);
+    });
+
+    app.meta.plataformaMapping = {emailCol, nameCol, progresoCol, extraCols};
+    app.meta.lastPlataformaUpload = today;
+    app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
+    app.meta.updatedAt = nowISO();
+
+    const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
+    let resumen = (app.master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander";
+    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
+    const logEntry = {
+      date: nowISO(), tipo:"Plataforma", archivo: app.pending.plataforma.fileName,
+      resumen: resumen,
+      por: (auth.currentUser && auth.currentUser.email) || ""
+    };
+    app.log.unshift(logEntry);
+
+    setSaveStatus("Guardando en Firestore...");
+    try{
+      await saveMasterBatched(app.slug, app.master);
+      await saveMetaRemote(app.slug, app.meta);
+      await addLogRemote(app.slug, logEntry);
+      setSaveStatus("Guardado.");
+    }catch(err){
+      console.error(err);
+      setSaveStatus("No se pudo guardar en Firestore — revisa la conexión o los permisos.");
+    }
+
+    app.lastRun.revisar = revisar;
+    document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
+
+    renderStats();
+    renderMasterTable();
+    renderSideTable("revisar", app.lastRun.revisar);
+    renderHistorial();
+
+    btn.disabled = false; btn.textContent = "Cruzar con tabla madre";
+    document.querySelector('.tab[data-tab="madre"]').click();
+    closeModal("modal-plataforma");
+  });
+
+  // ---------- rendering ----------
+  function flattenMasterRow(record){
+    const row = {};
+    row["Estado"] = record.estado;
+    row["Progreso"] = (typeof record.progreso === "number") ? record.progreso + "%" : "—";
+    row["Nombre"] = record.nombre;
+    row["Email"] = record.email;
+    const usedKeys = new Set(["Estado","Progreso","Nombre","Email"]);
+    Object.keys(record.santanderExtra || {}).forEach(c => {
+      const label = usedKeys.has(c) ? c + " (Santander)" : c;
+      row[label] = record.santanderExtra[c];
+      usedKeys.add(label);
+    });
+    Object.keys(record.plataformaExtra || {}).forEach(c => {
+      const label = usedKeys.has(c) ? c + " (Plataforma)" : c;
+      row[label] = record.plataformaExtra[c];
+      usedKeys.add(label);
+    });
+    row["En última carga Santander"] = record.presenteUltimaCarga ? "Sí" : "No";
+    row["Primera vez visto"] = record.primeraVez;
+    row["Última carga Santander"] = record.ultimaCargaSantander;
+    row["Última actualización plataforma"] = record.ultimaActualizacionPlataforma || "";
+    return row;
+  }
+
+  function renderStats(){
+    const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
+
+    document.getElementById("badge-madre").textContent = app.master.length;
+    document.getElementById("badge-alta").textContent = altaCount;
+    document.getElementById("badge-nuevos").textContent = app.lastRun.nuevos.length;
+    document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
+    document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
+    document.getElementById("badge-historial").textContent = app.log.length;
+
+    const p0 = app.master.filter(r => (r.progreso||0) <= 0).length;
+    const p1 = app.master.filter(r => (r.progreso||0) > 0 && r.progreso < 40).length;
+    const p2 = app.master.filter(r => (r.progreso||0) >= 40 && r.progreso < 80).length;
+    const p3 = app.master.filter(r => (r.progreso||0) >= 80).length;
+    document.getElementById("st-p0").textContent = p0;
+    document.getElementById("st-p1").textContent = p1;
+    document.getElementById("st-p2").textContent = p2;
+    document.getElementById("st-p3").textContent = p3;
+  }
+
+  function renderMasterTable(){
+    const rows = app.master.map(flattenMasterRow);
+    renderTableInto("madre", rows, true);
+    if(typeof refreshTableView === "function") refreshTableView("madre");
+    renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
+  }
+
+  function renderSideTable(key, rows){
+    renderTableInto(key, rows, key === "alta");
+  }
+
+  function renderTableInto(key, rows){
+    const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+    const thead = panel.querySelector("thead");
+    const tbody = panel.querySelector("tbody");
+    thead.innerHTML = ""; tbody.innerHTML = "";
+
+    if(!rows.length){
+      const tr = el("tr");
+      const td = el("td", {colspan:"20"}, [document.createTextNode("Sin registros en esta lista.")]);
+      td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
+      tr.appendChild(td); tbody.appendChild(tr);
+      return;
+    }
+    const cols = Object.keys(rows[0]);
+    const headRow = el("tr");
+    cols.forEach(c => headRow.appendChild(el("th", {}, [document.createTextNode(c)])));
+    thead.appendChild(headRow);
+    renderRows(tbody, rows, cols);
+  }
+
+  function renderRows(tbody, rows, cols){
+    tbody.innerHTML = "";
+    rows.forEach(r => {
+      const tr = el("tr");
+      cols.forEach(c => {
+        const val = r[c];
+        const td = el("td");
+        if(c === "Estado"){
+          const span = el("span", {class:"badge-status " + (val === "En plataforma" ? "ok" : "falta")}, [document.createTextNode(val)]);
+          td.appendChild(span);
+        } else if(c === "Progreso"){
+          const pct = parseFloat(val);
+          const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct < 40 ? "p1" : pct < 80 ? "p2" : "p3");
+          const span = el("span", {class:"badge-progreso " + cls}, [document.createTextNode(val)]);
+          td.appendChild(span);
+        } else if(c === "En última carga Santander"){
+          const span = el("span", {class:"badge-yesno " + (val === "Sí" ? "si" : "")}, [document.createTextNode(val)]);
+          td.appendChild(span);
+        } else {
+          td.textContent = (val === null || val === undefined) ? "" : val;
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderHistorial(){
+    const panel = document.querySelector('.tab-panel[data-panel="historial"]');
+    const thead = panel.querySelector("thead");
+    const tbody = panel.querySelector("tbody");
+    thead.innerHTML = ""; tbody.innerHTML = "";
+    const headRow = el("tr");
+    ["Fecha","Tipo","Archivo","Resumen","Quién"].forEach(c => headRow.appendChild(el("th", {}, [document.createTextNode(c)])));
+    thead.appendChild(headRow);
+    if(!app.log.length){
+      const tr = el("tr");
+      const td = el("td", {colspan:"5"}, [document.createTextNode("Sin actualizaciones todavía.")]);
+      td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
+      tr.appendChild(td); tbody.appendChild(tr);
+      return;
+    }
+    app.log.forEach(entry => {
+      const tr = el("tr");
+      [fmtDate(entry.date), entry.tipo, entry.archivo, entry.resumen, entry.por].forEach(v => {
+        tr.appendChild(el("td", {}, [document.createTextNode(v || "")]));
+      });
+      tbody.appendChild(tr);
+    });
+    document.getElementById("badge-historial").textContent = app.log.length;
+  }
+
+  // ---------- tabs, search, download ----------
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.querySelector('.tab-panel[data-panel="' + tab.dataset.tab + '"]').classList.add("active");
+    });
+  });
+
+  function currentRowsFor(key){
+    if(key === "madre") return app.master.map(flattenMasterRow);
+    if(key === "alta") return app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow);
+    return app.lastRun[key] || [];
+  }
+
+  const tableFilterState = {};
+
+  function matchesFilter(row, filterValue){
+    if(!filterValue || filterValue === "all") return true;
+    if(filterValue === "p0" || filterValue === "p1" || filterValue === "p2" || filterValue === "p3"){
+      const pct = parseFloat(row["Progreso"]);
+      if(isNaN(pct)) return false;
+      if(filterValue === "p0") return pct <= 0;
+      if(filterValue === "p1") return pct > 0 && pct < 40;
+      if(filterValue === "p2") return pct >= 40 && pct < 80;
+      if(filterValue === "p3") return pct >= 80;
+    }
+    return true;
+  }
+
+  function resetTableFilter(key){
+    tableFilterState[key] = "all";
+    document.querySelectorAll('.filter-chip[data-filter-key="' + key + '"]').forEach(b => {
+      b.classList.toggle("active", b.dataset.filterValue === "all");
+    });
+  }
+
+  function refreshTableView(key){
+    const input = document.querySelector('[data-search="' + key + '"]');
+    const q = input ? normalize(input.value) : "";
+    const filterValue = tableFilterState[key] || "all";
+    const rows = currentRowsFor(key);
+    const cols = rows.length ? Object.keys(rows[0]) : [];
+    let filtered = rows.filter(r => matchesFilter(r, filterValue));
+    if(q) filtered = filtered.filter(r => cols.some(c => normalize(r[c]).includes(q)));
+    const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+    renderRows(panel.querySelector("tbody"), filtered, cols);
+  }
+
+  document.querySelectorAll("[data-search]").forEach(input => {
+    input.addEventListener("input", () => refreshTableView(input.dataset.search));
+  });
+
+  document.querySelectorAll(".filter-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.filterKey;
+      tableFilterState[key] = btn.dataset.filterValue;
+      document.querySelectorAll('.filter-chip[data-filter-key="' + key + '"]').forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      refreshTableView(key);
+    });
+  });
+
+  document.querySelectorAll("[data-download]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.download;
+      const rows = currentRowsFor(key);
+      if(!rows.length) return;
+      const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", nuevos:"nuevos", cambios:"cambios-de-estatus", revisar:"en-plataforma-sin-santander"};
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Datos");
+      XLSX.writeFile(wb, curso + "-" + (names[key] || key) + ".xlsx");
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
