@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cruce Santander / Plataforma</title>
+<title>Central operativa - Base madre</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -88,14 +88,46 @@
     padding:3px 8px;border-radius:20px;font-weight:600;
   }
 
-  .course-bar{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;}
-  .course-field{display:flex;flex-direction:column;gap:6px;}
-  .course-field label{font-size:12px;color:var(--ink-soft);font-weight:500;}
-  .course-field select, .course-field input{
-    font-family:inherit;font-size:14.5px;padding:9px 10px;
-    border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);
-    min-width:220px;
+  .panel-compact{padding:12px 16px;}
+  .course-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+  .course-tabs:empty{display:none;margin:0;}
+  .course-tab{
+    font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:20px;
+    border:1px solid transparent;cursor:pointer;background:#EEF1F0;color:var(--ink-soft);
   }
+  .course-tab.active{color:#fff;}
+  .course-tab.c0{background:var(--teal-bg);color:var(--teal-dark);}
+  .course-tab.c0.active{background:var(--teal);color:#fff;}
+  .course-tab.c1{background:var(--amber-bg);color:var(--amber);}
+  .course-tab.c1.active{background:var(--amber);color:#fff;}
+  .course-tab.c2{background:var(--rust-bg);color:var(--rust);}
+  .course-tab.c2.active{background:var(--rust);color:#fff;}
+  .course-tab.c3{background:var(--plum-bg);color:var(--plum);}
+  .course-tab.c3.active{background:var(--plum);color:#fff;}
+  .course-tabs-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .course-tabs-row .course-tabs{margin-bottom:0;flex:1;}
+
+  .upload-actions{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:28px;}
+  .upload-action{display:flex;flex-direction:column;gap:6px;align-items:flex-start;max-width:320px;}
+  .upload-action-hint{font-size:12px;color:var(--ink-soft);}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(22,35,44,0.45);
+    display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-overlay.hidden{display:none !important;}
+  .modal-box{
+    background:var(--panel);border-radius:12px;padding:24px;max-width:560px;width:100%;
+    max-height:86vh;overflow-y:auto;position:relative;box-shadow:0 24px 60px rgba(0,0,0,0.28);
+  }
+  .modal-title{font-family:'Fraunces', serif;font-size:19px;font-weight:600;margin:0 0 4px;color:var(--ink);}
+  .modal-sub{color:var(--ink-soft);font-size:13px;margin:0 0 16px;max-width:60ch;}
+  .modal-close{
+    position:absolute;top:14px;right:14px;background:none;border:none;font-size:22px;line-height:1;
+    cursor:pointer;color:var(--ink-soft);padding:4px;
+  }
+  .modal-close:hover{color:var(--ink);}
+
   .course-head{
     margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
     display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;
@@ -164,8 +196,9 @@
 
   .cross-cta{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0 4px;}
 
-  .stat-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
-  @media (max-width:820px){ .stat-strip{grid-template-columns:repeat(2,1fr);} .grid2{grid-template-columns:1fr !important;} }
+  .stat-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px;}
+  .stat-strip-progress{grid-template-columns:repeat(4,1fr);margin-bottom:20px;}
+  @media (max-width:820px){ .stat-strip{grid-template-columns:repeat(2,1fr);} .stat-strip-progress{grid-template-columns:repeat(2,1fr);} .grid2{grid-template-columns:1fr !important;} }
   .stat{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 14px 12px;}
   .stat .n{font-family:'Fraunces', serif;font-size:26px;font-weight:600;}
   .stat .l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
@@ -176,6 +209,20 @@
   .stat.teal .n{color:var(--teal-dark);}
   .stat.plum{border-color:#DCC9E1;background:var(--plum-bg);}
   .stat.plum .n{color:var(--plum);}
+
+  .quick-filters{display:flex;gap:6px;flex-wrap:wrap;}
+  .filter-chip{
+    font-family:inherit;font-size:12px;font-weight:600;padding:6px 11px;border-radius:20px;
+    border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer;
+  }
+  .filter-chip:hover{border-color:var(--ink-soft);}
+  .filter-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  .badge-progreso{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);}
+  .badge-progreso.p0{background:var(--rust-bg);color:var(--rust);}
+  .badge-progreso.p1{background:var(--amber-bg);color:var(--amber);}
+  .badge-progreso.p2{background:#FCEFC7;color:#8A6D1D;}
+  .badge-progreso.p3{background:var(--teal-bg);color:var(--teal-dark);}
 
   .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap;}
   .tab{
@@ -244,7 +291,7 @@
 
 <!-- ======================= SIGN-IN GATE ======================= -->
 <div id="gate" class="wrap">
-  <h1>Cruce Santander / Plataforma</h1>
+  <h1>Central operativa - Base madre</h1>
   <p>Herramienta compartida del equipo para dar seguimiento a los cursos. Inicia sesión con tu cuenta de Google para ver y actualizar el histórico.</p>
   <button class="g-btn" id="btn-signin">Iniciar sesión con Google</button>
   <div id="gate-error"></div>
@@ -255,8 +302,7 @@
 
   <div class="top">
     <div>
-      <h1>Cruce Santander &nbsp;/&nbsp; Plataforma</h1>
-      <p>Histórico compartido por curso. Cada vez que subas una base de Santander nueva, solo se destacan los registros nuevos y los que cambiaron de estatus — la tabla madre siempre queda completa.</p>
+      <h1>Central operativa - Base madre</h1>
     </div>
     <div class="user-badge">
       <span>Sesión: <b id="user-email">—</b></span>
@@ -265,20 +311,12 @@
   </div>
 
   <section id="section-course">
-    <div class="panel">
-      <div class="course-bar">
-        <div class="course-field">
-          <label for="course-select">Curso guardado</label>
-          <select id="course-select">
-            <option value="">Cargando...</option>
-          </select>
-        </div>
-        <div class="course-field">
-          <label for="course-new-name">O crea uno nuevo</label>
-          <input id="course-new-name" type="text" placeholder="p. ej. Matemáticamente">
-        </div>
-        <button class="btn btn-primary" id="btn-new-course">Crear curso</button>
+    <div class="panel panel-compact">
+      <div class="course-tabs-row">
+        <div class="course-tabs" id="course-tabs"></div>
+        <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
+      <select id="course-select" class="hidden"><option value="">Cargando...</option></select>
 
       <div id="course-head" class="course-head hidden">
         <div>
@@ -297,59 +335,16 @@
 
   <div id="course-dependent" class="hidden">
 
-    <section id="section-santander">
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <div class="step-title">Actualizar base de Santander</div>
-          <div class="step-sub">Sube el archivo más reciente. Se compara contra la tabla madre: solo se destacan los registros nuevos y los que cambiaron.</div>
-        </div>
+    <div class="upload-actions">
+      <div class="upload-action">
+        <button class="btn btn-primary" id="btn-open-santander" type="button">1. Actualizar base de Santander</button>
+        <span class="upload-action-hint">Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.</span>
       </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Archivo de Santander</h3>
-          <span class="file-tag hidden" id="tag-santander"></span>
-        </div>
-        <div class="drop" id="drop-santander">
-          <div class="drop-icon">&#8593;</div>
-          <div class="drop-main">Arrastra el archivo o haz clic</div>
-          <div class="drop-sub">.xlsx</div>
-        </div>
-        <input type="file" id="file-santander" accept=".xlsx,.xls">
-        <div id="mapping-santander" class="hidden" style="margin-top:16px;"></div>
-        <div class="cross-cta hidden" id="cta-santander">
-          <button class="btn btn-primary" id="btn-process-santander" disabled>Procesar actualización</button>
-          <div class="status-line" id="santander-hint">Configura las columnas para continuar.</div>
-        </div>
+      <div class="upload-action">
+        <button class="btn btn-primary" id="btn-open-plataforma" type="button">2. Actualizar plataforma</button>
+        <span class="upload-action-hint">Se cruza contra toda la tabla madre y se refresca el progreso de todos.</span>
       </div>
-    </section>
-
-    <section id="section-plataforma">
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <div class="step-title">Actualizar plataforma</div>
-          <div class="step-sub">Sube el archivo de avance de plataforma. Se cruza contra toda la tabla madre y se refresca el progreso de todos.</div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Archivo de plataforma</h3>
-          <span class="file-tag hidden" id="tag-plataforma"></span>
-        </div>
-        <div class="drop" id="drop-plataforma">
-          <div class="drop-icon">&#8593;</div>
-          <div class="drop-main">Arrastra el archivo o haz clic</div>
-          <div class="drop-sub">.xlsx</div>
-        </div>
-        <input type="file" id="file-plataforma" accept=".xlsx,.xls">
-        <div id="mapping-plataforma" class="hidden" style="margin-top:16px;"></div>
-        <div class="cross-cta hidden" id="cta-plataforma">
-          <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
-          <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
-        </div>
-      </div>
-    </section>
+    </div>
 
     <section id="section-results">
       <div class="step">
@@ -360,12 +355,11 @@
         </div>
       </div>
 
-      <div class="stat-strip">
-        <div class="stat teal"><div class="n" id="st-total">0</div><div class="l">En tabla madre</div></div>
-        <div class="stat plum"><div class="n" id="st-nuevos">0</div><div class="l">Nuevos (última carga)</div></div>
-        <div class="stat plum"><div class="n" id="st-cambios">0</div><div class="l">Cambios de estatus</div></div>
-        <div class="stat amber"><div class="n" id="st-alta">0</div><div class="l">Faltan por dar de alta</div></div>
-        <div class="stat rust"><div class="n" id="st-revisar">0</div><div class="l">En plataforma sin Santander</div></div>
+      <div class="stat-strip stat-strip-progress">
+        <div class="stat rust"><div class="n" id="st-p0">0</div><div class="l">No ha iniciado (0%)</div></div>
+        <div class="stat amber"><div class="n" id="st-p1">0</div><div class="l">Iniciando (1–39%)</div></div>
+        <div class="stat amber"><div class="n" id="st-p2">0</div><div class="l">A medio camino (40–79%)</div></div>
+        <div class="stat teal"><div class="n" id="st-p3">0</div><div class="l">Finalizado (80%+)</div></div>
       </div>
 
       <div class="tabs">
@@ -381,6 +375,13 @@
         <div class="panel-note teal">Todo el histórico del curso: cada persona vista alguna vez en Santander, con su información más reciente y su estatus en plataforma.</div>
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="madre">
+          <div class="quick-filters" id="filters-madre">
+            <button type="button" class="filter-chip active" data-filter-key="madre" data-filter-value="all">Todos</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p0">No ha iniciado (0%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p1">Iniciando (1–39%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p2">A medio camino (40–79%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p3">Finalizado (80%+)</button>
+          </div>
           <button class="btn btn-ghost btn-small" data-download="madre">Descargar Excel</button>
         </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
@@ -430,6 +431,70 @@
   </div>
 
   <footer>El cruce ocurre en tu navegador. El histórico se guarda en Firestore, compartido por todo el equipo con la sesión de Google.</footer>
+
+  <!-- ======================= MODAL: nuevo curso ======================= -->
+  <div class="modal-overlay hidden" id="modal-course">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-course">&times;</button>
+      <h3 class="modal-title">Crear un curso nuevo</h3>
+      <div class="field-row" style="margin-top:14px;">
+        <label for="course-new-name">Nombre del curso</label>
+        <input id="course-new-name" type="text" class="input-text" placeholder="p. ej. Matemáticamente">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
+        <button class="btn btn-ghost btn-small" type="button" data-close-modal="modal-course">Cancelar</button>
+        <button class="btn btn-primary btn-small" id="btn-new-course">Crear curso</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: cargar Santander ======================= -->
+  <div class="modal-overlay hidden" id="modal-santander">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-santander">&times;</button>
+      <h3 class="modal-title">Actualizar base de Santander</h3>
+      <p class="modal-sub">Sube el archivo más reciente. Se compara contra la tabla madre: solo se destacan los registros nuevos y los que cambiaron.</p>
+      <div class="panel-head">
+        <h3>Archivo de Santander</h3>
+        <span class="file-tag hidden" id="tag-santander"></span>
+      </div>
+      <div class="drop" id="drop-santander">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx</div>
+      </div>
+      <input type="file" id="file-santander" accept=".xlsx,.xls">
+      <div id="mapping-santander" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-santander">
+        <button class="btn btn-primary" id="btn-process-santander" disabled>Procesar actualización</button>
+        <div class="status-line" id="santander-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: cargar plataforma ======================= -->
+  <div class="modal-overlay hidden" id="modal-plataforma">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-plataforma">&times;</button>
+      <h3 class="modal-title">Actualizar plataforma</h3>
+      <p class="modal-sub">Sube el archivo de avance de plataforma. Se cruza contra toda la tabla madre y se refresca el progreso de todos.</p>
+      <div class="panel-head">
+        <h3>Archivo de plataforma</h3>
+        <span class="file-tag hidden" id="tag-plataforma"></span>
+      </div>
+      <div class="drop" id="drop-plataforma">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx</div>
+      </div>
+      <input type="file" id="file-plataforma" accept=".xlsx,.xls">
+      <div id="mapping-plataforma" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-plataforma">
+        <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
+        <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -497,6 +562,30 @@ const db = firebase.firestore();
     if(s) s.textContent = text;
   }
 
+  // ---------- modales ----------
+  function openModal(id){ document.getElementById(id).classList.remove("hidden"); }
+  function closeModal(id){ document.getElementById(id).classList.add("hidden"); }
+
+  document.getElementById("btn-open-new-course").addEventListener("click", () => {
+    document.getElementById("course-new-name").value = "";
+    openModal("modal-course");
+    document.getElementById("course-new-name").focus();
+  });
+  document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
+  document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
+
+  document.querySelectorAll("[data-close-modal]").forEach(btn => {
+    btn.addEventListener("click", () => closeModal(btn.dataset.closeModal));
+  });
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    overlay.addEventListener("click", (e) => { if(e.target === overlay) closeModal(overlay.id); });
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape"){
+      document.querySelectorAll(".modal-overlay:not(.hidden)").forEach(o => closeModal(o.id));
+    }
+  });
+
   // ---------- xlsx helpers ----------
   function readWorkbook(file, cb){
     const reader = new FileReader();
@@ -524,6 +613,23 @@ const db = firebase.firestore();
     for(const c of candidates){ const idx = norm.indexOf(c); if(idx !== -1) return headers[idx]; }
     for(let i=0;i<norm.length;i++){ for(const c of candidates){ if(norm[i].includes(c)) return headers[i]; } }
     return headers[0] || "";
+  }
+  function guessColumnOptional(headers, candidates){
+    const norm = headers.map(h => normalize(h));
+    for(const c of candidates){ const idx = norm.indexOf(c); if(idx !== -1) return headers[idx]; }
+    for(let i=0;i<norm.length;i++){ for(const c of candidates){ if(norm[i].includes(c)) return headers[i]; } }
+    return "";
+  }
+  function parsePct(raw){
+    if(raw === null || raw === undefined || raw === "") return null;
+    const hasPercentSign = /%/.test(String(raw));
+    const s = String(raw).trim().replace("%","").replace(",",".");
+    let n = parseFloat(s);
+    if(isNaN(n)) return null;
+    if(!hasPercentSign && n <= 1) n = n * 100;
+    if(n < 0) n = 0;
+    if(n > 100) n = 100;
+    return Math.round(n * 10) / 10;
   }
   function makeHeaderSelect(headers, selected){
     const sel = el("select");
@@ -664,6 +770,7 @@ const db = firebase.firestore();
       console.error(e);
     }
     renderCourseSelect();
+    renderCourseTabs();
   }
 
   function renderCourseSelect(){
@@ -672,6 +779,19 @@ const db = firebase.firestore();
     sel.appendChild(el("option", {value:""}, [document.createTextNode(app.coursesIndex.length ? "Elige un curso..." : "Aún no hay cursos guardados")]));
     app.coursesIndex.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach(c => {
       sel.appendChild(el("option", {value:c.slug}, [document.createTextNode(c.displayName)]));
+    });
+  }
+
+  function renderCourseTabs(){
+    const wrap = document.getElementById("course-tabs");
+    wrap.innerHTML = "";
+    app.coursesIndex.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach((c, i) => {
+      const btn = el("button", {
+        type:"button",
+        class:"course-tab c" + (i % 4) + (c.slug === app.slug ? " active" : "")
+      }, [document.createTextNode(c.displayName)]);
+      btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
+      wrap.appendChild(btn);
     });
   }
 
@@ -685,7 +805,7 @@ const db = firebase.firestore();
     if(!name) return;
     const slug = slugify(name);
     const existing = app.coursesIndex.find(c => c.slug === slug);
-    if(existing){ document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; return; }
+    if(existing){ document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; closeModal("modal-course"); return; }
 
     const meta = emptyMeta(name, slug);
     setSaveStatus("Creando curso...");
@@ -696,6 +816,11 @@ const db = firebase.firestore();
     input.value = "";
     await loadCourse(slug);
     setSaveStatus("Curso creado.");
+    closeModal("modal-course");
+  });
+
+  document.getElementById("course-new-name").addEventListener("keydown", (e) => {
+    if(e.key === "Enter") document.getElementById("btn-new-course").click();
   });
 
   document.getElementById("btn-delete-course").addEventListener("click", async () => {
@@ -707,6 +832,7 @@ const db = firebase.firestore();
     app.coursesIndex = app.coursesIndex.filter(c => c.slug !== app.slug);
     app.slug = null; app.meta = null; app.master = []; app.log = [];
     renderCourseSelect();
+    renderCourseTabs();
     document.getElementById("course-select").value = "";
     document.getElementById("course-head").classList.add("hidden");
     document.getElementById("course-dependent").classList.add("hidden");
@@ -722,6 +848,8 @@ const db = firebase.firestore();
     app.log = log;
     app.lastRun = { nuevos:[], cambios:[], alta:[], revisar:[] };
     setSaveStatus("");
+    renderCourseTabs();
+    resetTableFilter("madre");
 
     document.getElementById("course-head").classList.remove("hidden");
     document.getElementById("course-name-display").textContent = app.meta.displayName;
@@ -871,11 +999,28 @@ const db = firebase.firestore();
       container.appendChild(nameRow);
       nameSel.addEventListener("change", checkReady);
 
+      const progRow = el("div", {class:"field-row"});
+      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
+      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
+        ? savedMap.progresoCol
+        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
+      const progSel = el("select");
+      progSel.id = "map-plataforma-progreso";
+      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === progDefault) opt.selected = true;
+        progSel.appendChild(opt);
+      });
+      progRow.appendChild(progSel);
+      container.appendChild(progRow);
+
       const emailHeaderNorm = normalize(emailSel.value);
       const nameHeaderNorm = normalize(nameSel.value);
+      const progHeaderNorm = normalize(progSel.value);
       const defaultExtra = (savedMap && savedMap.extraCols)
         ? savedMap.extraCols.filter(c => headers.includes(c))
-        : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm);
+        : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm && normalize(h) !== progHeaderNorm);
       appendChipSection(container, "plataforma-extra", headers, defaultExtra, "Columnas de plataforma a traer (progreso, hora, etc.)", false);
     }
 
@@ -990,7 +1135,7 @@ const db = firebase.firestore();
         record = {
           _key:key, nombre:name, email:email || "",
           santanderExtra:{}, plataformaExtra:{},
-          estado:"Falta registrar",
+          estado:"Falta registrar", progreso:0,
           primeraVez:today, ultimaCargaSantander:today, presenteUltimaCarga:true,
           ultimaActualizacionPlataforma:null
         };
@@ -1057,6 +1202,7 @@ const db = firebase.firestore();
 
     btn.disabled = false; btn.textContent = "Procesar actualización";
     document.querySelector('.tab[data-tab="nuevos"]').click();
+    closeModal("modal-santander");
   });
 
   function flattenForDiff(record){
@@ -1073,8 +1219,10 @@ const db = firebase.firestore();
 
     const emailCol = document.getElementById("map-plataforma-email").value;
     const nameCol = document.getElementById("map-plataforma-fullname").value;
+    const progresoCol = document.getElementById("map-plataforma-progreso").value;
     const extraCols = getSelectedChips("plataforma-extra");
     const today = todayISO();
+    let lockedCount = 0;
 
     const platByEmail = new Map();
     const platByName = new Map();
@@ -1100,6 +1248,15 @@ const db = firebase.firestore();
         record.estado = "En plataforma";
         record.ultimaActualizacionPlataforma = today;
         usedPlatEmails.add(normalize(match[emailCol]));
+
+        if(progresoCol){
+          const parsed = parsePct(match[progresoCol]);
+          if(parsed !== null){
+            const prevProgreso = typeof record.progreso === "number" ? record.progreso : 0;
+            if(parsed < prevProgreso) lockedCount++;
+            record.progreso = Math.max(prevProgreso, parsed);
+          }
+        }
       } else {
         record.estado = "Falta registrar";
       }
@@ -1114,15 +1271,17 @@ const db = firebase.firestore();
       revisar.push(r);
     });
 
-    app.meta.plataformaMapping = {emailCol, nameCol, extraCols};
+    app.meta.plataformaMapping = {emailCol, nameCol, progresoCol, extraCols};
     app.meta.lastPlataformaUpload = today;
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
 
     const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
+    let resumen = (app.master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander";
+    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
     const logEntry = {
       date: nowISO(), tipo:"Plataforma", archivo: app.pending.plataforma.fileName,
-      resumen: (app.master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander",
+      resumen: resumen,
       por: (auth.currentUser && auth.currentUser.email) || ""
     };
     app.log.unshift(logEntry);
@@ -1148,14 +1307,17 @@ const db = firebase.firestore();
 
     btn.disabled = false; btn.textContent = "Cruzar con tabla madre";
     document.querySelector('.tab[data-tab="madre"]').click();
+    closeModal("modal-plataforma");
   });
 
   // ---------- rendering ----------
   function flattenMasterRow(record){
     const row = {};
+    row["Estado"] = record.estado;
+    row["Progreso"] = (typeof record.progreso === "number") ? record.progreso + "%" : "—";
     row["Nombre"] = record.nombre;
     row["Email"] = record.email;
-    const usedKeys = new Set(["Nombre","Email"]);
+    const usedKeys = new Set(["Estado","Progreso","Nombre","Email"]);
     Object.keys(record.santanderExtra || {}).forEach(c => {
       const label = usedKeys.has(c) ? c + " (Santander)" : c;
       row[label] = record.santanderExtra[c];
@@ -1166,7 +1328,6 @@ const db = firebase.firestore();
       row[label] = record.plataformaExtra[c];
       usedKeys.add(label);
     });
-    row["Estado"] = record.estado;
     row["En última carga Santander"] = record.presenteUltimaCarga ? "Sí" : "No";
     row["Primera vez visto"] = record.primeraVez;
     row["Última carga Santander"] = record.ultimaCargaSantander;
@@ -1175,12 +1336,7 @@ const db = firebase.firestore();
   }
 
   function renderStats(){
-    document.getElementById("st-total").textContent = app.master.length;
-    document.getElementById("st-nuevos").textContent = app.lastRun.nuevos.length;
-    document.getElementById("st-cambios").textContent = app.lastRun.cambios.length;
     const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
-    document.getElementById("st-alta").textContent = altaCount;
-    document.getElementById("st-revisar").textContent = app.lastRun.revisar.length;
 
     document.getElementById("badge-madre").textContent = app.master.length;
     document.getElementById("badge-alta").textContent = altaCount;
@@ -1188,11 +1344,21 @@ const db = firebase.firestore();
     document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = app.log.length;
+
+    const p0 = app.master.filter(r => (r.progreso||0) <= 0).length;
+    const p1 = app.master.filter(r => (r.progreso||0) > 0 && r.progreso < 40).length;
+    const p2 = app.master.filter(r => (r.progreso||0) >= 40 && r.progreso < 80).length;
+    const p3 = app.master.filter(r => (r.progreso||0) >= 80).length;
+    document.getElementById("st-p0").textContent = p0;
+    document.getElementById("st-p1").textContent = p1;
+    document.getElementById("st-p2").textContent = p2;
+    document.getElementById("st-p3").textContent = p3;
   }
 
   function renderMasterTable(){
     const rows = app.master.map(flattenMasterRow);
     renderTableInto("madre", rows, true);
+    if(typeof refreshTableView === "function") refreshTableView("madre");
     renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
   }
 
@@ -1229,6 +1395,11 @@ const db = firebase.firestore();
         const td = el("td");
         if(c === "Estado"){
           const span = el("span", {class:"badge-status " + (val === "En plataforma" ? "ok" : "falta")}, [document.createTextNode(val)]);
+          td.appendChild(span);
+        } else if(c === "Progreso"){
+          const pct = parseFloat(val);
+          const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct < 40 ? "p1" : pct < 80 ? "p2" : "p3");
+          const span = el("span", {class:"badge-progreso " + cls}, [document.createTextNode(val)]);
           td.appendChild(span);
         } else if(c === "En última carga Santander"){
           const span = el("span", {class:"badge-yesno " + (val === "Sí" ? "si" : "")}, [document.createTextNode(val)]);
@@ -1283,15 +1454,51 @@ const db = firebase.firestore();
     return app.lastRun[key] || [];
   }
 
+  const tableFilterState = {};
+
+  function matchesFilter(row, filterValue){
+    if(!filterValue || filterValue === "all") return true;
+    if(filterValue === "p0" || filterValue === "p1" || filterValue === "p2" || filterValue === "p3"){
+      const pct = parseFloat(row["Progreso"]);
+      if(isNaN(pct)) return false;
+      if(filterValue === "p0") return pct <= 0;
+      if(filterValue === "p1") return pct > 0 && pct < 40;
+      if(filterValue === "p2") return pct >= 40 && pct < 80;
+      if(filterValue === "p3") return pct >= 80;
+    }
+    return true;
+  }
+
+  function resetTableFilter(key){
+    tableFilterState[key] = "all";
+    document.querySelectorAll('.filter-chip[data-filter-key="' + key + '"]').forEach(b => {
+      b.classList.toggle("active", b.dataset.filterValue === "all");
+    });
+  }
+
+  function refreshTableView(key){
+    const input = document.querySelector('[data-search="' + key + '"]');
+    const q = input ? normalize(input.value) : "";
+    const filterValue = tableFilterState[key] || "all";
+    const rows = currentRowsFor(key);
+    const cols = rows.length ? Object.keys(rows[0]) : [];
+    let filtered = rows.filter(r => matchesFilter(r, filterValue));
+    if(q) filtered = filtered.filter(r => cols.some(c => normalize(r[c]).includes(q)));
+    const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+    renderRows(panel.querySelector("tbody"), filtered, cols);
+  }
+
   document.querySelectorAll("[data-search]").forEach(input => {
-    input.addEventListener("input", () => {
-      const key = input.dataset.search;
-      const q = normalize(input.value);
-      const rows = currentRowsFor(key);
-      const cols = rows.length ? Object.keys(rows[0]) : [];
-      const filtered = q ? rows.filter(r => cols.some(c => normalize(r[c]).includes(q))) : rows;
-      const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
-      renderRows(panel.querySelector("tbody"), filtered, cols);
+    input.addEventListener("input", () => refreshTableView(input.dataset.search));
+  });
+
+  document.querySelectorAll(".filter-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.filterKey;
+      tableFilterState[key] = btn.dataset.filterValue;
+      document.querySelectorAll('.filter-chip[data-filter-key="' + key + '"]').forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      refreshTableView(key);
     });
   });
 
