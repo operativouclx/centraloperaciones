@@ -126,6 +126,51 @@
   }
   .modal-close:hover{color:var(--ink);}
 
+  .modal-box-wide{max-width:960px;}
+  .dashboard-loading{color:var(--ink-soft);font-size:13.5px;padding:30px 0;text-align:center;}
+  .dashboard-section-title{font-family:'Fraunces', serif;font-size:15.5px;font-weight:600;margin:22px 0 12px;color:var(--ink);}
+
+  .dashboard-compare-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+  .dashboard-compare-label{width:130px;flex:none;font-size:12.5px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dashboard-compare-track{flex:1;min-width:80px;height:14px;border-radius:8px;background:#EEF1F0;overflow:hidden;}
+  .dashboard-compare-fill{height:100%;background:var(--teal);border-radius:8px;}
+  .dashboard-compare-pct{width:42px;flex:none;text-align:right;font-size:12.5px;font-weight:700;color:var(--teal-dark);}
+  .dashboard-compare-delta{flex:none;text-align:right;margin-left:auto;}
+  .dashboard-empty{text-align:center;color:var(--ink-soft);padding:30px;font-size:13.5px;}
+  @media (max-width:560px){
+    .dashboard-compare-label{width:100%;}
+    .dashboard-compare-delta{margin-left:0;}
+  }
+
+  .dashboard-cards{display:grid;grid-template-columns:repeat(auto-fill, minmax(270px, 1fr));gap:14px;}
+  .dashboard-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel);}
+  .dashboard-card h4{font-family:'Fraunces', serif;font-size:16px;margin-bottom:2px;}
+  .dashboard-card .dc-total{font-size:12px;color:var(--ink-soft);margin-bottom:10px;}
+  .dashboard-bar{display:flex;height:16px;border-radius:8px;overflow:hidden;margin-bottom:8px;background:#EEF1F0;}
+  .dashboard-bar span{height:100%;}
+  .dashboard-bar .seg-p0{background:var(--rust);}
+  .dashboard-bar .seg-p1{background:var(--amber);}
+  .dashboard-bar .seg-p2{background:#E8B93B;}
+  .dashboard-bar .seg-p3{background:var(--teal);}
+  .dashboard-legend{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--ink-soft);margin-bottom:12px;}
+  .dashboard-legend span{display:inline-flex;align-items:center;gap:4px;}
+  .dashboard-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .dashboard-legend .lp0{background:var(--rust);}
+  .dashboard-legend .lp1{background:var(--amber);}
+  .dashboard-legend .lp2{background:#E8B93B;}
+  .dashboard-legend .lp3{background:var(--teal);}
+
+  .dashboard-tasas{border-top:1px dashed var(--line);padding-top:10px;margin-top:2px;}
+  .dashboard-tasa-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
+  .dashboard-tasa-label{font-size:12px;color:var(--ink-soft);}
+  .dashboard-tasa-value{font-family:'Fraunces', serif;font-size:16px;font-weight:600;color:var(--ink);}
+
+  .delta-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);white-space:nowrap;}
+  .delta-badge.up{background:var(--teal-bg);color:var(--teal-dark);}
+  .delta-badge.down{background:var(--rust-bg);color:var(--rust);}
+
+  .dashboard-card .dc-meta{font-size:11.5px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:8px;margin-top:10px;}
+
   .course-head{
     margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
     display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;
@@ -312,6 +357,7 @@
     <div class="panel panel-compact">
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
+        <button class="btn btn-ghost btn-small" id="btn-open-dashboard" type="button">Dashboard</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <select id="course-select" class="hidden"><option value="">Cargando...</option></select>
@@ -486,6 +532,32 @@
       </div>
     </div>
   </div>
+
+  <!-- ======================= MODAL: dashboard general ======================= -->
+  <div class="modal-overlay hidden" id="modal-dashboard">
+    <div class="modal-box modal-box-wide">
+      <button class="modal-close" type="button" data-close-modal="modal-dashboard">&times;</button>
+      <h3 class="modal-title">Dashboard general</h3>
+      <p class="modal-sub">Resumen visual del avance de todos los cursos, con la tasa de término y cuánto se movió respecto a la semana pasada.</p>
+
+      <div id="dashboard-loading" class="dashboard-loading">Cargando...</div>
+
+      <div id="dashboard-content" class="hidden">
+        <div class="stat-strip stat-strip-progress">
+          <div class="stat teal"><div class="n" id="dash-total-courses">0</div><div class="l">Cursos</div></div>
+          <div class="stat plum"><div class="n" id="dash-total-people">0</div><div class="l">Personas en total</div></div>
+          <div class="stat teal"><div class="n" id="dash-total-finalizado">0</div><div class="l">Finalizados en total</div></div>
+          <div class="stat amber"><div class="n" id="dash-total-pct">0%</div><div class="l">Tasa de término global</div></div>
+        </div>
+
+        <h4 class="dashboard-section-title">Tasa de término por curso (sobre tabla madre)</h4>
+        <div id="dashboard-compare"></div>
+
+        <h4 class="dashboard-section-title">Detalle por curso</h4>
+        <div class="dashboard-cards" id="dashboard-cards"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -564,6 +636,10 @@ const db = firebase.firestore();
   });
   document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
   document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
+  document.getElementById("btn-open-dashboard").addEventListener("click", () => {
+    openModal("modal-dashboard");
+    loadDashboard();
+  });
 
   document.querySelectorAll("[data-close-modal]").forEach(btn => {
     btn.addEventListener("click", () => closeModal(btn.dataset.closeModal));
@@ -658,7 +734,8 @@ const db = firebase.firestore();
       lastSantanderUpload: null,
       lastPlataformaUpload: null,
       lastSantanderFile: null,
-      lastPlataformaFile: null
+      lastPlataformaFile: null,
+      stats: emptyStats()
     };
   }
 
@@ -668,15 +745,96 @@ const db = firebase.firestore();
     return "n_" + normalize(name);
   }
 
+  // ---------- estadísticas del curso (para stat-strip y dashboard) ----------
+  function emptyStats(){
+    return {total:0, alta:0, p0:0, p1:0, p2:0, p3:0};
+  }
+  function computeMasterStats(master){
+    const total = master.length;
+    const alta = master.filter(r => r.estado !== "En plataforma").length;
+    const p0 = master.filter(r => (r.progreso||0) <= 0).length;
+    const p1 = master.filter(r => (r.progreso||0) > 0 && r.progreso < 40).length;
+    const p2 = master.filter(r => (r.progreso||0) >= 40 && r.progreso < 80).length;
+    const p3 = master.filter(r => (r.progreso||0) >= 80).length;
+    return {total, alta, p0, p1, p2, p3};
+  }
+  function computeTasas(stats){
+    stats = stats || {};
+    const total = stats.total || 0;
+    const p0 = stats.p0 || 0;
+    const p3 = stats.p3 || 0;
+    const iniciaron = total - p0;
+    const tasaSantander = total ? (p3 / total * 100) : 0;
+    const tasaIniciados = iniciaron > 0 ? (p3 / iniciaron * 100) : 0;
+    return {
+      tasaSantander: Math.round(tasaSantander * 10) / 10,
+      tasaIniciados: Math.round(tasaIniciados * 10) / 10
+    };
+  }
+  function isoWeekLabel(d){
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - dayNum + 3);
+    const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+    const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+    firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+    const week = 1 + Math.round((date - firstThursday) / (7 * 24 * 3600 * 1000));
+    return date.getUTCFullYear() + "-W" + String(week).padStart(2, "0");
+  }
+
   // ================= FIRESTORE DATA LAYER =================
   const coursesColl = () => db.collection("courses");
   const courseDoc = (slug) => coursesColl().doc(slug);
   const masterColl = (slug) => courseDoc(slug).collection("master");
   const logColl = (slug) => courseDoc(slug).collection("log");
+  const weeklyStatsColl = (slug) => courseDoc(slug).collection("weeklyStats");
 
   async function fetchCoursesIndex(){
     const snap = await coursesColl().get();
-    return snap.docs.map(d => ({slug:d.id, displayName: d.data().displayName || d.id, updatedAt: d.data().updatedAt}));
+    return snap.docs.map(d => {
+      const data = d.data() || {};
+      return {
+        slug: d.id,
+        displayName: data.displayName || d.id,
+        updatedAt: data.updatedAt,
+        stats: data.stats || emptyStats(),
+        lastSantanderUpload: data.lastSantanderUpload || null,
+        lastPlataformaUpload: data.lastPlataformaUpload || null
+      };
+    });
+  }
+
+  // Guarda, una sola vez por semana ISO, el estado de las estadísticas justo
+  // antes de la actualización — así el dashboard puede comparar "esta semana"
+  // contra ese punto de partida sin depender de un cron en el servidor.
+  async function ensureWeeklySnapshot(slug, statsBeforeUpdate){
+    const label = isoWeekLabel(new Date());
+    const ref = weeklyStatsColl(slug).doc(label);
+    try{
+      const snap = await ref.get();
+      if(!snap.exists){
+        const tasas = computeTasas(statsBeforeUpdate);
+        await ref.set({
+          capturedAt: nowISO(),
+          stats: statsBeforeUpdate || emptyStats(),
+          tasaSantander: tasas.tasaSantander,
+          tasaIniciados: tasas.tasaIniciados
+        });
+      }
+    }catch(e){ console.error("No se pudo guardar el snapshot semanal:", e); }
+  }
+
+  // Snapshot que sirve de referencia para "cuánto se movió esta semana":
+  // el de la semana en curso si ya existe, o si no el más reciente disponible.
+  async function getBaselineSnapshot(slug){
+    const label = isoWeekLabel(new Date());
+    try{
+      const snap = await weeklyStatsColl(slug).doc(label).get();
+      if(snap.exists) return snap.data();
+      const q = await weeklyStatsColl(slug).orderBy("capturedAt", "desc").limit(1).get();
+      if(!q.empty) return q.docs[0].data();
+    }catch(e){ console.error(e); }
+    return null;
   }
 
   async function createCourseRemote(meta){
@@ -1161,6 +1319,9 @@ const db = firebase.firestore();
     app.meta.lastSantanderFile = app.pending.santander.fileName;
     app.meta.updatedAt = nowISO();
 
+    await ensureWeeklySnapshot(app.slug, app.meta.stats);
+    app.meta.stats = computeMasterStats(app.master);
+
     const logEntry = {
       date: nowISO(), tipo:"Santander", archivo: app.pending.santander.fileName,
       resumen: nuevos.length + " nuevos, " + cambios.length + " cambios, " + (app.pending.santander.rows.length - nuevos.length - cambios.length) + " sin cambios",
@@ -1267,6 +1428,9 @@ const db = firebase.firestore();
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
 
+    await ensureWeeklySnapshot(app.slug, app.meta.stats);
+    app.meta.stats = computeMasterStats(app.master);
+
     const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
     let resumen = (app.master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander";
     if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
@@ -1327,23 +1491,20 @@ const db = firebase.firestore();
   }
 
   function renderStats(){
-    const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
+    const stats = computeMasterStats(app.master);
+    app.meta.stats = stats;
 
-    document.getElementById("badge-madre").textContent = app.master.length;
-    document.getElementById("badge-alta").textContent = altaCount;
+    document.getElementById("badge-madre").textContent = stats.total;
+    document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-nuevos").textContent = app.lastRun.nuevos.length;
     document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = app.log.length;
 
-    const p0 = app.master.filter(r => (r.progreso||0) <= 0).length;
-    const p1 = app.master.filter(r => (r.progreso||0) > 0 && r.progreso < 40).length;
-    const p2 = app.master.filter(r => (r.progreso||0) >= 40 && r.progreso < 80).length;
-    const p3 = app.master.filter(r => (r.progreso||0) >= 80).length;
-    document.getElementById("st-p0").textContent = p0;
-    document.getElementById("st-p1").textContent = p1;
-    document.getElementById("st-p2").textContent = p2;
-    document.getElementById("st-p3").textContent = p3;
+    document.getElementById("st-p0").textContent = stats.p0;
+    document.getElementById("st-p1").textContent = stats.p1;
+    document.getElementById("st-p2").textContent = stats.p2;
+    document.getElementById("st-p3").textContent = stats.p3;
   }
 
   function renderMasterTable(){
@@ -1427,6 +1588,133 @@ const db = firebase.firestore();
       tbody.appendChild(tr);
     });
     document.getElementById("badge-historial").textContent = app.log.length;
+  }
+
+  // ---------- dashboard general (todos los cursos) ----------
+  function deltaBadge(delta){
+    if(delta === null || delta === undefined || isNaN(delta)){
+      return el("span", {class:"delta-badge"}, [document.createTextNode("Sin comparación")]);
+    }
+    if(delta === 0){
+      return el("span", {class:"delta-badge"}, [document.createTextNode("Sin cambio vs. semana pasada")]);
+    }
+    const cls = delta > 0 ? "up" : "down";
+    const arrow = delta > 0 ? "▲" : "▼";
+    const sign = delta > 0 ? "+" : "";
+    return el("span", {class:"delta-badge " + cls}, [document.createTextNode(arrow + " " + sign + delta + " pts vs. semana pasada")]);
+  }
+
+  async function loadDashboard(){
+    const loading = document.getElementById("dashboard-loading");
+    const content = document.getElementById("dashboard-content");
+    loading.classList.remove("hidden");
+    content.classList.add("hidden");
+
+    let courses = [];
+    try{
+      courses = await fetchCoursesIndex();
+    }catch(e){
+      console.error(e);
+    }
+
+    const enriched = await Promise.all(courses.map(async c => {
+      const baseline = await getBaselineSnapshot(c.slug);
+      const currentTasas = computeTasas(c.stats);
+      const deltaSantander = baseline ? Math.round((currentTasas.tasaSantander - baseline.tasaSantander) * 10) / 10 : null;
+      const deltaIniciados = baseline ? Math.round((currentTasas.tasaIniciados - baseline.tasaIniciados) * 10) / 10 : null;
+      return Object.assign({}, c, {tasas: currentTasas, deltaSantander, deltaIniciados});
+    }));
+
+    renderDashboard(enriched);
+    loading.classList.add("hidden");
+    content.classList.remove("hidden");
+  }
+
+  function renderDashboard(courses){
+    const compareEl = document.getElementById("dashboard-compare");
+    const cardsEl = document.getElementById("dashboard-cards");
+    compareEl.innerHTML = "";
+    cardsEl.innerHTML = "";
+
+    const totalCourses = courses.length;
+    const totalPeople = courses.reduce((sum,c) => sum + (c.stats.total || 0), 0);
+    const totalFinalizado = courses.reduce((sum,c) => sum + (c.stats.p3 || 0), 0);
+    const pctGlobal = totalPeople ? Math.round((totalFinalizado / totalPeople) * 100) : 0;
+    document.getElementById("dash-total-courses").textContent = totalCourses;
+    document.getElementById("dash-total-people").textContent = totalPeople;
+    document.getElementById("dash-total-finalizado").textContent = totalFinalizado;
+    document.getElementById("dash-total-pct").textContent = pctGlobal + "%";
+
+    if(!courses.length){
+      cardsEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Todavía no hay cursos guardados.")]));
+      compareEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("—")]));
+      return;
+    }
+
+    const sorted = courses.slice().sort((a,b) => b.tasas.tasaSantander - a.tasas.tasaSantander);
+
+    sorted.forEach(c => {
+      const row = el("div", {class:"dashboard-compare-row"});
+      row.appendChild(el("div", {class:"dashboard-compare-label", title:c.displayName}, [document.createTextNode(c.displayName)]));
+      const track = el("div", {class:"dashboard-compare-track"});
+      const fill = el("div", {class:"dashboard-compare-fill"});
+      fill.style.width = c.tasas.tasaSantander + "%";
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el("div", {class:"dashboard-compare-pct"}, [document.createTextNode(c.tasas.tasaSantander + "%")]));
+      const deltaWrap = el("div", {class:"dashboard-compare-delta"}, [deltaBadge(c.deltaSantander)]);
+      row.appendChild(deltaWrap);
+      compareEl.appendChild(row);
+    });
+
+    sorted.forEach(c => {
+      const s = c.stats;
+      const card = el("div", {class:"dashboard-card"});
+      card.appendChild(el("h4", {}, [document.createTextNode(c.displayName)]));
+      card.appendChild(el("div", {class:"dc-total"}, [document.createTextNode(s.total + " en tabla madre · " + s.alta + " faltan por dar de alta")]));
+
+      const bar = el("div", {class:"dashboard-bar"});
+      [["p0","seg-p0"],["p1","seg-p1"],["p2","seg-p2"],["p3","seg-p3"]].forEach(([key,cls]) => {
+        const pct = s.total ? (s[key] / s.total * 100) : 0;
+        if(pct > 0){
+          const seg = el("span", {class:cls, title:key + ": " + s[key]});
+          seg.style.width = pct + "%";
+          bar.appendChild(seg);
+        }
+      });
+      card.appendChild(bar);
+
+      const legend = el("div", {class:"dashboard-legend"});
+      [["lp0","No iniciado",s.p0],["lp1","Iniciando",s.p1],["lp2","A medio camino",s.p2],["lp3","Finalizado",s.p3]].forEach(([cls,label,count]) => {
+        legend.appendChild(el("span", {}, [el("i", {class:cls}, []), document.createTextNode(label + ": " + count)]));
+      });
+      card.appendChild(legend);
+
+      const tasas = el("div", {class:"dashboard-tasas"});
+      const row1 = el("div", {class:"dashboard-tasa-row"});
+      row1.appendChild(el("div", {}, [
+        el("div", {class:"dashboard-tasa-label"}, [document.createTextNode("Tasa de término (sobre tabla madre)")]),
+        el("div", {class:"dashboard-tasa-value"}, [document.createTextNode(c.tasas.tasaSantander + "%")])
+      ]));
+      row1.appendChild(deltaBadge(c.deltaSantander));
+      tasas.appendChild(row1);
+
+      const row2 = el("div", {class:"dashboard-tasa-row"});
+      row2.appendChild(el("div", {}, [
+        el("div", {class:"dashboard-tasa-label"}, [document.createTextNode("Tasa de término (sobre los que iniciaron)")]),
+        el("div", {class:"dashboard-tasa-value"}, [document.createTextNode(c.tasas.tasaIniciados + "%")])
+      ]));
+      row2.appendChild(deltaBadge(c.deltaIniciados));
+      tasas.appendChild(row2);
+      card.appendChild(tasas);
+
+      const meta = el("div", {class:"dc-meta"});
+      meta.appendChild(el("span", {}, [document.createTextNode("Santander: " + fmtDate(c.lastSantanderUpload))]));
+      meta.appendChild(el("span", {}, [document.createTextNode("Plataforma: " + fmtDate(c.lastPlataformaUpload))]));
+      card.appendChild(meta);
+
+      cardsEl.appendChild(card);
+    });
   }
 
   // ---------- tabs, search, download ----------
