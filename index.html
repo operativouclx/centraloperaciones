@@ -1509,60 +1509,75 @@ const db = firebase.firestore();
 
   function renderMasterTable(){
     const rows = app.master.map(flattenMasterRow);
-    renderTableInto("madre", rows, true);
-    if(typeof refreshTableView === "function") refreshTableView("madre");
+    renderTableHead("madre", rows);
+    // El cuerpo de "madre" se pinta una sola vez, ya filtrado/buscado —
+    // pintarlo también sin filtrar aquí duplicaría el costo de armar la
+    // tabla completa (crítico con cursos de miles de registros).
+    refreshTableView("madre");
     renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
   }
 
   function renderSideTable(key, rows){
-    renderTableInto(key, rows, key === "alta");
+    renderTableInto(key, rows);
   }
 
-  function renderTableInto(key, rows){
+  function renderTableHead(key, rows){
     const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
     const thead = panel.querySelector("thead");
-    const tbody = panel.querySelector("tbody");
-    thead.innerHTML = ""; tbody.innerHTML = "";
-
-    if(!rows.length){
-      const tr = el("tr");
-      const td = el("td", {colspan:"20"}, [document.createTextNode("Sin registros en esta lista.")]);
-      td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
-      tr.appendChild(td); tbody.appendChild(tr);
-      return;
-    }
+    thead.innerHTML = "";
+    if(!rows.length) return;
     const cols = Object.keys(rows[0]);
     const headRow = el("tr");
     cols.forEach(c => headRow.appendChild(el("th", {}, [document.createTextNode(c)])));
     thead.appendChild(headRow);
-    renderRows(tbody, rows, cols);
+  }
+
+  function renderTableInto(key, rows){
+    const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+    renderTableHead(key, rows);
+    const cols = rows.length ? Object.keys(rows[0]) : [];
+    renderRows(panel.querySelector("tbody"), rows, cols);
   }
 
   function renderRows(tbody, rows, cols){
-    tbody.innerHTML = "";
-    rows.forEach(r => {
+    // Se arma en un DocumentFragment y se inserta una sola vez: con miles
+    // de filas, insertar de una en una al tbody en vivo es mucho más lento.
+    const fragment = document.createDocumentFragment();
+
+    if(!rows.length){
       const tr = el("tr");
-      cols.forEach(c => {
-        const val = r[c];
-        const td = el("td");
-        if(c === "Estado"){
-          const span = el("span", {class:"badge-status " + (val === "En plataforma" ? "ok" : "falta")}, [document.createTextNode(val)]);
-          td.appendChild(span);
-        } else if(c === "Progreso"){
-          const pct = parseFloat(val);
-          const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct < 40 ? "p1" : pct < 80 ? "p2" : "p3");
-          const span = el("span", {class:"badge-progreso " + cls}, [document.createTextNode(val)]);
-          td.appendChild(span);
-        } else if(c === "En última carga Santander"){
-          const span = el("span", {class:"badge-yesno " + (val === "Sí" ? "si" : "")}, [document.createTextNode(val)]);
-          td.appendChild(span);
-        } else {
-          td.textContent = (val === null || val === undefined) ? "" : val;
-        }
-        tr.appendChild(td);
+      const td = el("td", {colspan:String(Math.max(cols.length, 1))}, [document.createTextNode("Sin registros en esta lista.")]);
+      td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
+      tr.appendChild(td);
+      fragment.appendChild(tr);
+    } else {
+      rows.forEach(r => {
+        const tr = el("tr");
+        cols.forEach(c => {
+          const val = r[c];
+          const td = el("td");
+          if(c === "Estado"){
+            const span = el("span", {class:"badge-status " + (val === "En plataforma" ? "ok" : "falta")}, [document.createTextNode(val)]);
+            td.appendChild(span);
+          } else if(c === "Progreso"){
+            const pct = parseFloat(val);
+            const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct < 40 ? "p1" : pct < 80 ? "p2" : "p3");
+            const span = el("span", {class:"badge-progreso " + cls}, [document.createTextNode(val)]);
+            td.appendChild(span);
+          } else if(c === "En última carga Santander"){
+            const span = el("span", {class:"badge-yesno " + (val === "Sí" ? "si" : "")}, [document.createTextNode(val)]);
+            td.appendChild(span);
+          } else {
+            td.textContent = (val === null || val === undefined) ? "" : val;
+          }
+          tr.appendChild(td);
+        });
+        fragment.appendChild(tr);
       });
-      tbody.appendChild(tr);
-    });
+    }
+
+    tbody.innerHTML = "";
+    tbody.appendChild(fragment);
   }
 
   function renderHistorial(){
