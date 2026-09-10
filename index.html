@@ -137,6 +137,15 @@
   .dashboard-compare-pct{width:42px;flex:none;text-align:right;font-size:12.5px;font-weight:700;color:var(--teal-dark);}
   .dashboard-compare-delta{flex:none;text-align:right;margin-left:auto;}
   .dashboard-empty{text-align:center;color:var(--ink-soft);padding:30px;font-size:13.5px;}
+
+  .archived-row{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px 0;border-bottom:1px solid var(--line-soft);
+  }
+  .archived-row:last-child{border-bottom:none;}
+  .archived-name{font-weight:600;font-size:14px;flex:1;min-width:120px;}
+  .archived-meta{font-size:12px;color:var(--ink-soft);}
+  .archived-actions{display:flex;gap:8px;flex:none;}
   @media (max-width:560px){
     .dashboard-compare-label{width:100%;}
     .dashboard-compare-delta{margin-left:0;}
@@ -358,6 +367,7 @@
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-open-dashboard" type="button">Dashboard</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-archived" type="button">Archivados</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <select id="course-select" class="hidden"><option value="">Cargando...</option></select>
@@ -375,7 +385,7 @@
         <div class="course-head-actions">
           <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
           <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
-          <button class="btn btn-danger btn-small" id="btn-delete-course">Eliminar este curso</button>
+          <button class="btn btn-ghost btn-small" id="btn-archive-course" title="Lo oculta de la lista principal sin borrar nada. Se puede restaurar en cualquier momento desde &quot;Archivados&quot;.">Archivar este curso</button>
         </div>
       </div>
     </div>
@@ -558,6 +568,16 @@
       </div>
     </div>
   </div>
+
+  <!-- ======================= MODAL: cursos archivados ======================= -->
+  <div class="modal-overlay hidden" id="modal-archived">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-archived">&times;</button>
+      <h3 class="modal-title">Cursos archivados</h3>
+      <p class="modal-sub">Ocultos de la lista principal, pero con todos sus datos intactos. Restáuralos cuando quieras.</p>
+      <div id="archived-list"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -737,7 +757,8 @@ const db = firebase.firestore();
       lastPlataformaUpload: null,
       lastSantanderFile: null,
       lastPlataformaFile: null,
-      stats: emptyStats()
+      stats: emptyStats(),
+      archived: false
     };
   }
 
@@ -801,9 +822,14 @@ const db = firebase.firestore();
         updatedAt: data.updatedAt,
         stats: data.stats || emptyStats(),
         lastSantanderUpload: data.lastSantanderUpload || null,
-        lastPlataformaUpload: data.lastPlataformaUpload || null
+        lastPlataformaUpload: data.lastPlataformaUpload || null,
+        archived: !!data.archived
       };
     });
+  }
+
+  async function setCourseArchived(slug, archived){
+    await courseDoc(slug).set({archived}, {merge:true});
   }
 
   // Guarda, una sola vez por semana ISO, el estado de las estadísticas justo
@@ -1022,7 +1048,7 @@ const db = firebase.firestore();
   function renderCourseTabs(){
     const wrap = document.getElementById("course-tabs");
     wrap.innerHTML = "";
-    app.coursesIndex.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach((c, i) => {
+    app.coursesIndex.filter(c => !c.archived).slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach((c, i) => {
       const btn = el("button", {
         type:"button",
         class:"course-tab c" + (i % 4) + (c.slug === app.slug ? " active" : "")
@@ -1030,6 +1056,10 @@ const db = firebase.firestore();
       btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
       wrap.appendChild(btn);
     });
+
+    const archivedCount = app.coursesIndex.filter(c => c.archived).length;
+    const archBtn = document.getElementById("btn-open-archived");
+    if(archBtn) archBtn.textContent = "Archivados" + (archivedCount ? " (" + archivedCount + ")" : "");
   }
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
@@ -1047,7 +1077,10 @@ const db = firebase.firestore();
     const meta = emptyMeta(name, slug);
     setSaveStatus("Creando curso...");
     await createCourseRemote(meta);
-    app.coursesIndex.push({slug, displayName:name, updatedAt: meta.updatedAt});
+    app.coursesIndex.push({
+      slug, displayName:name, updatedAt: meta.updatedAt,
+      stats: meta.stats, lastSantanderUpload: null, lastPlataformaUpload: null, archived: false
+    });
     renderCourseSelect();
     document.getElementById("course-select").value = slug;
     input.value = "";
@@ -1060,13 +1093,14 @@ const db = firebase.firestore();
     if(e.key === "Enter") document.getElementById("btn-new-course").click();
   });
 
-  document.getElementById("btn-delete-course").addEventListener("click", async () => {
+  document.getElementById("btn-archive-course").addEventListener("click", async () => {
     if(!app.slug) return;
-    const ok = confirm('¿Eliminar por completo el curso "' + app.meta.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
+    const ok = confirm('¿Archivar "' + app.meta.displayName + '"? Se oculta de la lista principal para todo el equipo, pero no se borra ningún dato — puedes restaurarlo cuando quieras desde "Archivados".');
     if(!ok) return;
-    setSaveStatus("Eliminando...");
-    await deleteCourseRemote(app.slug);
-    app.coursesIndex = app.coursesIndex.filter(c => c.slug !== app.slug);
+    setSaveStatus("Archivando...");
+    await setCourseArchived(app.slug, true);
+    const idx = app.coursesIndex.find(c => c.slug === app.slug);
+    if(idx) idx.archived = true;
     app.slug = null; app.meta = null; app.master = []; app.log = [];
     renderCourseSelect();
     renderCourseTabs();
@@ -1075,6 +1109,47 @@ const db = firebase.firestore();
     document.getElementById("course-dependent").classList.add("hidden");
     setSaveStatus("");
   });
+
+  document.getElementById("btn-open-archived").addEventListener("click", () => {
+    openModal("modal-archived");
+    renderArchivedModal();
+  });
+
+  async function renderArchivedModal(){
+    const listEl = document.getElementById("archived-list");
+    listEl.innerHTML = "";
+    const archived = app.coursesIndex.filter(c => c.archived).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    if(!archived.length){
+      listEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("No hay cursos archivados.")]));
+      return;
+    }
+    archived.forEach(c => {
+      const row = el("div", {class:"archived-row"});
+      row.appendChild(el("div", {class:"archived-name"}, [document.createTextNode(c.displayName)]));
+      row.appendChild(el("div", {class:"archived-meta"}, [document.createTextNode(((c.stats && c.stats.total) || 0) + " en tabla madre")]));
+      const btnRestore = el("button", {class:"btn btn-primary btn-small", type:"button"}, [document.createTextNode("Restaurar")]);
+      btnRestore.addEventListener("click", async () => {
+        btnRestore.disabled = true;
+        await setCourseArchived(c.slug, false);
+        c.archived = false;
+        renderCourseTabs();
+        renderArchivedModal();
+      });
+      const btnDelete = el("button", {class:"btn btn-danger btn-small", type:"button"}, [document.createTextNode("Eliminar definitivamente")]);
+      btnDelete.addEventListener("click", async () => {
+        const ok = confirm('¿Eliminar por completo "' + c.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
+        if(!ok) return;
+        btnDelete.disabled = true;
+        await deleteCourseRemote(c.slug);
+        app.coursesIndex = app.coursesIndex.filter(x => x.slug !== c.slug);
+        renderCourseTabs();
+        renderArchivedModal();
+      });
+      const actions = el("div", {class:"archived-actions"}, [btnRestore, btnDelete]);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  }
 
   async function loadCourse(slug){
     const loadToken = ++app.courseLoadToken;
@@ -1790,8 +1865,8 @@ const db = firebase.firestore();
     cardsEl.innerHTML = "";
 
     const totalCourses = courses.length;
-    const totalPeople = courses.reduce((sum,c) => sum + (c.stats.total || 0), 0);
-    const totalFinalizado = courses.reduce((sum,c) => sum + (c.stats.p3 || 0), 0);
+    const totalPeople = courses.reduce((sum,c) => sum + ((c.stats && c.stats.total) || 0), 0);
+    const totalFinalizado = courses.reduce((sum,c) => sum + ((c.stats && c.stats.p3) || 0), 0);
     const pctGlobal = totalPeople ? Math.round((totalFinalizado / totalPeople) * 100) : 0;
     document.getElementById("dash-total-courses").textContent = totalCourses;
     document.getElementById("dash-total-people").textContent = totalPeople;
@@ -1821,7 +1896,7 @@ const db = firebase.firestore();
     });
 
     sorted.forEach(c => {
-      const s = c.stats;
+      const s = c.stats || emptyStats();
       const card = el("div", {class:"dashboard-card"});
       card.appendChild(el("h4", {}, [document.createTextNode(c.displayName)]));
       card.appendChild(el("div", {class:"dc-total"}, [document.createTextNode(s.total + " en tabla madre · " + s.alta + " faltan por dar de alta")]));
