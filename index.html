@@ -961,7 +961,7 @@ const db = firebase.firestore();
 
   async function deleteCourseRemote(slug){
     // Firestore no borra subcolecciones en cascada: hay que borrarlas a mano.
-    for(const coll of [masterColl(slug), logColl(slug)]){
+    for(const coll of [masterColl(slug), logColl(slug), weeklyStatsColl(slug)]){
       let snap = await coll.limit(400).get();
       while(!snap.empty){
         const batch = db.batch();
