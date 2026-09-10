@@ -1203,6 +1203,18 @@ const db = firebase.firestore();
       app.masterReady = true;
 
       renderStats();
+      document.getElementById("cm-santander-count").textContent = app.master.length;
+
+      // Autocompleta meta.stats en Firestore si un curso viejo (creado antes
+      // de que existiera este resumen) nunca lo tuvo guardado — así el
+      // dashboard y el modal de archivados dejan de verlo en ceros la
+      // primera vez que alguien abra el curso, sin tener que reprocesar
+      // ninguna carga. Se escribe SOLO el campo stats (no el resto de meta)
+      // para no pisar cambios más nuevos que otra persona del equipo haya
+      // guardado mientras tanto (mapeos, fechas de carga, etc.).
+      courseDoc(app.slug).set({stats: app.meta.stats}, {merge:true})
+        .catch(err => console.error("No se pudo actualizar el resumen del curso:", err));
+
       renderMasterTable();
       renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
       renderSideTable("nuevos", []);
