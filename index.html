@@ -721,6 +721,8 @@ const db = firebase.firestore();
     meta: null,
     master: [],       // array of records (mirror de la subcolección master en Firestore)
     log: [],
+    masterReady: false, // false mientras la tabla madre completa sigue cargando de fondo
+    courseLoadToken: 0, // evita que una carga vieja pise los datos si el usuario cambia de curso
     pending: { santander:null, plataforma:null },
     lastRun: { nuevos:[], cambios:[], alta:[], revisar:[] }
   };
@@ -841,18 +843,25 @@ const db = firebase.firestore();
     await courseDoc(meta.slug).set(meta);
   }
 
-  async function loadCourseRemote(slug){
-    // Las tres lecturas son independientes: pedirlas en paralelo evita
-    // esperar la tabla madre (la más pesada) detrás de meta/log sin motivo.
-    const [metaSnap, masterSnap, logSnap] = await Promise.all([
-      courseDoc(slug).get(),
+  // Lectura rápida: solo el documento de metadatos del curso (incluye el
+  // resumen ya calculado en meta.stats). Suficiente para pintar el
+  // encabezado y los contadores al instante, sin esperar la tabla madre.
+  async function loadCourseMetaRemote(slug){
+    const metaSnap = await courseDoc(slug).get();
+    return metaSnap.exists ? metaSnap.data() : emptyMeta(slug, slug);
+  }
+
+  // Lectura pesada: la tabla madre completa + historial. Con cursos de
+  // miles de registros esto es lo que tarda — se pide aparte y de fondo,
+  // después de que el usuario ya ve el resumen del curso en pantalla.
+  async function loadCourseDetailRemote(slug){
+    const [masterSnap, logSnap] = await Promise.all([
       masterColl(slug).get(),
       logColl(slug).orderBy("date", "desc").limit(60).get()
     ]);
-    const meta = metaSnap.exists ? metaSnap.data() : emptyMeta(slug, slug);
     const master = masterSnap.docs.map(d => Object.assign({_key: d.id}, d.data()));
     const log = logSnap.docs.map(d => d.data());
-    return {meta, master, log};
+    return {master, log};
   }
 
   async function saveMetaRemote(slug, meta){
@@ -1068,12 +1077,20 @@ const db = firebase.firestore();
   });
 
   async function loadCourse(slug){
-    setSaveStatus("Cargando histórico...");
-    const {meta, master, log} = await loadCourseRemote(slug);
+    const loadToken = ++app.courseLoadToken;
+    setSaveStatus("Cargando curso...");
+
+    // Fase 1 — rápida: solo metadatos (incluye el resumen ya calculado en
+    // meta.stats). Con esto ya se puede pintar el encabezado y los
+    // contadores sin esperar a bajar la tabla madre completa.
+    const meta = await loadCourseMetaRemote(slug);
+    if(loadToken !== app.courseLoadToken) return; // el usuario ya cambió de curso
+
     app.slug = slug;
     app.meta = meta;
-    app.master = master;
-    app.log = log;
+    app.master = [];
+    app.log = [];
+    app.masterReady = false;
     app.lastRun = { nuevos:[], cambios:[], alta:[], revisar:[] };
     setSaveStatus("");
     renderCourseTabs();
@@ -1081,7 +1098,7 @@ const db = firebase.firestore();
 
     document.getElementById("course-head").classList.remove("hidden");
     document.getElementById("course-name-display").textContent = app.meta.displayName;
-    document.getElementById("cm-santander-count").textContent = app.master.length;
+    document.getElementById("cm-santander-count").textContent = (app.meta.stats && app.meta.stats.total) || 0;
     document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
     document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
 
@@ -1096,13 +1113,69 @@ const db = firebase.firestore();
       app.pending[kind] = null;
     });
 
-    renderStats();
-    renderMasterTable();
-    renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
-    renderSideTable("nuevos", []);
-    renderSideTable("cambios", []);
-    renderSideTable("revisar", []);
-    renderHistorial();
+    renderStatsFromMeta();
+    renderTablesLoading();
+    checkReady();
+
+    // Fase 2 — de fondo: la tabla madre completa + historial. Puede tardar
+    // varios segundos en cursos grandes, pero el usuario ya está viendo el
+    // resumen del curso mientras tanto.
+    try{
+      const {master, log} = await loadCourseDetailRemote(slug);
+      if(loadToken !== app.courseLoadToken) return;
+      app.master = master;
+      app.log = log;
+      app.masterReady = true;
+
+      renderStats();
+      renderMasterTable();
+      renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
+      renderSideTable("nuevos", []);
+      renderSideTable("cambios", []);
+      renderSideTable("revisar", []);
+      renderHistorial();
+      checkReady();
+    }catch(err){
+      console.error(err);
+      if(loadToken === app.courseLoadToken){
+        setSaveStatus("No se pudo cargar la tabla madre completa — revisa la conexión y vuelve a intentarlo.");
+      }
+    }
+  }
+
+  function renderStatsFromMeta(){
+    const stats = (app.meta && app.meta.stats) || emptyStats();
+    document.getElementById("badge-madre").textContent = stats.total;
+    document.getElementById("badge-alta").textContent = stats.alta;
+    document.getElementById("badge-nuevos").textContent = 0;
+    document.getElementById("badge-cambios").textContent = 0;
+    document.getElementById("badge-revisar").textContent = 0;
+    document.getElementById("badge-historial").textContent = "…";
+    document.getElementById("st-p0").textContent = stats.p0;
+    document.getElementById("st-p1").textContent = stats.p1;
+    document.getElementById("st-p2").textContent = stats.p2;
+    document.getElementById("st-p3").textContent = stats.p3;
+  }
+
+  function renderTablesLoading(){
+    ["madre","alta","nuevos","cambios","revisar"].forEach(key => {
+      const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+      panel.querySelector("thead").innerHTML = "";
+      const tbody = panel.querySelector("tbody");
+      tbody.innerHTML = "";
+      const tr = el("tr");
+      const td = el("td", {colspan:"20"}, [document.createTextNode("Cargando historial completo del curso...")]);
+      td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
+      tr.appendChild(td); tbody.appendChild(tr);
+    });
+    const histPanel = document.querySelector('.tab-panel[data-panel="historial"]');
+    histPanel.querySelector("thead").innerHTML = "";
+    const histBody = histPanel.querySelector("tbody");
+    histBody.innerHTML = "";
+    const tr = el("tr");
+    const td = el("td", {colspan:"5"}, [document.createTextNode("Cargando...")]);
+    td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
+    tr.appendChild(td); histBody.appendChild(tr);
   }
 
   // ---------- upload wiring ----------
@@ -1305,11 +1378,15 @@ const db = firebase.firestore();
 
   function checkReady(){
     ["santander","plataforma"].forEach(kind => {
-      const ready = isReady(kind);
+      const mappingReady = isReady(kind);
+      const ready = mappingReady && app.masterReady;
       const btn = document.getElementById("btn-process-" + kind);
       if(btn) btn.disabled = !ready;
       const hint = document.getElementById(kind + "-hint");
-      if(hint) hint.textContent = ready ? "Listo para procesar." : "Configura las columnas para continuar.";
+      if(hint){
+        if(!app.masterReady) hint.textContent = "Espera a que termine de cargar el historial completo del curso...";
+        else hint.textContent = mappingReady ? "Listo para procesar." : "Configura las columnas para continuar.";
+      }
     });
   }
 
