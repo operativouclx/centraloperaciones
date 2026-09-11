@@ -149,32 +149,32 @@
   .delta-badge.up{background:var(--teal-bg);color:var(--teal-dark);}
   .delta-badge.down{background:var(--rust-bg);color:var(--rust);}
 
-  /* ---- resumen de progreso: Activos/Inactivos + 3 rangos + tasa de término, en la vista de cada curso ---- */
+  /* ---- vista visual del curso: embudo Santander/Plataforma + dona de 3 rangos + comparación semanal ---- */
   .progress-summary{margin-bottom:22px;}
-  .progress-summary-top{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
-  .progress-summary-sub{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
-  @media (max-width:820px){ .progress-summary-sub{grid-template-columns:1fr 1fr;} }
-  .progress-box{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 14px 12px;}
-  .progress-box .progress-box-n{font-family:'Fraunces', serif;font-size:24px;font-weight:600;}
-  .progress-box .progress-box-l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
-  .progress-box .progress-box-sub{font-size:11px;color:var(--ink-soft);margin-top:4px;opacity:0.85;}
-  .progress-box.inactivo{border-color:var(--rust-line);background:var(--rust-bg);}
-  .progress-box.inactivo .progress-box-n{color:var(--rust);}
-  .progress-box.activo{border-color:#C7DED9;background:var(--teal-bg);}
-  .progress-box.activo .progress-box-n{color:var(--teal-dark);}
-  .progress-box.p1{border-color:var(--amber-line);background:var(--amber-bg);}
-  .progress-box.p1 .progress-box-n{color:var(--amber);}
-  .progress-box.p2{border-color:#F0DFA0;background:#FCF6E4;}
-  .progress-box.p2 .progress-box-n{color:#8A6D1D;}
-  .progress-box.p3{border-color:#C7DED9;background:var(--teal-bg);}
-  .progress-box.p3 .progress-box-n{color:var(--teal-dark);}
 
-  .progress-summary-tasas{
-    display:grid;grid-template-columns:1fr 1fr;gap:14px;
-    border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 16px;
+  .funnel-wrap{
+    border:1px solid var(--line);border-radius:10px;background:var(--panel);
+    padding:16px 18px;margin-bottom:16px;
   }
-  @media (max-width:820px){ .progress-summary-tasas{grid-template-columns:1fr;} }
-  .tasa-block{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+  .funnel-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .funnel-row:last-of-type{margin-bottom:0;}
+  .funnel-label{width:84px;flex:none;font-size:13px;font-weight:600;color:var(--ink);}
+  .funnel-svg{flex:1;min-width:0;}
+  .funnel-count{width:56px;flex:none;text-align:right;font-family:'Fraunces', serif;font-size:17px;font-weight:600;color:var(--ink);}
+  .funnel-diff{margin-top:6px;text-align:right;font-size:12px;color:var(--ink-soft);}
+
+  .course-visual-bottom{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
+  .range-donut-svg{flex:none;}
+  .range-donut-svg .range-donut-label{font-size:12px;font-weight:700;fill:var(--ink);}
+
+  .week-compare{
+    flex:1;min-width:240px;border:1px solid var(--line);border-radius:10px;
+    background:var(--panel);padding:14px 16px;
+  }
+  .week-compare-title{font-family:'Fraunces', serif;font-size:14.5px;font-weight:600;color:var(--ink);}
+  .week-compare-date{font-size:11.5px;color:var(--ink-soft);margin-bottom:10px;}
+  .tasa-block{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .tasa-block:last-child{margin-bottom:0;}
 
   .course-head{
     margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
@@ -1300,7 +1300,10 @@ const db = firebase.firestore();
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
     renderCourseMetaCounts();
-    renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline), {
+      tipo: app.meta && app.meta.tipo,
+      baselineDate: app.baseline && app.baseline.capturedAt
+    });
   }
 
   function renderTablesLoading(){
@@ -1925,7 +1928,10 @@ const db = firebase.firestore();
     document.getElementById("badge-historial").textContent = app.log.length;
 
     renderCourseMetaCounts();
-    renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline), {
+      tipo: app.meta && app.meta.tipo,
+      baselineDate: app.baseline && app.baseline.capturedAt
+    });
   }
 
   function renderMasterTable(){
@@ -2048,15 +2054,6 @@ const db = firebase.firestore();
     return {tasas, deltaSantander, deltaIniciados};
   }
 
-  function progressBox(label, count, total, cls){
-    const pct = total ? Math.round((count / total) * 1000) / 10 : 0;
-    return el("div", {class:"progress-box " + cls}, [
-      el("div", {class:"progress-box-n"}, [document.createTextNode(String(count))]),
-      el("div", {class:"progress-box-l"}, [document.createTextNode(label)]),
-      el("div", {class:"progress-box-sub"}, [document.createTextNode(count + " de " + total + " · " + pct + "%")])
-    ]);
-  }
-
   function tasaBlock(label, value, delta){
     const wrap = el("div", {class:"tasa-block"});
     wrap.appendChild(el("div", {}, [
@@ -2067,40 +2064,116 @@ const db = firebase.firestore();
     return wrap;
   }
 
-  // Resumen reutilizado tanto en la vista de un curso como en cada tarjeta
-  // del dashboard: primero Inactivos (0% de avance) vs. Activos (ya
-  // arrancaron), y dentro de Activos los 3 rangos; abajo, las dos tasas de
-  // término con su cambio contra la semana pasada.
-  function renderProgressBoxesInto(container, stats){
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs){
+    const e = document.createElementNS(SVGNS, tag);
+    for(const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // Barra tipo "embudo": termina en punta en vez de un borde recto, del
+  // largo del boceto — el ancho es proporcional al valor contra el mayor
+  // de los dos (Santander casi siempre es el más grande).
+  function funnelBarSVG(value, maxValue, color){
+    const maxW = 400, h = 30, tip = 14;
+    const w = maxValue > 0 ? Math.max((value / maxValue) * maxW, 10) : 0;
+    const svg = svgEl("svg", {viewBox: "0 0 " + (maxW + tip) + " " + h, width:"100%", height:h, class:"funnel-svg", preserveAspectRatio:"xMinYMid meet"});
+    if(w > 0){
+      const flat = Math.max(w - tip, 0);
+      const points = [[0,0],[flat,0],[w,h/2],[flat,h],[0,h]].map(p => p.join(",")).join(" ");
+      svg.appendChild(svgEl("polygon", {points, fill:color}));
+    }
+    return svg;
+  }
+
+  function funnelRow(label, value, maxValue, color){
+    const row = el("div", {class:"funnel-row"});
+    row.appendChild(el("div", {class:"funnel-label"}, [document.createTextNode(label)]));
+    row.appendChild(funnelBarSVG(value, maxValue, color));
+    row.appendChild(el("div", {class:"funnel-count"}, [document.createTextNode(String(value))]));
+    return row;
+  }
+
+  // Dona de un anillo con los 3 rangos de avance de quienes ya iniciaron
+  // (Iniciando / A medio camino / Finalizado), con el % de cada rango
+  // escrito junto a su arco.
+  function rangeDonutSVG(stats, size){
+    size = size || 150;
     const activos = stats.p1 + stats.p2 + stats.p3;
+    const segments = [
+      {value: stats.p1, color: "var(--amber)"},
+      {value: stats.p2, color: "#C79A1E"},
+      {value: stats.p3, color: "var(--teal)"}
+    ];
+    const strokeW = Math.round(size * 0.13);
+    const r = (size - strokeW) / 2 - 16;
+    const cx = size / 2, cy = size / 2;
+    const C = 2 * Math.PI * r;
+    const svg = svgEl("svg", {viewBox: "0 0 " + size + " " + size, width:size, height:size, class:"range-donut-svg"});
+    svg.appendChild(svgEl("circle", {cx, cy, r, fill:"none", stroke:"#EEF1F0", "stroke-width":strokeW}));
 
-    const topRow = el("div", {class:"progress-summary-top"});
-    topRow.appendChild(progressBox("Inactivos (0%)", stats.p0, stats.total, "inactivo"));
-    topRow.appendChild(progressBox("Activos (>0%)", activos, stats.total, "activo"));
-    container.appendChild(topRow);
-
-    const subRow = el("div", {class:"progress-summary-sub"});
-    subRow.appendChild(progressBox("Iniciando (1–39%)", stats.p1, stats.total, "p1"));
-    subRow.appendChild(progressBox("A medio camino (40–79%)", stats.p2, stats.total, "p2"));
-    subRow.appendChild(progressBox("Finalizado (80%+)", stats.p3, stats.total, "p3"));
-    container.appendChild(subRow);
+    let frac = 0;
+    segments.forEach(seg => {
+      const segFrac = activos ? seg.value / activos : 0;
+      if(segFrac > 0){
+        const len = segFrac * C;
+        svg.appendChild(svgEl("circle", {
+          cx, cy, r, fill:"none", stroke:seg.color, "stroke-width":strokeW,
+          "stroke-dasharray": len + " " + (C - len),
+          "stroke-dashoffset": -(frac * C),
+          transform: "rotate(-90 " + cx + " " + cy + ")"
+        }));
+        const midAngleDeg = -90 + (frac + segFrac / 2) * 360;
+        const rad = midAngleDeg * Math.PI / 180;
+        const labelR = r + strokeW / 2 + 13;
+        const lx = cx + labelR * Math.cos(rad);
+        const ly = cy + labelR * Math.sin(rad);
+        const pct = Math.round(segFrac * 1000) / 10;
+        const text = svgEl("text", {x:lx, y:ly, "text-anchor":"middle", "dominant-baseline":"middle", class:"range-donut-label"});
+        text.textContent = pct + "%";
+        svg.appendChild(text);
+      }
+      frac += segFrac;
+    });
+    return svg;
   }
 
-  function renderTasaRowInto(container, deltas){
-    const tasaRow = el("div", {class:"progress-summary-tasas"});
-    tasaRow.appendChild(tasaBlock("Tasa de término (sobre tabla madre)", deltas.tasas.tasaSantander, deltas.deltaSantander));
-    tasaRow.appendChild(tasaBlock("Tasa de término (sobre quienes iniciaron)", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
-    container.appendChild(tasaRow);
-  }
-
-  function renderProgressSummaryInto(container, stats, deltas){
+  // Vista visual del curso: embudo Santander → Plataforma con su
+  // diferencia, y la dona de los 3 rangos junto a la comparación con la
+  // semana pasada.
+  function renderCourseVisualInto(container, stats, deltas, opts){
     container.innerHTML = "";
-    renderProgressBoxesInto(container, stats);
-    renderTasaRowInto(container, deltas);
-  }
+    opts = opts || {};
+    const esHistorico = opts.tipo === "historico";
+    const registrados = stats.total - stats.alta;
 
-  // El dashboard general se quitó (ver control de versiones si se necesita
-  // recuperar) — se está rediseñando la vista por curso primero.
+    const funnelWrap = el("div", {class:"funnel-wrap"});
+    if(esHistorico){
+      funnelWrap.appendChild(funnelRow("Total", stats.total, stats.total || 1, "var(--teal)"));
+    } else {
+      const maxValue = Math.max(stats.total, registrados, 1);
+      funnelWrap.appendChild(funnelRow("Santander", stats.total, maxValue, "var(--teal-dark)"));
+      funnelWrap.appendChild(funnelRow("Plataforma", registrados, maxValue, "var(--teal)"));
+      funnelWrap.appendChild(el("div", {class:"funnel-diff"}, [
+        document.createTextNode("Diferencia: " + (stats.total - registrados))
+      ]));
+    }
+    container.appendChild(funnelWrap);
+
+    const bottomRow = el("div", {class:"course-visual-bottom"});
+    bottomRow.appendChild(rangeDonutSVG(stats, 150));
+
+    const compareWrap = el("div", {class:"week-compare"});
+    compareWrap.appendChild(el("div", {class:"week-compare-title"}, [document.createTextNode("Comparación con la semana pasada")]));
+    compareWrap.appendChild(el("div", {class:"week-compare-date"}, [
+      document.createTextNode(opts.baselineDate ? "Desde " + fmtDate(opts.baselineDate) : "Primera semana con datos")
+    ]));
+    compareWrap.appendChild(tasaBlock("Tasa de término (sobre tabla madre)", deltas.tasas.tasaSantander, deltas.deltaSantander));
+    compareWrap.appendChild(tasaBlock("Tasa de término (sobre quienes iniciaron)", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
+    bottomRow.appendChild(compareWrap);
+
+    container.appendChild(bottomRow);
+  }
 
   // ---------- tabs, search, download ----------
   document.querySelectorAll(".tab").forEach(tab => {
