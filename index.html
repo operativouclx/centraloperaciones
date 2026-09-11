@@ -172,6 +172,7 @@
   .progress-box{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 14px 12px;}
   .progress-box .progress-box-n{font-family:'Fraunces', serif;font-size:24px;font-weight:600;}
   .progress-box .progress-box-l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .progress-box .progress-box-sub{font-size:11px;color:var(--ink-soft);margin-top:4px;opacity:0.85;}
   .progress-box.inactivo{border-color:var(--rust-line);background:var(--rust-bg);}
   .progress-box.inactivo .progress-box-n{color:var(--rust);}
   .progress-box.activo{border-color:#C7DED9;background:var(--teal-bg);}
@@ -193,6 +194,7 @@
   .dashboard-card .progress-summary-sub{grid-template-columns:repeat(3,1fr);margin-bottom:10px;gap:6px;}
   .dashboard-card .progress-box{padding:8px 8px 6px;}
   .dashboard-card .progress-box .progress-box-n{font-size:18px;}
+  .dashboard-card .progress-box .progress-box-sub{font-size:10px;}
   .dashboard-card .progress-summary-tasas{padding:10px 12px;gap:8px;}
 
   .course-head{
@@ -683,6 +685,17 @@ const db = firebase.firestore();
     for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i, i+size));
     return out;
   }
+  // Los resultados de la última carga (nuevos/cambios/revisar) se guardan
+  // dentro del documento del curso para que no se pierdan al recargar. Un
+  // curso grande podría generar miles de filas en una sola carga — se
+  // limita cuánto se persiste para no toparse con el límite de tamaño de
+  // un documento de Firestore (1MB). La descarga de Excel justo después
+  // de procesar siempre trae la lista completa, sin este tope.
+  const LASTRUN_STORAGE_LIMIT = 500;
+  function capForStorage(rows){
+    if(!Array.isArray(rows) || rows.length <= LASTRUN_STORAGE_LIMIT) return rows || [];
+    return rows.slice(0, LASTRUN_STORAGE_LIMIT);
+  }
   function setSaveStatus(text){
     const s = document.getElementById("save-status");
     if(s) s.textContent = text;
@@ -809,7 +822,8 @@ const db = firebase.firestore();
       lastPlataformaFile: null,
       lastListaFinalFile: null,
       stats: emptyStats(),
-      archived: false
+      archived: false,
+      lastRun: { nuevos: [], cambios: [], revisar: [] }
     };
   }
 
@@ -1226,7 +1240,13 @@ const db = firebase.firestore();
     app.master = [];
     app.log = [];
     app.masterReady = false;
-    app.lastRun = { nuevos:[], cambios:[], alta:[], revisar:[] };
+    const savedLastRun = app.meta.lastRun || {};
+    app.lastRun = {
+      nuevos: savedLastRun.nuevos || [],
+      cambios: savedLastRun.cambios || [],
+      revisar: savedLastRun.revisar || [],
+      alta: []
+    };
     setSaveStatus("");
     renderCourseTabs();
     resetTableFilter("madre");
@@ -1291,9 +1311,9 @@ const db = firebase.firestore();
 
       renderMasterTable();
       renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
-      renderSideTable("nuevos", []);
-      renderSideTable("cambios", []);
-      renderSideTable("revisar", []);
+      renderSideTable("nuevos", app.lastRun.nuevos);
+      renderSideTable("cambios", app.lastRun.cambios);
+      renderSideTable("revisar", app.lastRun.revisar);
       renderHistorial();
       checkReady();
     }catch(err){
@@ -1308,15 +1328,18 @@ const db = firebase.firestore();
     const stats = (app.meta && app.meta.stats) || emptyStats();
     document.getElementById("badge-madre").textContent = stats.total;
     document.getElementById("badge-alta").textContent = stats.alta;
-    document.getElementById("badge-nuevos").textContent = 0;
-    document.getElementById("badge-cambios").textContent = 0;
-    document.getElementById("badge-revisar").textContent = 0;
+    document.getElementById("badge-nuevos").textContent = app.lastRun.nuevos.length;
+    document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
+    document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
     renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
   }
 
   function renderTablesLoading(){
-    ["madre","alta","nuevos","cambios","revisar"].forEach(key => {
+    // "nuevos"/"cambios"/"revisar" ya se conocen desde meta.lastRun (sin
+    // esperar la tabla madre completa); solo "madre" y "alta" necesitan la
+    // tabla madre y muestran el aviso de carga mientras tanto.
+    ["madre","alta"].forEach(key => {
       const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
       panel.querySelector("thead").innerHTML = "";
       const tbody = panel.querySelector("tbody");
@@ -1326,6 +1349,9 @@ const db = firebase.firestore();
       td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
       tr.appendChild(td); tbody.appendChild(tr);
     });
+    renderSideTable("nuevos", app.lastRun.nuevos);
+    renderSideTable("cambios", app.lastRun.cambios);
+    renderSideTable("revisar", app.lastRun.revisar);
     const histPanel = document.querySelector('.tab-panel[data-panel="historial"]');
     histPanel.querySelector("thead").innerHTML = "";
     const histBody = histPanel.querySelector("tbody");
@@ -1674,6 +1700,11 @@ const db = firebase.firestore();
     await ensureWeeklySnapshot(app.slug, app.meta.stats);
     app.meta.stats = computeMasterStats(app.master);
 
+    // Se guarda el resultado de esta carga (no solo en memoria) para que no
+    // desaparezca de las pestañas "Nuevos" / "Cambios de estatus" la
+    // próxima vez que alguien abra el curso.
+    app.meta.lastRun = Object.assign({}, app.meta.lastRun, {nuevos: capForStorage(nuevos), cambios: capForStorage(cambios)});
+
     const logEntry = {
       date: nowISO(), tipo:"Santander", archivo: app.pending.santander.fileName,
       resumen: nuevos.length + " nuevos, " + cambios.length + " cambios, " + (app.pending.santander.rows.length - nuevos.length - cambios.length) + " sin cambios",
@@ -1773,6 +1804,11 @@ const db = firebase.firestore();
 
     await ensureWeeklySnapshot(app.slug, app.meta.stats);
     app.meta.stats = computeMasterStats(app.master);
+
+    // Se guarda "revisar" (gente en plataforma que no está en Santander)
+    // para que no desaparezca al recargar — antes solo vivía en memoria y
+    // se perdía la próxima vez que alguien abría el curso.
+    app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: capForStorage(revisar)});
 
     const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
     let resumen = (app.master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander";
@@ -2044,10 +2080,12 @@ const db = firebase.firestore();
     return {tasas, deltaSantander, deltaIniciados};
   }
 
-  function progressBox(label, count, cls){
+  function progressBox(label, count, total, cls){
+    const pct = total ? Math.round((count / total) * 1000) / 10 : 0;
     return el("div", {class:"progress-box " + cls}, [
       el("div", {class:"progress-box-n"}, [document.createTextNode(String(count))]),
-      el("div", {class:"progress-box-l"}, [document.createTextNode(label)])
+      el("div", {class:"progress-box-l"}, [document.createTextNode(label)]),
+      el("div", {class:"progress-box-sub"}, [document.createTextNode(count + " de " + total + " · " + pct + "%")])
     ]);
   }
 
@@ -2070,14 +2108,14 @@ const db = firebase.firestore();
     const activos = stats.p1 + stats.p2 + stats.p3;
 
     const topRow = el("div", {class:"progress-summary-top"});
-    topRow.appendChild(progressBox("Inactivos (0%)", stats.p0, "inactivo"));
-    topRow.appendChild(progressBox("Activos (>0%)", activos, "activo"));
+    topRow.appendChild(progressBox("Inactivos (0%)", stats.p0, stats.total, "inactivo"));
+    topRow.appendChild(progressBox("Activos (>0%)", activos, stats.total, "activo"));
     container.appendChild(topRow);
 
     const subRow = el("div", {class:"progress-summary-sub"});
-    subRow.appendChild(progressBox("Iniciando (1–39%)", stats.p1, "p1"));
-    subRow.appendChild(progressBox("A medio camino (40–79%)", stats.p2, "p2"));
-    subRow.appendChild(progressBox("Finalizado (80%+)", stats.p3, "p3"));
+    subRow.appendChild(progressBox("Iniciando (1–39%)", stats.p1, stats.total, "p1"));
+    subRow.appendChild(progressBox("A medio camino (40–79%)", stats.p2, stats.total, "p2"));
+    subRow.appendChild(progressBox("Finalizado (80%+)", stats.p3, stats.total, "p3"));
     container.appendChild(subRow);
 
     const tasaRow = el("div", {class:"progress-summary-tasas"});
