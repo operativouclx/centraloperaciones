@@ -164,6 +164,38 @@
 
   .dashboard-card .dc-meta{font-size:11.5px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:8px;margin-top:10px;}
 
+  /* ---- gráficas: dona SVG + pictograma de personitas ---- */
+  .donut-svg{display:block;flex:none;}
+  .donut-svg .donut-center-n{font-family:'Fraunces', serif;font-size:20px;font-weight:600;fill:var(--ink);}
+  .donut-svg .donut-center-l{font-size:9.5px;fill:var(--ink-soft);}
+
+  .pictogram-grid{display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start;}
+  .pictogram-icon{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  .pictogram-icon.ic-p0{color:var(--rust);}
+  .pictogram-icon.ic-p1{color:var(--amber);}
+  .pictogram-icon.ic-p2{color:#C79A1E;}
+  .pictogram-icon.ic-p3{color:var(--teal);}
+
+  .color-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;color:var(--ink-soft);margin-top:8px;}
+  .color-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .color-legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .color-legend .lc-p0{background:var(--rust);}
+  .color-legend .lc-p1{background:var(--amber);}
+  .color-legend .lc-p2{background:#C79A1E;}
+  .color-legend .lc-p3{background:var(--teal);}
+
+  .dashboard-global-visual{
+    display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin-bottom:18px;
+    padding:16px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);
+  }
+  .dashboard-global-visual .dgv-picto{flex:1;min-width:220px;}
+  .dashboard-global-visual .pictogram-icon{width:16px;height:16px;}
+
+  .dc-header{display:flex;gap:12px;align-items:center;margin-bottom:10px;}
+  .dc-header-text{flex:1;min-width:0;}
+  .dc-header-text h4{font-family:'Fraunces', serif;font-size:16px;margin-bottom:2px;}
+  .dashboard-card .pictogram-grid{margin-bottom:12px;}
+
   /* ---- resumen de progreso: Activos/Inactivos + 3 rangos + tasa de término, compartido entre la vista del curso y las tarjetas del dashboard ---- */
   .progress-summary{margin-bottom:22px;}
   .progress-summary-top{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
@@ -598,6 +630,14 @@
       <div id="dashboard-loading" class="dashboard-loading">Cargando...</div>
 
       <div id="dashboard-content" class="hidden">
+        <div class="dashboard-global-visual">
+          <div id="dashboard-global-donut"></div>
+          <div class="dgv-picto">
+            <div id="dashboard-global-picto" class="pictogram-grid"></div>
+            <div id="dashboard-global-legend"></div>
+          </div>
+        </div>
+
         <div class="stat-strip stat-strip-progress">
           <div class="stat teal"><div class="n" id="dash-total-courses">0</div><div class="l">Cursos</div></div>
           <div class="stat plum"><div class="n" id="dash-total-people">0</div><div class="l">Personas en total</div></div>
@@ -2103,8 +2143,7 @@ const db = firebase.firestore();
   // del dashboard: primero Inactivos (0% de avance) vs. Activos (ya
   // arrancaron), y dentro de Activos los 3 rangos; abajo, las dos tasas de
   // término con su cambio contra la semana pasada.
-  function renderProgressSummaryInto(container, stats, deltas){
-    container.innerHTML = "";
+  function renderProgressBoxesInto(container, stats){
     const activos = stats.p1 + stats.p2 + stats.p3;
 
     const topRow = el("div", {class:"progress-summary-top"});
@@ -2117,11 +2156,118 @@ const db = firebase.firestore();
     subRow.appendChild(progressBox("A medio camino (40–79%)", stats.p2, stats.total, "p2"));
     subRow.appendChild(progressBox("Finalizado (80%+)", stats.p3, stats.total, "p3"));
     container.appendChild(subRow);
+  }
 
+  function renderTasaRowInto(container, deltas){
     const tasaRow = el("div", {class:"progress-summary-tasas"});
     tasaRow.appendChild(tasaBlock("Tasa de término (sobre tabla madre)", deltas.tasas.tasaSantander, deltas.deltaSantander));
     tasaRow.appendChild(tasaBlock("Tasa de término (sobre quienes iniciaron)", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
     container.appendChild(tasaRow);
+  }
+
+  function renderProgressSummaryInto(container, stats, deltas){
+    container.innerHTML = "";
+    renderProgressBoxesInto(container, stats);
+    renderTasaRowInto(container, deltas);
+  }
+
+  // ---------- gráficas: dona SVG + pictograma de personitas ----------
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs){
+    const e = document.createElementNS(SVGNS, tag);
+    for(const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function renderDonutSVG(stats, centerLabel, centerSubLabel, size){
+    size = size || 116;
+    const stroke = Math.round(size * 0.14);
+    const r = (size - stroke) / 2;
+    const cx = size / 2, cy = size / 2;
+    const C = 2 * Math.PI * r;
+    const total = stats.total || 0;
+    const segments = [
+      {value: stats.p0, color: "var(--rust)"},
+      {value: stats.p1, color: "var(--amber)"},
+      {value: stats.p2, color: "#C79A1E"},
+      {value: stats.p3, color: "var(--teal)"}
+    ];
+    const svg = svgEl("svg", {viewBox: "0 0 " + size + " " + size, width:size, height:size, class:"donut-svg"});
+    svg.appendChild(svgEl("circle", {cx, cy, r, fill:"none", stroke:"#EEF1F0", "stroke-width":stroke}));
+
+    let offset = 0;
+    const gapPx = total ? 2 : 0;
+    segments.forEach(seg => {
+      if(!total || seg.value <= 0) return;
+      const len = Math.max((seg.value / total) * C - gapPx, 0);
+      const circle = svgEl("circle", {
+        cx, cy, r, fill:"none", stroke:seg.color, "stroke-width":stroke,
+        "stroke-linecap":"round",
+        "stroke-dasharray": len + " " + (C - len),
+        "stroke-dashoffset": -offset,
+        transform: "rotate(-90 " + cx + " " + cy + ")"
+      });
+      svg.appendChild(circle);
+      offset += (seg.value / total) * C;
+    });
+
+    const text1 = svgEl("text", {x:cx, y: centerSubLabel ? cy - 3 : cy + 6, "text-anchor":"middle", class:"donut-center-n"});
+    text1.textContent = centerLabel;
+    svg.appendChild(text1);
+    if(centerSubLabel){
+      const text2 = svgEl("text", {x:cx, y:cy + 15, "text-anchor":"middle", class:"donut-center-l"});
+      text2.textContent = centerSubLabel;
+      svg.appendChild(text2);
+    }
+    return svg;
+  }
+
+  function personIconSVG(cls){
+    const svg = svgEl("svg", {viewBox:"0 0 24 24", class:"pictogram-icon " + cls});
+    svg.appendChild(svgEl("circle", {cx:12, cy:7, r:4}));
+    svg.appendChild(svgEl("path", {d:"M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"}));
+    return svg;
+  }
+
+  // Reparte "totalIcons" personitas proporcionalmente entre los 4 rangos,
+  // repartiendo el residuo por mayor parte fraccionaria para que la suma
+  // cuadre exacto (en vez de que el redondeo deje personitas de más o de
+  // menos).
+  function renderPictogramInto(container, stats, totalIcons){
+    container.innerHTML = "";
+    const total = stats.total || 0;
+    if(!total){
+      container.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Sin datos todavía.")]));
+      return;
+    }
+    const buckets = [
+      {value: stats.p0, cls:"ic-p0"},
+      {value: stats.p1, cls:"ic-p1"},
+      {value: stats.p2, cls:"ic-p2"},
+      {value: stats.p3, cls:"ic-p3"}
+    ];
+    const raw = buckets.map(b => (b.value / total) * totalIcons);
+    const counts = raw.map(Math.floor);
+    let remainder = totalIcons - counts.reduce((a,b) => a + b, 0);
+    const byFraction = raw.map((v,i) => ({i, frac: v - counts[i]})).sort((a,b) => b.frac - a.frac);
+    let oi = 0;
+    while(remainder > 0 && oi < byFraction.length){
+      counts[byFraction[oi].i]++;
+      remainder--; oi++;
+    }
+    const fragment = document.createDocumentFragment();
+    buckets.forEach((b, i) => {
+      for(let k = 0; k < counts[i]; k++) fragment.appendChild(personIconSVG(b.cls));
+    });
+    container.appendChild(fragment);
+  }
+
+  function colorLegend(){
+    const legend = el("div", {class:"color-legend"});
+    [["lc-p0","Inactivo (0%)"],["lc-p1","Iniciando"],["lc-p2","A medio camino"],["lc-p3","Finalizado"]].forEach(([cls,label]) => {
+      legend.appendChild(el("span", {}, [el("i", {class:cls}, []), document.createTextNode(label)]));
+    });
+    return legend;
   }
 
   async function loadDashboard(){
@@ -2165,6 +2311,22 @@ const db = firebase.firestore();
     document.getElementById("dash-total-finalizado").textContent = totalFinalizado;
     document.getElementById("dash-total-pct").textContent = pctGlobal + "%";
 
+    const globalStats = {
+      total: totalPeople,
+      p0: courses.reduce((sum,c) => sum + ((c.stats && c.stats.p0) || 0), 0),
+      p1: courses.reduce((sum,c) => sum + ((c.stats && c.stats.p1) || 0), 0),
+      p2: courses.reduce((sum,c) => sum + ((c.stats && c.stats.p2) || 0), 0),
+      p3: totalFinalizado
+    };
+    const donutWrap = document.getElementById("dashboard-global-donut");
+    donutWrap.innerHTML = "";
+    donutWrap.appendChild(renderDonutSVG(globalStats, pctGlobal + "%", "finalizado", 128));
+    const pictoWrap = document.getElementById("dashboard-global-picto");
+    renderPictogramInto(pictoWrap, globalStats, 60);
+    const legendWrap = document.getElementById("dashboard-global-legend");
+    legendWrap.innerHTML = "";
+    legendWrap.appendChild(colorLegend());
+
     if(!courses.length){
       cardsEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Todavía no hay cursos guardados.")]));
       compareEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("—")]));
@@ -2190,12 +2352,22 @@ const db = firebase.firestore();
     sorted.forEach(c => {
       const s = c.stats || emptyStats();
       const card = el("div", {class:"dashboard-card"});
-      card.appendChild(el("h4", {}, [document.createTextNode(c.displayName)]));
-      card.appendChild(el("div", {class:"dc-total"}, [document.createTextNode(s.total + " en tabla madre · " + s.alta + " faltan por dar de alta")]));
 
-      const summaryWrap = el("div", {});
-      card.appendChild(summaryWrap);
-      renderProgressSummaryInto(summaryWrap, s, {tasas: c.tasas, deltaSantander: c.deltaSantander, deltaIniciados: c.deltaIniciados});
+      const header = el("div", {class:"dc-header"});
+      header.appendChild(renderDonutSVG(s, c.tasas.tasaSantander + "%", "término", 90));
+      const headerText = el("div", {class:"dc-header-text"});
+      headerText.appendChild(el("h4", {}, [document.createTextNode(c.displayName)]));
+      headerText.appendChild(el("div", {class:"dc-total"}, [document.createTextNode(s.total + " en tabla madre · " + s.alta + " faltan por dar de alta")]));
+      header.appendChild(headerText);
+      card.appendChild(header);
+
+      const pictoWrap = el("div", {class:"pictogram-grid"});
+      card.appendChild(pictoWrap);
+      renderPictogramInto(pictoWrap, s, 30);
+
+      const tasaWrap = el("div", {});
+      card.appendChild(tasaWrap);
+      renderTasaRowInto(tasaWrap, {tasas: c.tasas, deltaSantander: c.deltaSantander, deltaIniciados: c.deltaIniciados});
 
       const meta = el("div", {class:"dc-meta"});
       if(c.tipo === "historico"){
