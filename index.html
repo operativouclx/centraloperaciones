@@ -155,22 +155,6 @@
   .dashboard-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel);}
   .dashboard-card h4{font-family:'Fraunces', serif;font-size:16px;margin-bottom:2px;}
   .dashboard-card .dc-total{font-size:12px;color:var(--ink-soft);margin-bottom:10px;}
-  .dashboard-bar{display:flex;height:16px;border-radius:8px;overflow:hidden;margin-bottom:8px;background:#EEF1F0;}
-  .dashboard-bar span{height:100%;}
-  .dashboard-bar .seg-p0{background:var(--rust);}
-  .dashboard-bar .seg-p1{background:var(--amber);}
-  .dashboard-bar .seg-p2{background:#E8B93B;}
-  .dashboard-bar .seg-p3{background:var(--teal);}
-  .dashboard-legend{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--ink-soft);margin-bottom:12px;}
-  .dashboard-legend span{display:inline-flex;align-items:center;gap:4px;}
-  .dashboard-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
-  .dashboard-legend .lp0{background:var(--rust);}
-  .dashboard-legend .lp1{background:var(--amber);}
-  .dashboard-legend .lp2{background:#E8B93B;}
-  .dashboard-legend .lp3{background:var(--teal);}
-
-  .dashboard-tasas{border-top:1px dashed var(--line);padding-top:10px;margin-top:2px;}
-  .dashboard-tasa-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
   .dashboard-tasa-label{font-size:12px;color:var(--ink-soft);}
   .dashboard-tasa-value{font-family:'Fraunces', serif;font-size:16px;font-weight:600;color:var(--ink);}
 
@@ -179,6 +163,37 @@
   .delta-badge.down{background:var(--rust-bg);color:var(--rust);}
 
   .dashboard-card .dc-meta{font-size:11.5px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:8px;margin-top:10px;}
+
+  /* ---- resumen de progreso: Activos/Inactivos + 3 rangos + tasa de término, compartido entre la vista del curso y las tarjetas del dashboard ---- */
+  .progress-summary{margin-bottom:22px;}
+  .progress-summary-top{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
+  .progress-summary-sub{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+  @media (max-width:820px){ .progress-summary-sub{grid-template-columns:1fr 1fr;} }
+  .progress-box{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 14px 12px;}
+  .progress-box .progress-box-n{font-family:'Fraunces', serif;font-size:24px;font-weight:600;}
+  .progress-box .progress-box-l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .progress-box.inactivo{border-color:var(--rust-line);background:var(--rust-bg);}
+  .progress-box.inactivo .progress-box-n{color:var(--rust);}
+  .progress-box.activo{border-color:#C7DED9;background:var(--teal-bg);}
+  .progress-box.activo .progress-box-n{color:var(--teal-dark);}
+  .progress-box.p1{border-color:var(--amber-line);background:var(--amber-bg);}
+  .progress-box.p1 .progress-box-n{color:var(--amber);}
+  .progress-box.p2{border-color:#F0DFA0;background:#FCF6E4;}
+  .progress-box.p2 .progress-box-n{color:#8A6D1D;}
+  .progress-box.p3{border-color:#C7DED9;background:var(--teal-bg);}
+  .progress-box.p3 .progress-box-n{color:var(--teal-dark);}
+
+  .progress-summary-tasas{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;
+    border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 16px;
+  }
+  @media (max-width:820px){ .progress-summary-tasas{grid-template-columns:1fr;} }
+  .tasa-block{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+  .dashboard-card .progress-summary-top{grid-template-columns:1fr 1fr;margin-bottom:8px;}
+  .dashboard-card .progress-summary-sub{grid-template-columns:repeat(3,1fr);margin-bottom:10px;gap:6px;}
+  .dashboard-card .progress-box{padding:8px 8px 6px;}
+  .dashboard-card .progress-box .progress-box-n{font-size:18px;}
+  .dashboard-card .progress-summary-tasas{padding:10px 12px;gap:8px;}
 
   .course-head{
     margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
@@ -377,14 +392,15 @@
           <h2 id="course-name-display"></h2>
           <div class="course-meta-list">
             <div class="course-meta-item"><b id="cm-santander-count">0</b>en tabla madre</div>
-            <div class="course-meta-item"><b id="cm-last-santander">—</b>última carga Santander</div>
-            <div class="course-meta-item"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
+            <div class="course-meta-item"><b id="cm-last-santander">—</b><span id="cm-label-santander">última carga Santander</span></div>
+            <div class="course-meta-item" id="cm-item-plataforma"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
           </div>
           <div class="save-status" id="save-status"></div>
         </div>
         <div class="course-head-actions">
           <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
           <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
+          <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
           <button class="btn btn-ghost btn-small" id="btn-archive-course" title="Lo oculta de la lista principal sin borrar nada. Se puede restaurar en cualquier momento desde &quot;Archivados&quot;.">Archivar este curso</button>
         </div>
       </div>
@@ -402,12 +418,7 @@
         </div>
       </div>
 
-      <div class="stat-strip stat-strip-progress">
-        <div class="stat rust"><div class="n" id="st-p0">0</div><div class="l">No ha iniciado (0%)</div></div>
-        <div class="stat amber"><div class="n" id="st-p1">0</div><div class="l">Iniciando (1–39%)</div></div>
-        <div class="stat amber"><div class="n" id="st-p2">0</div><div class="l">A medio camino (40–79%)</div></div>
-        <div class="stat teal"><div class="n" id="st-p3">0</div><div class="l">Finalizado (80%+)</div></div>
-      </div>
+      <div id="course-progress-summary" class="progress-summary"></div>
 
       <div class="tabs">
         <button class="tab active" data-tab="madre">Tabla madre <span class="badge" id="badge-madre">0</span></button>
@@ -488,6 +499,14 @@
         <label for="course-new-name">Nombre del curso</label>
         <input id="course-new-name" type="text" class="input-text" placeholder="p. ej. Matemáticamente">
       </div>
+      <div class="field-row">
+        <label>Tipo de curso</label>
+        <div class="radio-row">
+          <label class="radio-opt"><input type="radio" name="course-new-tipo" value="activo" checked> Activo (Santander + plataforma)</label>
+          <label class="radio-opt"><input type="radio" name="course-new-tipo" value="historico"> Histórico (una sola lista final)</label>
+        </div>
+        <div class="status-line">Un curso histórico no cruza contra Santander: solo sube una lista final con nombre, correo y % de avance.</div>
+      </div>
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
         <button class="btn btn-ghost btn-small" type="button" data-close-modal="modal-course">Cancelar</button>
         <button class="btn btn-primary btn-small" id="btn-new-course">Crear curso</button>
@@ -539,6 +558,30 @@
       <div class="cross-cta hidden" id="cta-plataforma">
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: cargar lista final (cursos históricos) ======================= -->
+  <div class="modal-overlay hidden" id="modal-listafinal">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-listafinal">&times;</button>
+      <h3 class="modal-title">Actualizar lista final</h3>
+      <p class="modal-sub">Curso histórico: no hay cruce contra Santander. Sube la lista final y se actualiza directo el nombre, correo y % de avance de cada quien.</p>
+      <div class="panel-head">
+        <h3>Archivo de lista final</h3>
+        <span class="file-tag hidden" id="tag-listafinal"></span>
+      </div>
+      <div class="drop" id="drop-listafinal">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx</div>
+      </div>
+      <input type="file" id="file-listafinal" accept=".xlsx,.xls">
+      <div id="mapping-listafinal" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-listafinal">
+        <button class="btn btn-primary" id="btn-process-listafinal" disabled>Actualizar lista final</button>
+        <div class="status-line" id="listafinal-hint">Configura las columnas para continuar.</div>
       </div>
     </div>
   </div>
@@ -651,11 +694,14 @@ const db = firebase.firestore();
 
   document.getElementById("btn-open-new-course").addEventListener("click", () => {
     document.getElementById("course-new-name").value = "";
+    const defaultTipo = document.querySelector('input[name="course-new-tipo"][value="activo"]');
+    if(defaultTipo) defaultTipo.checked = true;
     openModal("modal-course");
     document.getElementById("course-new-name").focus();
   });
   document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
   document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
+  document.getElementById("btn-open-listafinal").addEventListener("click", () => openModal("modal-listafinal"));
   document.getElementById("btn-open-dashboard").addEventListener("click", () => {
     openModal("modal-dashboard");
     loadDashboard();
@@ -742,21 +788,26 @@ const db = firebase.firestore();
     master: [],       // array of records (mirror de la subcolección master en Firestore)
     log: [],
     masterReady: false, // false mientras la tabla madre completa sigue cargando de fondo
+    baseline: null,      // snapshot semanal (para calcular "cuánto se movió" en la vista del curso)
     courseLoadToken: 0, // evita que una carga vieja pise los datos si el usuario cambia de curso
-    pending: { santander:null, plataforma:null },
+    pending: { santander:null, plataforma:null, listafinal:null },
     lastRun: { nuevos:[], cambios:[], alta:[], revisar:[] }
   };
 
-  function emptyMeta(displayName, slug){
+  function emptyMeta(displayName, slug, tipo){
     return {
       displayName, slug,
+      tipo: tipo === "historico" ? "historico" : "activo",
       createdAt: nowISO(), updatedAt: nowISO(),
       santanderMapping: null,
       plataformaMapping: null,
+      listaFinalMapping: null,
       lastSantanderUpload: null,
       lastPlataformaUpload: null,
+      lastListaFinalUpload: null,
       lastSantanderFile: null,
       lastPlataformaFile: null,
+      lastListaFinalFile: null,
       stats: emptyStats(),
       archived: false
     };
@@ -821,8 +872,10 @@ const db = firebase.firestore();
         displayName: data.displayName || d.id,
         updatedAt: data.updatedAt,
         stats: data.stats || emptyStats(),
+        tipo: data.tipo === "historico" ? "historico" : "activo",
         lastSantanderUpload: data.lastSantanderUpload || null,
         lastPlataformaUpload: data.lastPlataformaUpload || null,
+        lastListaFinalUpload: data.lastListaFinalUpload || null,
         archived: !!data.archived
       };
     });
@@ -1074,12 +1127,13 @@ const db = firebase.firestore();
     const existing = app.coursesIndex.find(c => c.slug === slug);
     if(existing){ document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; closeModal("modal-course"); return; }
 
-    const meta = emptyMeta(name, slug);
+    const tipoSel = document.querySelector('input[name="course-new-tipo"]:checked');
+    const meta = emptyMeta(name, slug, tipoSel ? tipoSel.value : "activo");
     setSaveStatus("Creando curso...");
     await createCourseRemote(meta);
     app.coursesIndex.push({
-      slug, displayName:name, updatedAt: meta.updatedAt,
-      stats: meta.stats, lastSantanderUpload: null, lastPlataformaUpload: null, archived: false
+      slug, displayName:name, updatedAt: meta.updatedAt, tipo: meta.tipo,
+      stats: meta.stats, lastSantanderUpload: null, lastPlataformaUpload: null, lastListaFinalUpload: null, archived: false
     });
     renderCourseSelect();
     document.getElementById("course-select").value = slug;
@@ -1155,14 +1209,20 @@ const db = firebase.firestore();
     const loadToken = ++app.courseLoadToken;
     setSaveStatus("Cargando curso...");
 
-    // Fase 1 — rápida: solo metadatos (incluye el resumen ya calculado en
-    // meta.stats). Con esto ya se puede pintar el encabezado y los
-    // contadores sin esperar a bajar la tabla madre completa.
-    const meta = await loadCourseMetaRemote(slug);
+    // Fase 1 — rápida: metadatos (incluye el resumen ya calculado en
+    // meta.stats) + el snapshot semanal de referencia. Ambas son lecturas
+    // de un solo documento, así que ya se puede pintar el encabezado, los
+    // contadores y la tasa de término con su tendencia sin esperar a bajar
+    // la tabla madre completa.
+    const [meta, baseline] = await Promise.all([
+      loadCourseMetaRemote(slug),
+      getBaselineSnapshot(slug)
+    ]);
     if(loadToken !== app.courseLoadToken) return; // el usuario ya cambió de curso
 
     app.slug = slug;
     app.meta = meta;
+    app.baseline = baseline;
     app.master = [];
     app.log = [];
     app.masterReady = false;
@@ -1171,15 +1231,29 @@ const db = firebase.firestore();
     renderCourseTabs();
     resetTableFilter("madre");
 
+    const esHistorico = app.meta.tipo === "historico";
+
     document.getElementById("course-head").classList.remove("hidden");
     document.getElementById("course-name-display").textContent = app.meta.displayName;
     document.getElementById("cm-santander-count").textContent = (app.meta.stats && app.meta.stats.total) || 0;
-    document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
-    document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
+    if(esHistorico){
+      document.getElementById("cm-label-santander").textContent = "última carga de lista final";
+      document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastListaFinalUpload);
+      document.getElementById("cm-item-plataforma").classList.add("hidden");
+    } else {
+      document.getElementById("cm-label-santander").textContent = "última carga Santander";
+      document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
+      document.getElementById("cm-item-plataforma").classList.remove("hidden");
+      document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
+    }
+
+    document.getElementById("btn-open-santander").classList.toggle("hidden", esHistorico);
+    document.getElementById("btn-open-plataforma").classList.toggle("hidden", esHistorico);
+    document.getElementById("btn-open-listafinal").classList.toggle("hidden", !esHistorico);
 
     document.getElementById("course-dependent").classList.remove("hidden");
 
-    ["santander","plataforma"].forEach(kind => {
+    ["santander","plataforma","listafinal"].forEach(kind => {
       document.getElementById("mapping-" + kind).classList.add("hidden");
       document.getElementById("mapping-" + kind).innerHTML = "";
       document.getElementById("cta-" + kind).classList.add("hidden");
@@ -1238,10 +1312,7 @@ const db = firebase.firestore();
     document.getElementById("badge-cambios").textContent = 0;
     document.getElementById("badge-revisar").textContent = 0;
     document.getElementById("badge-historial").textContent = "…";
-    document.getElementById("st-p0").textContent = stats.p0;
-    document.getElementById("st-p1").textContent = stats.p1;
-    document.getElementById("st-p2").textContent = stats.p2;
-    document.getElementById("st-p3").textContent = stats.p3;
+    renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
   }
 
   function renderTablesLoading(){
@@ -1310,7 +1381,9 @@ const db = firebase.firestore();
     container.classList.remove("hidden");
     document.getElementById("cta-" + kind).classList.remove("hidden");
     const headers = app.pending[kind].headers;
-    const savedMap = kind === "santander" ? app.meta.santanderMapping : app.meta.plataformaMapping;
+    const savedMap = kind === "santander" ? app.meta.santanderMapping
+      : kind === "plataforma" ? app.meta.plataformaMapping
+      : app.meta.listaFinalMapping;
 
     if(sheetNames.length > 1){
       const row = el("div", {class:"field-row"});
@@ -1377,7 +1450,7 @@ const db = firebase.firestore();
       const watchDefault = (savedMap && savedMap.watchCols) ? savedMap.watchCols.filter(c => headers.includes(c)) : headers.filter(h => /status|estado/.test(normalize(h)));
       appendChipSection(container, "santander-watch", headers, watchDefault, "Columnas a vigilar por cambios de estatus", true);
 
-    } else {
+    } else if(kind === "plataforma"){
       const nameRow = el("div", {class:"field-row"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
       const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
@@ -1410,6 +1483,41 @@ const db = firebase.firestore();
         ? savedMap.extraCols.filter(c => headers.includes(c))
         : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm && normalize(h) !== progHeaderNorm);
       appendChipSection(container, "plataforma-extra", headers, defaultExtra, "Columnas de plataforma a traer (progreso, hora, etc.)", false);
+
+    } else if(kind === "listafinal"){
+      const nameRow = el("div", {class:"field-row"});
+      nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
+      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
+      const nameSel = makeHeaderSelect(headers, nameDefault);
+      nameSel.id = "map-listafinal-fullname";
+      nameRow.appendChild(nameSel);
+      container.appendChild(nameRow);
+      nameSel.addEventListener("change", checkReady);
+
+      const progRow = el("div", {class:"field-row"});
+      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
+      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
+        ? savedMap.progresoCol
+        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
+      const progSel = el("select");
+      progSel.id = "map-listafinal-progreso";
+      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === progDefault) opt.selected = true;
+        progSel.appendChild(opt);
+      });
+      progRow.appendChild(progSel);
+      container.appendChild(progRow);
+      progSel.addEventListener("change", checkReady);
+
+      const emailHeaderNorm = normalize(emailSel.value);
+      const nameHeaderNorm = normalize(nameSel.value);
+      const progHeaderNorm = normalize(progSel.value);
+      const defaultExtra = (savedMap && savedMap.extraCols)
+        ? savedMap.extraCols.filter(c => headers.includes(c))
+        : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm && normalize(h) !== progHeaderNorm);
+      appendChipSection(container, "listafinal-extra", headers, defaultExtra, "Otras columnas a incluir (hora de finalización, etc.)", false);
     }
 
     checkReady();
@@ -1458,13 +1566,13 @@ const db = firebase.firestore();
         return !!(s && s.value);
       }
     } else {
-      const n = document.getElementById("map-plataforma-fullname");
+      const n = document.getElementById("map-" + kind + "-fullname");
       return !!(n && n.value);
     }
   }
 
   function checkReady(){
-    ["santander","plataforma"].forEach(kind => {
+    ["santander","plataforma","listafinal"].forEach(kind => {
       const mappingReady = isReady(kind);
       const ready = mappingReady && app.masterReady;
       const btn = document.getElementById("btn-process-" + kind);
@@ -1479,6 +1587,7 @@ const db = firebase.firestore();
 
   wireUpload("santander");
   wireUpload("plataforma");
+  wireUpload("listafinal");
 
   function getSantanderName(row){
     const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
@@ -1690,6 +1799,92 @@ const db = firebase.firestore();
     closeModal("modal-plataforma");
   });
 
+  // ---------- procesar lista final (cursos históricos, sin cruce con Santander) ----------
+  document.getElementById("btn-process-listafinal").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-process-listafinal");
+    btn.disabled = true; btn.textContent = "Procesando...";
+    setSaveStatus("Actualizando la lista final...");
+
+    const emailCol = document.getElementById("map-listafinal-email").value;
+    const nameCol = document.getElementById("map-listafinal-fullname").value;
+    const progresoCol = document.getElementById("map-listafinal-progreso").value;
+    const extraCols = getSelectedChips("listafinal-extra");
+    const today = todayISO();
+    let lockedCount = 0;
+    let nuevosCount = 0;
+
+    const masterByKey = new Map(app.master.map(r => [r._key, r]));
+
+    app.pending.listafinal.rows.forEach(row => {
+      const email = row[emailCol];
+      const name = row[nameCol];
+      const key = recordKey(email, name);
+
+      const extraVals = {};
+      extraCols.forEach(c => extraVals[c] = row[c]);
+
+      let record = masterByKey.get(key);
+      if(!record){
+        record = {
+          _key:key, nombre:name, email:email || "",
+          santanderExtra:{}, plataformaExtra: extraVals,
+          estado:"En plataforma", progreso:0,
+          primeraVez:today, ultimaCargaSantander:today, presenteUltimaCarga:true,
+          ultimaActualizacionPlataforma:today
+        };
+        app.master.push(record);
+        masterByKey.set(key, record);
+        nuevosCount++;
+      } else {
+        record.nombre = name || record.nombre;
+        record.email = email || record.email;
+        record.plataformaExtra = Object.assign({}, record.plataformaExtra, extraVals);
+        record.estado = "En plataforma";
+        record.ultimaCargaSantander = today;
+        record.presenteUltimaCarga = true;
+        record.ultimaActualizacionPlataforma = today;
+      }
+
+      if(progresoCol){
+        const parsed = parsePct(row[progresoCol]);
+        if(parsed !== null){
+          const prevProgreso = typeof record.progreso === "number" ? record.progreso : 0;
+          if(parsed < prevProgreso) lockedCount++;
+          record.progreso = Math.max(prevProgreso, parsed);
+        }
+      }
+    });
+
+    app.meta.listaFinalMapping = {emailCol, nameCol, progresoCol, extraCols};
+    app.meta.lastListaFinalUpload = today;
+    app.meta.lastListaFinalFile = app.pending.listafinal.fileName;
+    app.meta.updatedAt = nowISO();
+
+    await ensureWeeklySnapshot(app.slug, app.meta.stats);
+    app.meta.stats = computeMasterStats(app.master);
+
+    let resumen = app.pending.listafinal.rows.length + " registros procesados, " + nuevosCount + " nuevos";
+    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
+    const logEntry = {
+      date: nowISO(), tipo:"Lista final", archivo: app.pending.listafinal.fileName,
+      resumen: resumen,
+      por: (auth.currentUser && auth.currentUser.email) || ""
+    };
+    app.log.unshift(logEntry);
+
+    await persistUpdate(logEntry);
+
+    document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastListaFinalUpload);
+
+    renderStats();
+    renderMasterTable();
+    renderHistorial();
+
+    btn.disabled = false; btn.textContent = "Actualizar lista final";
+    document.querySelector('.tab[data-tab="madre"]').click();
+    closeModal("modal-listafinal");
+  });
+
   // ---------- rendering ----------
   function flattenMasterRow(record){
     const row = {};
@@ -1726,10 +1921,7 @@ const db = firebase.firestore();
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = app.log.length;
 
-    document.getElementById("st-p0").textContent = stats.p0;
-    document.getElementById("st-p1").textContent = stats.p1;
-    document.getElementById("st-p2").textContent = stats.p2;
-    document.getElementById("st-p3").textContent = stats.p3;
+    renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
   }
 
   function renderMasterTable(){
@@ -1844,6 +2036,56 @@ const db = firebase.firestore();
     return el("span", {class:"delta-badge " + cls}, [document.createTextNode(arrow + " " + sign + delta + " pts vs. semana pasada")]);
   }
 
+  function computeDeltas(stats, baseline){
+    const tasas = computeTasas(stats);
+    if(!baseline) return {tasas, deltaSantander:null, deltaIniciados:null};
+    const deltaSantander = Math.round((tasas.tasaSantander - baseline.tasaSantander) * 10) / 10;
+    const deltaIniciados = Math.round((tasas.tasaIniciados - baseline.tasaIniciados) * 10) / 10;
+    return {tasas, deltaSantander, deltaIniciados};
+  }
+
+  function progressBox(label, count, cls){
+    return el("div", {class:"progress-box " + cls}, [
+      el("div", {class:"progress-box-n"}, [document.createTextNode(String(count))]),
+      el("div", {class:"progress-box-l"}, [document.createTextNode(label)])
+    ]);
+  }
+
+  function tasaBlock(label, value, delta){
+    const wrap = el("div", {class:"tasa-block"});
+    wrap.appendChild(el("div", {}, [
+      el("div", {class:"dashboard-tasa-label"}, [document.createTextNode(label)]),
+      el("div", {class:"dashboard-tasa-value"}, [document.createTextNode(value + "%")])
+    ]));
+    wrap.appendChild(deltaBadge(delta));
+    return wrap;
+  }
+
+  // Resumen reutilizado tanto en la vista de un curso como en cada tarjeta
+  // del dashboard: primero Inactivos (0% de avance) vs. Activos (ya
+  // arrancaron), y dentro de Activos los 3 rangos; abajo, las dos tasas de
+  // término con su cambio contra la semana pasada.
+  function renderProgressSummaryInto(container, stats, deltas){
+    container.innerHTML = "";
+    const activos = stats.p1 + stats.p2 + stats.p3;
+
+    const topRow = el("div", {class:"progress-summary-top"});
+    topRow.appendChild(progressBox("Inactivos (0%)", stats.p0, "inactivo"));
+    topRow.appendChild(progressBox("Activos (>0%)", activos, "activo"));
+    container.appendChild(topRow);
+
+    const subRow = el("div", {class:"progress-summary-sub"});
+    subRow.appendChild(progressBox("Iniciando (1–39%)", stats.p1, "p1"));
+    subRow.appendChild(progressBox("A medio camino (40–79%)", stats.p2, "p2"));
+    subRow.appendChild(progressBox("Finalizado (80%+)", stats.p3, "p3"));
+    container.appendChild(subRow);
+
+    const tasaRow = el("div", {class:"progress-summary-tasas"});
+    tasaRow.appendChild(tasaBlock("Tasa de término (sobre tabla madre)", deltas.tasas.tasaSantander, deltas.deltaSantander));
+    tasaRow.appendChild(tasaBlock("Tasa de término (sobre quienes iniciaron)", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
+    container.appendChild(tasaRow);
+  }
+
   async function loadDashboard(){
     const loading = document.getElementById("dashboard-loading");
     const content = document.getElementById("dashboard-content");
@@ -1913,44 +2155,17 @@ const db = firebase.firestore();
       card.appendChild(el("h4", {}, [document.createTextNode(c.displayName)]));
       card.appendChild(el("div", {class:"dc-total"}, [document.createTextNode(s.total + " en tabla madre · " + s.alta + " faltan por dar de alta")]));
 
-      const bar = el("div", {class:"dashboard-bar"});
-      [["p0","seg-p0"],["p1","seg-p1"],["p2","seg-p2"],["p3","seg-p3"]].forEach(([key,cls]) => {
-        const pct = s.total ? (s[key] / s.total * 100) : 0;
-        if(pct > 0){
-          const seg = el("span", {class:cls, title:key + ": " + s[key]});
-          seg.style.width = pct + "%";
-          bar.appendChild(seg);
-        }
-      });
-      card.appendChild(bar);
-
-      const legend = el("div", {class:"dashboard-legend"});
-      [["lp0","No iniciado",s.p0],["lp1","Iniciando",s.p1],["lp2","A medio camino",s.p2],["lp3","Finalizado",s.p3]].forEach(([cls,label,count]) => {
-        legend.appendChild(el("span", {}, [el("i", {class:cls}, []), document.createTextNode(label + ": " + count)]));
-      });
-      card.appendChild(legend);
-
-      const tasas = el("div", {class:"dashboard-tasas"});
-      const row1 = el("div", {class:"dashboard-tasa-row"});
-      row1.appendChild(el("div", {}, [
-        el("div", {class:"dashboard-tasa-label"}, [document.createTextNode("Tasa de término (sobre tabla madre)")]),
-        el("div", {class:"dashboard-tasa-value"}, [document.createTextNode(c.tasas.tasaSantander + "%")])
-      ]));
-      row1.appendChild(deltaBadge(c.deltaSantander));
-      tasas.appendChild(row1);
-
-      const row2 = el("div", {class:"dashboard-tasa-row"});
-      row2.appendChild(el("div", {}, [
-        el("div", {class:"dashboard-tasa-label"}, [document.createTextNode("Tasa de término (sobre los que iniciaron)")]),
-        el("div", {class:"dashboard-tasa-value"}, [document.createTextNode(c.tasas.tasaIniciados + "%")])
-      ]));
-      row2.appendChild(deltaBadge(c.deltaIniciados));
-      tasas.appendChild(row2);
-      card.appendChild(tasas);
+      const summaryWrap = el("div", {});
+      card.appendChild(summaryWrap);
+      renderProgressSummaryInto(summaryWrap, s, {tasas: c.tasas, deltaSantander: c.deltaSantander, deltaIniciados: c.deltaIniciados});
 
       const meta = el("div", {class:"dc-meta"});
-      meta.appendChild(el("span", {}, [document.createTextNode("Santander: " + fmtDate(c.lastSantanderUpload))]));
-      meta.appendChild(el("span", {}, [document.createTextNode("Plataforma: " + fmtDate(c.lastPlataformaUpload))]));
+      if(c.tipo === "historico"){
+        meta.appendChild(el("span", {}, [document.createTextNode("Lista final: " + fmtDate(c.lastListaFinalUpload))]));
+      } else {
+        meta.appendChild(el("span", {}, [document.createTextNode("Santander: " + fmtDate(c.lastSantanderUpload))]));
+        meta.appendChild(el("span", {}, [document.createTextNode("Plataforma: " + fmtDate(c.lastPlataformaUpload))]));
+      }
       card.appendChild(meta);
 
       cardsEl.appendChild(card);
