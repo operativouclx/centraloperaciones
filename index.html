@@ -96,6 +96,11 @@
     border:1px solid transparent;cursor:pointer;background:#EEF1F0;color:var(--ink-soft);
   }
   .course-tab.active{color:#fff;}
+  .course-tabs-group-label{
+    display:flex;align-items:center;font-size:10.5px;font-weight:700;color:var(--ink-soft);
+    text-transform:uppercase;letter-spacing:.04em;padding:0 4px;
+  }
+  .course-tabs-group-label:not(:first-child){margin-left:6px;}
   .course-tab.c0{background:var(--teal-bg);color:var(--teal-dark);}
   .course-tab.c0.active{background:var(--teal);color:#fff;}
   .course-tab.c1{background:var(--amber-bg);color:var(--amber);}
@@ -435,7 +440,8 @@
         <div>
           <h2 id="course-name-display"></h2>
           <div class="course-meta-list">
-            <div class="course-meta-item"><b id="cm-santander-count">0</b>en tabla madre</div>
+            <div class="course-meta-item" id="cm-item-santander-total"><b id="cm-santander-count">0</b><span id="cm-label-santander-total">Total Santander</span></div>
+            <div class="course-meta-item" id="cm-item-plataforma-total"><b id="cm-plataforma-count">0</b>Total plataforma</div>
             <div class="course-meta-item"><b id="cm-last-santander">—</b><span id="cm-label-santander">última carga Santander</span></div>
             <div class="course-meta-item" id="cm-item-plataforma"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
           </div>
@@ -640,19 +646,34 @@
       <div id="dashboard-loading" class="dashboard-loading">Cargando...</div>
 
       <div id="dashboard-content" class="hidden">
+        <h4 class="dashboard-section-title">General (todos los cursos, sin Salud Financiera)</h4>
         <div class="dashboard-global-visual">
-          <div id="dashboard-global-donut"></div>
+          <div id="dash-gen-donut"></div>
           <div class="dgv-picto">
-            <div id="dashboard-global-picto"></div>
-            <div id="dashboard-global-legend"></div>
+            <div id="dash-gen-picto"></div>
+            <div id="dash-gen-legend"></div>
           </div>
         </div>
-
         <div class="stat-strip stat-strip-progress">
-          <div class="stat teal"><div class="n" id="dash-total-courses">0</div><div class="l">Cursos</div></div>
-          <div class="stat plum"><div class="n" id="dash-total-people">0</div><div class="l">Personas en total</div></div>
-          <div class="stat teal"><div class="n" id="dash-total-finalizado">0</div><div class="l">Finalizados en total</div></div>
-          <div class="stat amber"><div class="n" id="dash-total-pct">0%</div><div class="l">Tasa de término global</div></div>
+          <div class="stat teal"><div class="n" id="dash-gen-courses">0</div><div class="l">Cursos</div></div>
+          <div class="stat plum"><div class="n" id="dash-gen-people">0</div><div class="l">Personas en total</div></div>
+          <div class="stat teal"><div class="n" id="dash-gen-finalizado">0</div><div class="l">Finalizados en total</div></div>
+          <div class="stat amber"><div class="n" id="dash-gen-pct">0%</div><div class="l">Tasa de término</div></div>
+        </div>
+
+        <h4 class="dashboard-section-title">Salud Financiera</h4>
+        <div class="dashboard-global-visual">
+          <div id="dash-sf-donut"></div>
+          <div class="dgv-picto">
+            <div id="dash-sf-picto"></div>
+            <div id="dash-sf-legend"></div>
+          </div>
+        </div>
+        <div class="stat-strip stat-strip-progress">
+          <div class="stat teal"><div class="n" id="dash-sf-courses">0</div><div class="l">Cursos</div></div>
+          <div class="stat plum"><div class="n" id="dash-sf-people">0</div><div class="l">Personas en total</div></div>
+          <div class="stat teal"><div class="n" id="dash-sf-finalizado">0</div><div class="l">Finalizados en total</div></div>
+          <div class="stat amber"><div class="n" id="dash-sf-pct">0%</div><div class="l">Tasa de término</div></div>
         </div>
 
         <h4 class="dashboard-section-title">Tasa de término por curso (sobre tabla madre)</h4>
@@ -1165,14 +1186,25 @@ const db = firebase.firestore();
   function renderCourseTabs(){
     const wrap = document.getElementById("course-tabs");
     wrap.innerHTML = "";
-    app.coursesIndex.filter(c => !c.archived).slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach((c, i) => {
-      const btn = el("button", {
-        type:"button",
-        class:"course-tab c" + (i % 4) + (c.slug === app.slug ? " active" : "")
-      }, [document.createTextNode(c.displayName)]);
-      btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
-      wrap.appendChild(btn);
-    });
+
+    function addGroup(label, list, colorStart){
+      if(!list.length) return;
+      wrap.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(label)]));
+      list.forEach((c, i) => {
+        const btn = el("button", {
+          type:"button",
+          class:"course-tab c" + ((colorStart + i) % 4) + (c.slug === app.slug ? " active" : "")
+        }, [document.createTextNode(c.displayName)]);
+        btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
+        wrap.appendChild(btn);
+      });
+    }
+
+    const visible = app.coursesIndex.filter(c => !c.archived);
+    const activos = visible.filter(c => c.tipo !== "historico").sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    const historicos = visible.filter(c => c.tipo === "historico").sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    addGroup("Activos", activos, 0);
+    addGroup("Históricos", historicos, activos.length);
 
     const archivedCount = app.coursesIndex.filter(c => c.archived).length;
     const archBtn = document.getElementById("btn-open-archived");
@@ -1305,7 +1337,7 @@ const db = firebase.firestore();
 
     document.getElementById("course-head").classList.remove("hidden");
     document.getElementById("course-name-display").textContent = app.meta.displayName;
-    document.getElementById("cm-santander-count").textContent = (app.meta.stats && app.meta.stats.total) || 0;
+    renderCourseMetaCounts();
     if(esHistorico){
       document.getElementById("cm-label-santander").textContent = "última carga de lista final";
       document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastListaFinalUpload);
@@ -1347,7 +1379,6 @@ const db = firebase.firestore();
       app.masterReady = true;
 
       renderStats();
-      document.getElementById("cm-santander-count").textContent = app.master.length;
 
       // Autocompleta meta.stats en Firestore si un curso viejo (creado antes
       // de que existiera este resumen) nunca lo tuvo guardado — así el
@@ -1374,6 +1405,15 @@ const db = firebase.firestore();
     }
   }
 
+  function renderCourseMetaCounts(){
+    const stats = (app.meta && app.meta.stats) || emptyStats();
+    const esHistorico = app.meta && app.meta.tipo === "historico";
+    document.getElementById("cm-santander-count").textContent = stats.total;
+    document.getElementById("cm-label-santander-total").textContent = esHistorico ? "Total" : "Total Santander";
+    document.getElementById("cm-item-plataforma-total").classList.toggle("hidden", esHistorico);
+    document.getElementById("cm-plataforma-count").textContent = Math.max(stats.total - stats.alta, 0);
+  }
+
   function renderStatsFromMeta(){
     const stats = (app.meta && app.meta.stats) || emptyStats();
     document.getElementById("badge-madre").textContent = stats.total;
@@ -1382,6 +1422,7 @@ const db = firebase.firestore();
     document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
+    renderCourseMetaCounts();
     renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
   }
 
@@ -1767,7 +1808,6 @@ const db = firebase.firestore();
     app.lastRun.nuevos = nuevos;
     app.lastRun.cambios = cambios;
 
-    document.getElementById("cm-santander-count").textContent = app.master.length;
     document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
 
     renderStats();
@@ -2007,6 +2047,7 @@ const db = firebase.firestore();
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = app.log.length;
 
+    renderCourseMetaCounts();
     renderProgressSummaryInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline));
   }
 
@@ -2337,36 +2378,49 @@ const db = firebase.firestore();
     content.classList.remove("hidden");
   }
 
-  function renderDashboard(courses){
-    const compareEl = document.getElementById("dashboard-compare");
-    const cardsEl = document.getElementById("dashboard-cards");
-    compareEl.innerHTML = "";
-    cardsEl.innerHTML = "";
-
+  // Pinta un bloque resumen (dona + pictograma + leyenda + 4 cifras) para
+  // un subconjunto de cursos, usando el prefijo de id en el HTML
+  // (ej. "dash-gen-donut", "dash-gen-courses", ...).
+  function renderGlobalSummaryBlock(idPrefix, courses){
     const totalCourses = courses.length;
     const totalPeople = courses.reduce((sum,c) => sum + ((c.stats && c.stats.total) || 0), 0);
     const totalFinalizado = courses.reduce((sum,c) => sum + ((c.stats && c.stats.p3) || 0), 0);
     const pctGlobal = totalPeople ? Math.round((totalFinalizado / totalPeople) * 100) : 0;
-    document.getElementById("dash-total-courses").textContent = totalCourses;
-    document.getElementById("dash-total-people").textContent = totalPeople;
-    document.getElementById("dash-total-finalizado").textContent = totalFinalizado;
-    document.getElementById("dash-total-pct").textContent = pctGlobal + "%";
+    document.getElementById(idPrefix + "-courses").textContent = totalCourses;
+    document.getElementById(idPrefix + "-people").textContent = totalPeople;
+    document.getElementById(idPrefix + "-finalizado").textContent = totalFinalizado;
+    document.getElementById(idPrefix + "-pct").textContent = pctGlobal + "%";
 
-    const globalStats = {
+    const stats = {
       total: totalPeople,
       p0: courses.reduce((sum,c) => sum + ((c.stats && c.stats.p0) || 0), 0),
       p1: courses.reduce((sum,c) => sum + ((c.stats && c.stats.p1) || 0), 0),
       p2: courses.reduce((sum,c) => sum + ((c.stats && c.stats.p2) || 0), 0),
       p3: totalFinalizado
     };
-    const donutWrap = document.getElementById("dashboard-global-donut");
+    const donutWrap = document.getElementById(idPrefix + "-donut");
     donutWrap.innerHTML = "";
-    donutWrap.appendChild(renderDonutSVG(globalStats, 132));
-    const pictoWrap = document.getElementById("dashboard-global-picto");
-    renderActivoInactivoInto(pictoWrap, globalStats, 60);
-    const legendWrap = document.getElementById("dashboard-global-legend");
+    donutWrap.appendChild(renderDonutSVG(stats, 110));
+    const pictoWrap = document.getElementById(idPrefix + "-picto");
+    renderActivoInactivoInto(pictoWrap, stats, 40);
+    const legendWrap = document.getElementById(idPrefix + "-legend");
     legendWrap.innerHTML = "";
-    legendWrap.appendChild(colorLegend(globalStats));
+    legendWrap.appendChild(colorLegend(stats));
+  }
+
+  function renderDashboard(courses){
+    const compareEl = document.getElementById("dashboard-compare");
+    const cardsEl = document.getElementById("dashboard-cards");
+    compareEl.innerHTML = "";
+    cardsEl.innerHTML = "";
+
+    // Salud Financiera es un cliente aparte: su tasa de término no debe
+    // mezclarse con la del resto de los cursos en el resumen global.
+    const esSaludFinanciera = c => normalize(c.displayName) === normalize("Salud Financiera");
+    const saludFinancieraCourses = courses.filter(esSaludFinanciera);
+    const generalCourses = courses.filter(c => !esSaludFinanciera(c));
+    renderGlobalSummaryBlock("dash-gen", generalCourses);
+    renderGlobalSummaryBlock("dash-sf", saludFinancieraCourses);
 
     if(!courses.length){
       cardsEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Todavía no hay cursos guardados.")]));
