@@ -175,6 +175,16 @@
   .pictogram-icon.ic-p1{color:var(--amber);}
   .pictogram-icon.ic-p2{color:#C79A1E;}
   .pictogram-icon.ic-p3{color:var(--teal);}
+  .pictogram-icon.ic-inactivo{color:var(--rust);}
+  .pictogram-icon.ic-activo{color:var(--teal);}
+
+  .picto-summary{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;font-weight:700;}
+  .picto-summary-item{display:inline-flex;align-items:center;gap:6px;}
+  .picto-summary-item i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .picto-summary-item.ic-activo{color:var(--teal-dark);}
+  .picto-summary-item.ic-activo i{background:var(--teal);}
+  .picto-summary-item.ic-inactivo{color:var(--rust);}
+  .picto-summary-item.ic-inactivo i{background:var(--rust);}
 
   .color-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;color:var(--ink-soft);margin-top:8px;}
   .color-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -633,7 +643,7 @@
         <div class="dashboard-global-visual">
           <div id="dashboard-global-donut"></div>
           <div class="dgv-picto">
-            <div id="dashboard-global-picto" class="pictogram-grid"></div>
+            <div id="dashboard-global-picto"></div>
             <div id="dashboard-global-legend"></div>
           </div>
         </div>
@@ -2179,46 +2189,68 @@ const db = firebase.firestore();
     return e;
   }
 
-  function renderDonutSVG(stats, centerLabel, centerSubLabel, size){
-    size = size || 116;
-    const stroke = Math.round(size * 0.14);
-    const r = (size - stroke) / 2;
-    const cx = size / 2, cy = size / 2;
-    const C = 2 * Math.PI * r;
+  // Dona de dos anillos: el interior parte el total en Inactivos/Activos;
+  // el exterior usa las MISMAS fracciones (sobre el total) para dibujar
+  // Iniciando/Medio/Finalizado, así que su arco queda alineado justo
+  // encima del arco de "Activos" del anillo interior — literalmente "la
+  // distribución de Activos, y de ahí los 3 rangos".
+  function renderDonutSVG(stats, size){
+    size = size || 120;
     const total = stats.total || 0;
-    const segments = [
-      {value: stats.p0, color: "var(--rust)"},
-      {value: stats.p1, color: "var(--amber)"},
-      {value: stats.p2, color: "#C79A1E"},
-      {value: stats.p3, color: "var(--teal)"}
-    ];
+    const activos = stats.p1 + stats.p2 + stats.p3;
+    const pctActivos = total ? Math.round((activos / total) * 100) : 0;
+
+    const strokeW = Math.round(size * 0.115);
+    const gap = Math.max(2, Math.round(size * 0.02));
+    const rOuter = (size - strokeW) / 2;
+    const rInner = rOuter - strokeW - gap;
+    const cx = size / 2, cy = size / 2;
+    const Couter = 2 * Math.PI * rOuter;
+    const Cinner = 2 * Math.PI * rInner;
+
     const svg = svgEl("svg", {viewBox: "0 0 " + size + " " + size, width:size, height:size, class:"donut-svg"});
-    svg.appendChild(svgEl("circle", {cx, cy, r, fill:"none", stroke:"#EEF1F0", "stroke-width":stroke}));
+    svg.appendChild(svgEl("circle", {cx, cy, r:rOuter, fill:"none", stroke:"#EEF1F0", "stroke-width":strokeW}));
+    svg.appendChild(svgEl("circle", {cx, cy, r:rInner, fill:"none", stroke:"#EEF1F0", "stroke-width":strokeW}));
 
-    let offset = 0;
-    const gapPx = total ? 2 : 0;
-    segments.forEach(seg => {
-      if(!total || seg.value <= 0) return;
-      const len = Math.max((seg.value / total) * C - gapPx, 0);
-      const circle = svgEl("circle", {
-        cx, cy, r, fill:"none", stroke:seg.color, "stroke-width":stroke,
-        "stroke-linecap":"round",
-        "stroke-dasharray": len + " " + (C - len),
-        "stroke-dashoffset": -offset,
-        transform: "rotate(-90 " + cx + " " + cy + ")"
+    function drawRing(r, C, segments){
+      let frac = 0;
+      segments.forEach(seg => {
+        const segFrac = total ? (seg.value / total) : 0;
+        if(!seg.skip && seg.value > 0 && total){
+          const len = segFrac * C;
+          svg.appendChild(svgEl("circle", {
+            cx, cy, r, fill:"none", stroke:seg.color, "stroke-width":strokeW,
+            "stroke-dasharray": len + " " + (C - len),
+            "stroke-dashoffset": -(frac * C),
+            transform: "rotate(-90 " + cx + " " + cy + ")"
+          }));
+        }
+        frac += segFrac;
       });
-      svg.appendChild(circle);
-      offset += (seg.value / total) * C;
-    });
-
-    const text1 = svgEl("text", {x:cx, y: centerSubLabel ? cy - 3 : cy + 6, "text-anchor":"middle", class:"donut-center-n"});
-    text1.textContent = centerLabel;
-    svg.appendChild(text1);
-    if(centerSubLabel){
-      const text2 = svgEl("text", {x:cx, y:cy + 15, "text-anchor":"middle", class:"donut-center-l"});
-      text2.textContent = centerSubLabel;
-      svg.appendChild(text2);
     }
+
+    // Anillo interior: Inactivos vs Activos (círculo completo).
+    drawRing(rInner, Cinner, [
+      {value: stats.p0, color:"var(--rust)"},
+      {value: activos, color:"var(--teal)"}
+    ]);
+
+    // Anillo exterior: mismo reparto por total, pero solo se dibuja la
+    // parte de Activos (Iniciando/Medio/Finalizado) — la parte de
+    // Inactivos se salta (queda el fondo gris claro).
+    drawRing(rOuter, Couter, [
+      {value: stats.p0, skip:true},
+      {value: stats.p1, color:"var(--amber)"},
+      {value: stats.p2, color:"#C79A1E"},
+      {value: stats.p3, color:"var(--teal)"}
+    ]);
+
+    const text1 = svgEl("text", {x:cx, y:cy - 3, "text-anchor":"middle", class:"donut-center-n"});
+    text1.textContent = pctActivos + "%";
+    svg.appendChild(text1);
+    const text2 = svgEl("text", {x:cx, y:cy + 15, "text-anchor":"middle", class:"donut-center-l"});
+    text2.textContent = "activos";
+    svg.appendChild(text2);
     return svg;
   }
 
@@ -2229,43 +2261,52 @@ const db = firebase.firestore();
     return svg;
   }
 
-  // Reparte "totalIcons" personitas proporcionalmente entre los 4 rangos,
-  // repartiendo el residuo por mayor parte fraccionaria para que la suma
-  // cuadre exacto (en vez de que el redondeo deje personitas de más o de
-  // menos).
-  function renderPictogramInto(container, stats, totalIcons){
+  // Pictograma de personitas: solo Activos vs Inactivos, con el conteo y
+  // el porcentaje de cada grupo escrito junto a los iconos.
+  function renderActivoInactivoInto(container, stats, totalIcons){
     container.innerHTML = "";
     const total = stats.total || 0;
+    const activos = stats.p1 + stats.p2 + stats.p3;
+    const inactivos = stats.p0;
+    const pctActivos = total ? Math.round((activos / total) * 1000) / 10 : 0;
+    const pctInactivos = total ? Math.round((inactivos / total) * 1000) / 10 : 0;
+
+    const grid = el("div", {class:"pictogram-grid"});
     if(!total){
-      container.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Sin datos todavía.")]));
-      return;
+      grid.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Sin datos todavía.")]));
+    } else {
+      let countActivos = Math.round((activos / total) * totalIcons);
+      countActivos = Math.max(0, Math.min(totalIcons, countActivos));
+      const countInactivos = totalIcons - countActivos;
+      const fragment = document.createDocumentFragment();
+      for(let i = 0; i < countInactivos; i++) fragment.appendChild(personIconSVG("ic-inactivo"));
+      for(let i = 0; i < countActivos; i++) fragment.appendChild(personIconSVG("ic-activo"));
+      grid.appendChild(fragment);
     }
-    const buckets = [
-      {value: stats.p0, cls:"ic-p0"},
-      {value: stats.p1, cls:"ic-p1"},
-      {value: stats.p2, cls:"ic-p2"},
-      {value: stats.p3, cls:"ic-p3"}
-    ];
-    const raw = buckets.map(b => (b.value / total) * totalIcons);
-    const counts = raw.map(Math.floor);
-    let remainder = totalIcons - counts.reduce((a,b) => a + b, 0);
-    const byFraction = raw.map((v,i) => ({i, frac: v - counts[i]})).sort((a,b) => b.frac - a.frac);
-    let oi = 0;
-    while(remainder > 0 && oi < byFraction.length){
-      counts[byFraction[oi].i]++;
-      remainder--; oi++;
-    }
-    const fragment = document.createDocumentFragment();
-    buckets.forEach((b, i) => {
-      for(let k = 0; k < counts[i]; k++) fragment.appendChild(personIconSVG(b.cls));
-    });
-    container.appendChild(fragment);
+    container.appendChild(grid);
+
+    const summary = el("div", {class:"picto-summary"});
+    summary.appendChild(el("span", {class:"picto-summary-item ic-activo"}, [
+      el("i", {}, []), document.createTextNode("Activos: " + activos + " (" + pctActivos + "%)")
+    ]));
+    summary.appendChild(el("span", {class:"picto-summary-item ic-inactivo"}, [
+      el("i", {}, []), document.createTextNode("Inactivos: " + inactivos + " (" + pctInactivos + "%)")
+    ]));
+    container.appendChild(summary);
   }
 
-  function colorLegend(){
+  function colorLegend(stats){
+    const total = (stats && stats.total) || 0;
+    const pct = v => total ? Math.round((v / total) * 1000) / 10 : 0;
     const legend = el("div", {class:"color-legend"});
-    [["lc-p0","Inactivo (0%)"],["lc-p1","Iniciando"],["lc-p2","A medio camino"],["lc-p3","Finalizado"]].forEach(([cls,label]) => {
-      legend.appendChild(el("span", {}, [el("i", {class:cls}, []), document.createTextNode(label)]));
+    [
+      ["lc-p0","Inactivo", stats ? stats.p0 : null],
+      ["lc-p1","Iniciando", stats ? stats.p1 : null],
+      ["lc-p2","A medio camino", stats ? stats.p2 : null],
+      ["lc-p3","Finalizado", stats ? stats.p3 : null]
+    ].forEach(([cls,label,value]) => {
+      const text = value === null ? label : label + " (" + pct(value) + "%)";
+      legend.appendChild(el("span", {}, [el("i", {class:cls}, []), document.createTextNode(text)]));
     });
     return legend;
   }
@@ -2320,12 +2361,12 @@ const db = firebase.firestore();
     };
     const donutWrap = document.getElementById("dashboard-global-donut");
     donutWrap.innerHTML = "";
-    donutWrap.appendChild(renderDonutSVG(globalStats, pctGlobal + "%", "finalizado", 128));
+    donutWrap.appendChild(renderDonutSVG(globalStats, 132));
     const pictoWrap = document.getElementById("dashboard-global-picto");
-    renderPictogramInto(pictoWrap, globalStats, 60);
+    renderActivoInactivoInto(pictoWrap, globalStats, 60);
     const legendWrap = document.getElementById("dashboard-global-legend");
     legendWrap.innerHTML = "";
-    legendWrap.appendChild(colorLegend());
+    legendWrap.appendChild(colorLegend(globalStats));
 
     if(!courses.length){
       cardsEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("Todavía no hay cursos guardados.")]));
@@ -2354,16 +2395,16 @@ const db = firebase.firestore();
       const card = el("div", {class:"dashboard-card"});
 
       const header = el("div", {class:"dc-header"});
-      header.appendChild(renderDonutSVG(s, c.tasas.tasaSantander + "%", "término", 90));
+      header.appendChild(renderDonutSVG(s, 76));
       const headerText = el("div", {class:"dc-header-text"});
       headerText.appendChild(el("h4", {}, [document.createTextNode(c.displayName)]));
       headerText.appendChild(el("div", {class:"dc-total"}, [document.createTextNode(s.total + " en tabla madre · " + s.alta + " faltan por dar de alta")]));
       header.appendChild(headerText);
       card.appendChild(header);
 
-      const pictoWrap = el("div", {class:"pictogram-grid"});
+      const pictoWrap = el("div", {});
       card.appendChild(pictoWrap);
-      renderPictogramInto(pictoWrap, s, 30);
+      renderActivoInactivoInto(pictoWrap, s, 24);
 
       const tasaWrap = el("div", {});
       card.appendChild(tasaWrap);
