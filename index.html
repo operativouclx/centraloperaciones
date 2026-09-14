@@ -1484,6 +1484,46 @@ const db = firebase.firestore();
       progRow.appendChild(progSel);
       container.appendChild(progRow);
 
+      const genRow = el("div", {class:"field-row"});
+      genRow.appendChild(el("label", {}, [document.createTextNode("Columna de generación (opcional — úsala si el archivo trae varias ediciones juntas, ej. N+V)")]));
+      const genColDefault = (savedMap && savedMap.generacionCol && headers.includes(savedMap.generacionCol)) ? savedMap.generacionCol : "";
+      const genColSel = el("select");
+      genColSel.id = "map-plataforma-gencol";
+      genColSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === genColDefault) opt.selected = true;
+        genColSel.appendChild(opt);
+      });
+      genRow.appendChild(genColSel);
+      container.appendChild(genRow);
+
+      const genValRow = el("div", {class:"field-row" + (genColDefault ? "" : " hidden"), id:"plataforma-genval-wrap"});
+      genValRow.appendChild(el("label", {}, [document.createTextNode("Valor de esta generación")]));
+      const genValSel = el("select");
+      genValSel.id = "map-plataforma-genval";
+      genValRow.appendChild(genValSel);
+      container.appendChild(genValRow);
+
+      function populateGenValues(col, selectedVal){
+        genValSel.innerHTML = "";
+        if(!col) return;
+        const values = Array.from(new Set(
+          app.pending.plataforma.rows.map(r => r[col]).filter(v => v !== undefined && v !== null && v !== "")
+        )).sort((a,b) => String(a).localeCompare(String(b)));
+        values.forEach(v => {
+          const opt = el("option", {value:v}, [document.createTextNode(String(v))]);
+          if(String(v) === String(selectedVal)) opt.selected = true;
+          genValSel.appendChild(opt);
+        });
+      }
+      const genValDefault = (savedMap && savedMap.generacionCol === genColDefault) ? savedMap.generacionValor : "";
+      populateGenValues(genColDefault, genValDefault);
+      genColSel.addEventListener("change", () => {
+        genValRow.classList.toggle("hidden", !genColSel.value);
+        populateGenValues(genColSel.value, "");
+      });
+
       const emailHeaderNorm = normalize(emailSel.value);
       const nameHeaderNorm = normalize(nameSel.value);
       const progHeaderNorm = normalize(progSel.value);
@@ -1720,13 +1760,19 @@ const db = firebase.firestore();
     const emailCol = document.getElementById("map-plataforma-email").value;
     const nameCol = document.getElementById("map-plataforma-fullname").value;
     const progresoCol = document.getElementById("map-plataforma-progreso").value;
+    const generacionCol = document.getElementById("map-plataforma-gencol").value;
+    const generacionValor = generacionCol ? document.getElementById("map-plataforma-genval").value : "";
     const extraCols = getSelectedChips("plataforma-extra");
     const today = todayISO();
     let lockedCount = 0;
 
+    const sourceRows = generacionCol
+      ? app.pending.plataforma.rows.filter(r => String(r[generacionCol]) === String(generacionValor))
+      : app.pending.plataforma.rows;
+
     const platByEmail = new Map();
     const platByName = new Map();
-    app.pending.plataforma.rows.forEach(row => {
+    sourceRows.forEach(row => {
       const e = normalize(row[emailCol]);
       const n = normalize(row[nameCol]);
       if(e && !platByEmail.has(e)) platByEmail.set(e, row);
@@ -1763,7 +1809,7 @@ const db = firebase.firestore();
     });
 
     const revisar = [];
-    app.pending.plataforma.rows.forEach(row => {
+    sourceRows.forEach(row => {
       const e = normalize(row[emailCol]);
       if(e && usedPlatEmails.has(e)) return;
       const r = {Nombre: row[nameCol], Email: row[emailCol]};
@@ -1771,7 +1817,7 @@ const db = firebase.firestore();
       revisar.push(r);
     });
 
-    app.meta.plataformaMapping = {emailCol, nameCol, progresoCol, extraCols};
+    app.meta.plataformaMapping = {emailCol, nameCol, progresoCol, generacionCol, generacionValor, extraCols};
     app.meta.lastPlataformaUpload = today;
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
