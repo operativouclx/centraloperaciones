@@ -166,6 +166,7 @@
   .fi-label-purple{color:#6C5FD1;}
 
   .fi-metrics-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:nowrap;}
+  .fi-metrics-row-2{margin-top:10px;}
   .fi-metric{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;}
   .fi-metric-label{font-size:10px;color:var(--ink-soft);white-space:nowrap;}
   .fi-metric-value{font-size:20px;font-weight:700;color:var(--ink);line-height:1;}
@@ -2159,6 +2160,7 @@ const db = firebase.firestore();
     zoneIns.appendChild(el("div", {class:"fi-label fi-label-blue"}, [document.createTextNode("INSCRIPCIÓN")]));
     const metricsRow = el("div", {class:"fi-metrics-row"});
     const snap = opts.santanderSnapshot;
+    let metricsRow2 = null;
     if(esHistorico){
       const inscritos = (typeof opts.santanderInscritos === "number") ? opts.santanderInscritos : null;
       const asignados = (typeof opts.santanderAsignados === "number") ? opts.santanderAsignados : null;
@@ -2171,18 +2173,19 @@ const db = firebase.firestore();
       asigMetric.appendChild(fiEditManualLink("santanderAsignados", "Asignados", asignados));
       metricsRow.appendChild(asigMetric);
 
-      metricsRow.appendChild(fiMetric("Plataforma", stats.total, asignados ? Math.min(100, (stats.total/asignados)*100) : 100, "var(--teal)"));
+      metricsRow2 = el("div", {class:"fi-metrics-row fi-metrics-row-2"});
+      metricsRow2.appendChild(fiMetric("Plataforma", stats.total, asignados ? Math.min(100, (stats.total/asignados)*100) : 100, "var(--teal)"));
 
       if(asignados !== null){
         const diffH = asignados - stats.total;
         const faltaPctH = asignados ? Math.round((diffH / asignados) * 1000) / 10 : 0;
-        metricsRow.appendChild(el("div", {class:"fi-divider-v"}));
+        metricsRow2.appendChild(el("div", {class:"fi-divider-v"}));
         const diffWrapH = el("div", {class:"fi-metric"});
         diffWrapH.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode("Diferencia")]));
         diffWrapH.appendChild(el("div", {class:"fi-diff-value"}, [document.createTextNode((diffH > 0 ? "-" : diffH < 0 ? "+" : "") + Math.abs(diffH))]));
         const badgeText = diffH > 0 ? "Faltan " + Math.abs(faltaPctH) + "%" : diffH < 0 ? "Sobran " + Math.abs(faltaPctH) + "%" : "Coincide";
         diffWrapH.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode(badgeText)]));
-        metricsRow.appendChild(diffWrapH);
+        metricsRow2.appendChild(diffWrapH);
       }
     } else {
       // Si se mapeó la columna de estatus, el total "oficial" de Santander
@@ -2204,6 +2207,7 @@ const db = firebase.firestore();
       metricsRow.appendChild(diffWrap);
     }
     zoneIns.appendChild(metricsRow);
+    if(metricsRow2) zoneIns.appendChild(metricsRow2);
     if(!esHistorico && snap) zoneIns.appendChild(fiStatusBreakdown(snap.statusCounts));
     strip.appendChild(zoneIns);
 
