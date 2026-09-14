@@ -189,6 +189,14 @@
   .fi-edit-santander-link:hover{color:var(--ink);}
   .fi-edit-santander-link:disabled{opacity:.5;cursor:default;}
 
+  .fi-status-breakdown{margin-top:10px;}
+  .fi-status-breakdown-label{font-size:10px;color:var(--ink-soft);margin-bottom:4px;}
+  .fi-status-list{display:flex;flex-wrap:wrap;gap:6px;}
+  .fi-status-chip{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);}
+  .fi-status-chip.ok{background:var(--teal-bg);color:var(--teal-dark);}
+  .fi-status-chip.warn{background:var(--amber-bg);color:var(--amber);}
+  .fi-status-chip.bad{background:var(--rust-bg);color:var(--rust);}
+
   .fi-seg-wrap{display:flex;flex-direction:column;gap:8px;}
   .fi-segbar{display:flex;width:100%;height:12px;border-radius:6px;overflow:hidden;background:#DEE5F5;}
   .fi-seg-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--ink);}
@@ -785,7 +793,24 @@ const db = firebase.firestore();
 
   // ---------- estadísticas del curso (para stat-strip y dashboard) ----------
   function emptyStats(){
-    return {total:0, alta:0, p0:0, p1:0, p2:0, p3:0};
+    return {
+      total:0, alta:0, p0:0, p1:0, p2:0, p3:0,
+      hasStatusData:false, santanderCount:0,
+      statusCounts:{accepted:0, granted:0, pregranted:0, refuse:0, rejected:0, otro:0}
+    };
+  }
+  // Clasifica el valor crudo de la columna de estatus de Santander en una
+  // de las 5 categorías conocidas. "pregranted" se revisa antes que
+  // "granted" porque la contiene como subcadena.
+  function classifySantanderStatus(raw){
+    const n = normalize(raw);
+    if(!n) return "otro";
+    if(n.includes("pregrant")) return "pregranted";
+    if(n.includes("accept")) return "accepted";
+    if(n.includes("grant")) return "granted";
+    if(n.includes("reject")) return "rejected";
+    if(n.includes("refus")) return "refuse";
+    return "otro";
   }
   function computeMasterStats(master){
     const total = master.length;
@@ -794,7 +819,22 @@ const db = firebase.firestore();
     const p1 = master.filter(r => (r.progreso||0) > 0 && r.progreso < 40).length;
     const p2 = master.filter(r => (r.progreso||0) >= 40 && r.progreso < 80).length;
     const p3 = master.filter(r => (r.progreso||0) >= 80).length;
-    return {total, alta, p0, p1, p2, p3};
+
+    const statusCounts = {accepted:0, granted:0, pregranted:0, refuse:0, rejected:0, otro:0};
+    let hasStatusData = false;
+    master.forEach(r => {
+      if(r.santanderStatus !== undefined && r.santanderStatus !== null && r.santanderStatus !== ""){
+        hasStatusData = true;
+        const cat = classifySantanderStatus(r.santanderStatus);
+        statusCounts[cat] = (statusCounts[cat] || 0) + 1;
+      }
+    });
+    // El total "oficial" de Santander para comparar contra plataforma es
+    // solo Accepted + Granted — Pregranted/Refuse/Rejected no cuentan,
+    // pero se conservan en la tabla madre y se muestran en el desglose.
+    const santanderCount = hasStatusData ? (statusCounts.accepted + statusCounts.granted) : total;
+
+    return {total, alta, p0, p1, p2, p3, hasStatusData, santanderCount, statusCounts};
   }
   function computeTasas(stats){
     stats = stats || {};
@@ -1225,7 +1265,7 @@ const db = firebase.firestore();
   function renderCourseMetaCounts(){
     const stats = (app.meta && app.meta.stats) || emptyStats();
     const esHistorico = app.meta && app.meta.tipo === "historico";
-    document.getElementById("cm-santander-count").textContent = stats.total;
+    document.getElementById("cm-santander-count").textContent = stats.hasStatusData ? stats.santanderCount : stats.total;
     document.getElementById("cm-label-santander-total").textContent = esHistorico ? "Total" : "Total Santander";
     document.getElementById("cm-item-plataforma-total").classList.toggle("hidden", esHistorico);
     document.getElementById("cm-plataforma-count").textContent = Math.max(stats.total - stats.alta, 0);
@@ -1377,6 +1417,22 @@ const db = firebase.firestore();
 
       r1.addEventListener("change", () => { splitWrap.classList.remove("hidden"); singleWrap.classList.add("hidden"); checkReady(); });
       r2.addEventListener("change", () => { splitWrap.classList.add("hidden"); singleWrap.classList.remove("hidden"); checkReady(); });
+
+      const statusRow = el("div", {class:"field-row"});
+      statusRow.appendChild(el("label", {}, [document.createTextNode("Columna de estatus (Accepted/Granted/Pregranted/Refuse/Rejected — solo Accepted+Granted cuentan contra plataforma)")]));
+      const statusDefault = (savedMap && savedMap.statusCol && headers.includes(savedMap.statusCol))
+        ? savedMap.statusCol
+        : guessColumnOptional(headers, ["status","estatus","estado"]);
+      const statusSel = el("select");
+      statusSel.id = "map-santander-status";
+      statusSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === statusDefault) opt.selected = true;
+        statusSel.appendChild(opt);
+      });
+      statusRow.appendChild(statusSel);
+      container.appendChild(statusRow);
 
       const extraDefault = (savedMap && savedMap.extraCols) ? savedMap.extraCols.filter(c => headers.includes(c)) : [];
       appendChipSection(container, "santander-extra", headers, extraDefault, "Otras columnas a incluir en la tabla madre", false);
@@ -1548,6 +1604,7 @@ const db = firebase.firestore();
     const fullNameCol = mode === "single" ? document.getElementById("map-santander-fullname").value : null;
     const extraCols = getSelectedChips("santander-extra");
     const watchCols = getSelectedChips("santander-watch");
+    const statusCol = document.getElementById("map-santander-status").value;
     const allExtra = Array.from(new Set(extraCols.concat(watchCols)));
 
     const masterByKey = new Map(app.master.map(r => [r._key, r]));
@@ -1575,6 +1632,7 @@ const db = firebase.firestore();
           ultimaActualizacionPlataforma:null
         };
         record.santanderExtra = newVals;
+        if(statusCol) record.santanderStatus = row[statusCol];
         app.master.push(record);
         masterByKey.set(key, record);
         nuevos.push(flattenForDiff(record));
@@ -1588,6 +1646,7 @@ const db = firebase.firestore();
         record.nombre = name || record.nombre;
         record.email = email || record.email;
         record.santanderExtra = Object.assign({}, record.santanderExtra, newVals);
+        if(statusCol) record.santanderStatus = row[statusCol];
         record.ultimaCargaSantander = today;
         record.presenteUltimaCarga = true;
         if(changedFields.length){
@@ -1600,7 +1659,7 @@ const db = firebase.firestore();
 
     app.master.forEach(r => { if(!touched.has(r._key)) r.presenteUltimaCarga = false; });
 
-    app.meta.santanderMapping = {emailCol, nameMode:mode, firstCol, lastCol, fullNameCol, extraCols, watchCols};
+    app.meta.santanderMapping = {emailCol, nameMode:mode, firstCol, lastCol, fullNameCol, extraCols, watchCols, statusCol};
     app.meta.lastSantanderUpload = today;
     app.meta.lastSantanderFile = app.pending.santander.fileName;
     app.meta.updatedAt = nowISO();
@@ -2042,6 +2101,28 @@ const db = firebase.firestore();
     return link;
   }
 
+  // Desglose de la columna de estatus de Santander (solo aparece si se
+  // mapeó esa columna al procesar la carga).
+  function fiStatusBreakdown(counts){
+    const wrap = el("div", {class:"fi-status-breakdown"});
+    wrap.appendChild(el("div", {class:"fi-status-breakdown-label"}, [document.createTextNode("Desglose por estatus")]));
+    const list = el("div", {class:"fi-status-list"});
+    [
+      ["Accepted", counts.accepted, "ok"],
+      ["Granted", counts.granted, "ok"],
+      ["Pregranted", counts.pregranted, "warn"],
+      ["Refuse", counts.refuse, "bad"],
+      ["Rejected", counts.rejected, "bad"]
+    ].forEach(([label, count, cls]) => {
+      list.appendChild(el("span", {class:"fi-status-chip " + cls}, [document.createTextNode(label + ": " + count)]));
+    });
+    if(counts.otro > 0){
+      list.appendChild(el("span", {class:"fi-status-chip"}, [document.createTextNode("Otro: " + counts.otro)]));
+    }
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   // Franja de indicadores del curso: zona "Inscripción" (Santander vs.
   // plataforma y su diferencia) + zona "Avance en plataforma" (segmentado
   // en 0% / iniciaron / terminaron, más la tasa de término y su cambio
@@ -2051,9 +2132,6 @@ const db = firebase.firestore();
     opts = opts || {};
     const esHistorico = opts.tipo === "historico";
     const registrados = Math.max(stats.total - stats.alta, 0);
-    const diff = stats.total - registrados;
-    const faltaPct = stats.total ? Math.round((diff / stats.total) * 1000) / 10 : 0;
-    const plataformaBarPct = stats.total ? Math.min(100, (registrados / stats.total) * 100) : 0;
 
     const strip = el("div", {class:"fi-strip"});
 
@@ -2083,16 +2161,26 @@ const db = firebase.firestore();
         metricsRow.appendChild(totalMetric);
       }
     } else {
-      metricsRow.appendChild(fiMetric("Santander", stats.total, 100, "var(--teal-dark)"));
+      // Si se mapeó la columna de estatus, el total "oficial" de Santander
+      // para comparar es Accepted+Granted; si no, se usa toda la tabla
+      // madre (comportamiento de antes).
+      const santanderTotal = stats.hasStatusData ? stats.santanderCount : stats.total;
+      const diff = santanderTotal - registrados;
+      const faltaPct = santanderTotal ? Math.round((diff / santanderTotal) * 1000) / 10 : 0;
+      const plataformaBarPct = santanderTotal ? Math.min(100, (registrados / santanderTotal) * 100) : 0;
+
+      metricsRow.appendChild(fiMetric("Santander", santanderTotal, 100, "var(--teal-dark)"));
       metricsRow.appendChild(fiMetric("Plataforma", registrados, plataformaBarPct, "var(--teal)"));
       metricsRow.appendChild(el("div", {class:"fi-divider-v"}));
       const diffWrap = el("div", {class:"fi-metric"});
       diffWrap.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode("Diferencia")]));
       diffWrap.appendChild(el("div", {class:"fi-diff-value"}, [document.createTextNode((diff > 0 ? "-" : diff < 0 ? "+" : "") + Math.abs(diff))]));
-      diffWrap.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode("Falta " + Math.abs(faltaPct) + "%")]));
+      const badgeText = diff > 0 ? "Faltan " + Math.abs(faltaPct) + "%" : diff < 0 ? "Sobran " + Math.abs(faltaPct) + "%" : "Coincide";
+      diffWrap.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode(badgeText)]));
       metricsRow.appendChild(diffWrap);
     }
     zoneIns.appendChild(metricsRow);
+    if(!esHistorico && stats.hasStatusData) zoneIns.appendChild(fiStatusBreakdown(stats.statusCounts));
     strip.appendChild(zoneIns);
 
     // ---- zona: avance en plataforma ----
