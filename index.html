@@ -405,6 +405,7 @@
           <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
           <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
           <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
+          <button class="btn btn-danger btn-small" id="btn-delete-course" type="button">Eliminar este curso</button>
         </div>
       </div>
     </div>
@@ -1120,6 +1121,22 @@ const db = firebase.firestore();
 
   document.getElementById("course-new-name").addEventListener("keydown", (e) => {
     if(e.key === "Enter") document.getElementById("btn-new-course").click();
+  });
+
+  document.getElementById("btn-delete-course").addEventListener("click", async () => {
+    if(!app.slug) return;
+    const ok = confirm('¿Eliminar por completo "' + app.meta.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
+    if(!ok) return;
+    setSaveStatus("Eliminando...");
+    await deleteCourseRemote(app.slug);
+    app.coursesIndex = app.coursesIndex.filter(c => c.slug !== app.slug);
+    app.slug = null; app.meta = null; app.master = []; app.log = [];
+    renderCourseSelect();
+    renderCourseTabs();
+    document.getElementById("course-select").value = "";
+    document.getElementById("course-head").classList.add("hidden");
+    document.getElementById("course-dependent").classList.add("hidden");
+    setSaveStatus("");
   });
 
   document.getElementById("btn-open-archived").addEventListener("click", () => {
