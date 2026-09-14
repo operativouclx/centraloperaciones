@@ -192,6 +192,7 @@
   .fi-status-breakdown{margin-top:10px;}
   .fi-status-breakdown-label{font-size:10px;color:var(--ink-soft);margin-bottom:4px;}
   .fi-status-list{display:flex;flex-wrap:wrap;gap:6px;}
+  .fi-status-list-otros{margin-top:6px;}
   .fi-status-chip{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);}
   .fi-status-chip.ok{background:var(--teal-bg);color:var(--teal-dark);}
   .fi-status-chip.warn{background:var(--amber-bg);color:var(--amber);}
@@ -2124,10 +2125,16 @@ const db = firebase.firestore();
   function fiStatusBreakdown(counts){
     const wrap = el("div", {class:"fi-status-breakdown"});
     wrap.appendChild(el("div", {class:"fi-status-breakdown-label"}, [document.createTextNode("Desglose por estatus")]));
-    const list = el("div", {class:"fi-status-list"});
+    const listCuentan = el("div", {class:"fi-status-list"});
     [
       ["Accepted", counts.accepted, "ok"],
-      ["Granted", counts.granted, "ok"],
+      ["Granted", counts.granted, "ok"]
+    ].forEach(([label, count, cls]) => {
+      listCuentan.appendChild(el("span", {class:"fi-status-chip " + cls}, [document.createTextNode(label + ": " + count)]));
+    });
+    wrap.appendChild(listCuentan);
+    const list = el("div", {class:"fi-status-list fi-status-list-otros"});
+    [
       ["Pregranted", counts.pregranted, "warn"],
       ["Refuse", counts.refuse, "bad"],
       ["Rejected", counts.rejected, "bad"]
