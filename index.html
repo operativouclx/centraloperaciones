@@ -15,23 +15,27 @@
 
 <style>
   :root{
-    --ink:#16232C;
-    --ink-soft:#51636B;
-    --paper:#F2F5F4;
+    /* Paleta UCLX: azul y morado tomados de la presentación institucional
+       y confirmados contra uclx.media. Los nombres de variable (teal/plum)
+       se quedan igual para no tener que tocar cada uso — solo cambia el
+       valor detrás de cada una. */
+    --ink:#1B2340;
+    --ink-soft:#5B6478;
+    --paper:#F3F5FC;
     --panel:#FFFFFF;
-    --line:#D9E1DF;
-    --line-soft:#E7ECEA;
-    --teal:#1F6F63;
-    --teal-dark:#154F46;
-    --teal-bg:#E7F1EE;
+    --line:#DCE1F2;
+    --line-soft:#E9ECF8;
+    --teal:#4069BC;
+    --teal-dark:#2E4F91;
+    --teal-bg:#E8EDF9;
     --amber:#B4761E;
     --amber-bg:#FBF1E0;
     --amber-line:#E9CE9C;
     --rust:#A8493C;
     --rust-bg:#FAEBE8;
     --rust-line:#E9BEB6;
-    --plum:#6B4A78;
-    --plum-bg:#F0E9F2;
+    --plum:#9987FF;
+    --plum-bg:#F0EDFF;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -142,39 +146,59 @@
   .archived-meta{font-size:12px;color:var(--ink-soft);}
   .archived-actions{display:flex;gap:8px;flex:none;}
 
-  .dashboard-tasa-label{font-size:12px;color:var(--ink-soft);}
-  .dashboard-tasa-value{font-family:'Fraunces', serif;font-size:16px;font-weight:600;color:var(--ink);}
-
-  .delta-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEF1F0;color:var(--ink-soft);white-space:nowrap;}
-  .delta-badge.up{background:var(--teal-bg);color:var(--teal-dark);}
-  .delta-badge.down{background:var(--rust-bg);color:var(--rust);}
-
-  /* ---- vista visual del curso: embudo Santander/Plataforma + dona de 3 rangos + comparación semanal ---- */
+  /* ---- franja de indicadores del curso ---- */
   .progress-summary{margin-bottom:22px;}
 
-  .funnel-wrap{
-    border:1px solid var(--line);border-radius:10px;background:var(--panel);
-    padding:16px 18px;margin-bottom:16px;
+  .fi-strip{
+    display:flex;gap:2px;border-radius:16px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(20,25,50,.06), 0 1px 8px rgba(20,25,50,.05);
+    background:var(--panel);
   }
-  .funnel-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
-  .funnel-row:last-of-type{margin-bottom:0;}
-  .funnel-label{width:84px;flex:none;font-size:13px;font-weight:600;color:var(--ink);}
-  .funnel-svg{flex:1;min-width:0;}
-  .funnel-count{width:56px;flex:none;text-align:right;font-family:'Fraunces', serif;font-size:17px;font-weight:600;color:var(--ink);}
-  .funnel-diff{margin-top:6px;text-align:right;font-size:12px;color:var(--ink-soft);}
+  @media (max-width:720px){ .fi-strip{flex-direction:column;} .fi-zone{border-radius:14px;} }
 
-  .course-visual-bottom{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
-  .range-donut-svg{flex:none;}
-  .range-donut-svg .range-donut-label{font-size:12px;font-weight:700;fill:var(--ink);}
+  .fi-zone{padding:18px 22px;display:flex;flex-direction:column;gap:12px;min-width:280px;}
+  .fi-zone-inscripcion{flex:1 1 0;background:var(--teal-bg);}
+  .fi-zone-avance{flex:2 1 0;background:var(--plum-bg);min-width:320px;}
 
-  .week-compare{
-    flex:1;min-width:240px;border:1px solid var(--line);border-radius:10px;
-    background:var(--panel);padding:14px 16px;
+  .fi-label{font-size:12px;font-weight:700;letter-spacing:.03em;}
+  .fi-label-blue{color:var(--teal-dark);}
+  .fi-label-purple{color:#6C5FD1;}
+
+  .fi-metrics-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:nowrap;}
+  .fi-metric{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;}
+  .fi-metric-label{font-size:10px;color:var(--ink-soft);white-space:nowrap;}
+  .fi-metric-value{font-size:20px;font-weight:700;color:var(--ink);line-height:1;}
+  .fi-metric-track{width:100%;height:7px;background:#DEE5F5;border-radius:4px;overflow:hidden;}
+  .fi-metric-fill{height:100%;border-radius:4px;}
+  .fi-divider-v{width:1px;align-self:stretch;background:#CBD5EE;flex:0 0 auto;}
+
+  .fi-diff-value{font-size:17px;font-weight:700;color:var(--ink);line-height:1;white-space:nowrap;}
+  .fi-diff-badge{
+    font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;
+    background:var(--amber-bg);color:var(--amber);width:fit-content;white-space:nowrap;
   }
-  .week-compare-title{font-family:'Fraunces', serif;font-size:14.5px;font-weight:600;color:var(--ink);}
-  .week-compare-date{font-size:11.5px;color:var(--ink-soft);margin-bottom:10px;}
-  .tasa-block{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
-  .tasa-block:last-child{margin-bottom:0;}
+
+  .fi-avance-header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;}
+  .fi-avance-count{font-size:11px;color:var(--ink-soft);}
+
+  .fi-seg-wrap{display:flex;flex-direction:column;gap:8px;}
+  .fi-segbar{display:flex;width:100%;height:12px;border-radius:6px;overflow:hidden;background:#DEE5F5;}
+  .fi-seg-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--ink);}
+  .fi-seg-legend-item{display:flex;align-items:center;gap:6px;}
+  .fi-seg-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
+  .fi-hr{height:1px;background:#DED4FF;}
+
+  .fi-bottom-row{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
+  .fi-tasa{display:flex;flex-direction:column;gap:3px;min-width:170px;}
+  .fi-tasa-label{font-size:11px;color:var(--ink-soft);}
+  .fi-tasa-value-row{display:flex;align-items:baseline;gap:8px;}
+  .fi-tasa-value{font-size:20px;font-weight:700;color:var(--ink);}
+  .fi-tasa-delta{font-size:11px;font-weight:600;white-space:nowrap;}
+  .fi-tasa-delta.up{color:var(--teal-dark);}
+  .fi-tasa-delta.down{color:var(--rust);}
+  .fi-tasa-delta.flat{color:var(--ink-soft);}
+  .fi-compare-date{font-size:10.5px;color:var(--ink-soft);margin-left:auto;}
 
   .course-head{
     margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
@@ -2033,19 +2057,6 @@ const db = firebase.firestore();
   }
 
   // ---------- resumen de progreso del curso (tasa de término y tendencia semanal) ----------
-  function deltaBadge(delta){
-    if(delta === null || delta === undefined || isNaN(delta)){
-      return el("span", {class:"delta-badge"}, [document.createTextNode("Sin comparación")]);
-    }
-    if(delta === 0){
-      return el("span", {class:"delta-badge"}, [document.createTextNode("Sin cambio vs. semana pasada")]);
-    }
-    const cls = delta > 0 ? "up" : "down";
-    const arrow = delta > 0 ? "▲" : "▼";
-    const sign = delta > 0 ? "+" : "";
-    return el("span", {class:"delta-badge " + cls}, [document.createTextNode(arrow + " " + sign + delta + " pts vs. semana pasada")]);
-  }
-
   function computeDeltas(stats, baseline){
     const tasas = computeTasas(stats);
     if(!baseline) return {tasas, deltaSantander:null, deltaIniciados:null};
@@ -2054,125 +2065,127 @@ const db = firebase.firestore();
     return {tasas, deltaSantander, deltaIniciados};
   }
 
-  function tasaBlock(label, value, delta){
-    const wrap = el("div", {class:"tasa-block"});
-    wrap.appendChild(el("div", {}, [
-      el("div", {class:"dashboard-tasa-label"}, [document.createTextNode(label)]),
-      el("div", {class:"dashboard-tasa-value"}, [document.createTextNode(value + "%")])
-    ]));
-    wrap.appendChild(deltaBadge(delta));
+  function fiDeltaParts(delta){
+    if(delta === null || delta === undefined || isNaN(delta)) return {arrow:"—", label:"sin comparación", cls:"flat"};
+    if(delta === 0) return {arrow:"—", label:"sin cambio", cls:"flat"};
+    return {
+      arrow: delta > 0 ? "▲" : "▼",
+      label: Math.abs(delta).toFixed(1) + " pp",
+      cls: delta > 0 ? "up" : "down"
+    };
+  }
+
+  function fiTasaBlock(label, value, delta){
+    const wrap = el("div", {class:"fi-tasa"});
+    wrap.appendChild(el("div", {class:"fi-tasa-label"}, [document.createTextNode(label)]));
+    const d = fiDeltaParts(delta);
+    const row = el("div", {class:"fi-tasa-value-row"});
+    row.appendChild(el("div", {class:"fi-tasa-value"}, [document.createTextNode(value + "%")]));
+    row.appendChild(el("div", {class:"fi-tasa-delta " + d.cls}, [document.createTextNode(d.arrow + " " + d.label)]));
+    wrap.appendChild(row);
     return wrap;
   }
 
-  const SVGNS = "http://www.w3.org/2000/svg";
-  function svgEl(tag, attrs){
-    const e = document.createElementNS(SVGNS, tag);
-    for(const k in attrs) e.setAttribute(k, attrs[k]);
-    return e;
+  function fiMetric(label, value, pct, color){
+    const m = el("div", {class:"fi-metric"});
+    m.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode(label)]));
+    m.appendChild(el("div", {class:"fi-metric-value"}, [document.createTextNode(String(value))]));
+    const track = el("div", {class:"fi-metric-track"});
+    const fill = el("div", {class:"fi-metric-fill"});
+    fill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    fill.style.background = color;
+    track.appendChild(fill);
+    m.appendChild(track);
+    return m;
   }
 
-  // Barra tipo "embudo": termina en punta en vez de un borde recto, del
-  // largo del boceto — el ancho es proporcional al valor contra el mayor
-  // de los dos (Santander casi siempre es el más grande).
-  function funnelBarSVG(value, maxValue, color){
-    const maxW = 400, h = 30, tip = 14;
-    const w = maxValue > 0 ? Math.max((value / maxValue) * maxW, 10) : 0;
-    const svg = svgEl("svg", {viewBox: "0 0 " + (maxW + tip) + " " + h, width:"100%", height:h, class:"funnel-svg", preserveAspectRatio:"xMinYMid meet"});
-    if(w > 0){
-      const flat = Math.max(w - tip, 0);
-      const points = [[0,0],[flat,0],[w,h/2],[flat,h],[0,h]].map(p => p.join(",")).join(" ");
-      svg.appendChild(svgEl("polygon", {points, fill:color}));
-    }
-    return svg;
+  function fiLegendItem(color, label, count, pct){
+    const item = el("div", {class:"fi-seg-legend-item"});
+    const dot = el("span", {class:"fi-seg-dot"});
+    dot.style.background = color;
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(label + ": "));
+    item.appendChild(el("strong", {}, [document.createTextNode(String(count))]));
+    item.appendChild(document.createTextNode(" (" + pct + "%)"));
+    return item;
   }
 
-  function funnelRow(label, value, maxValue, color){
-    const row = el("div", {class:"funnel-row"});
-    row.appendChild(el("div", {class:"funnel-label"}, [document.createTextNode(label)]));
-    row.appendChild(funnelBarSVG(value, maxValue, color));
-    row.appendChild(el("div", {class:"funnel-count"}, [document.createTextNode(String(value))]));
-    return row;
-  }
-
-  // Dona de un anillo con los 3 rangos de avance de quienes ya iniciaron
-  // (Iniciando / A medio camino / Finalizado), con el % de cada rango
-  // escrito junto a su arco.
-  function rangeDonutSVG(stats, size){
-    size = size || 150;
-    const activos = stats.p1 + stats.p2 + stats.p3;
-    const segments = [
-      {value: stats.p1, color: "var(--amber)"},
-      {value: stats.p2, color: "#C79A1E"},
-      {value: stats.p3, color: "var(--teal)"}
-    ];
-    const strokeW = Math.round(size * 0.13);
-    const r = (size - strokeW) / 2 - 16;
-    const cx = size / 2, cy = size / 2;
-    const C = 2 * Math.PI * r;
-    const svg = svgEl("svg", {viewBox: "0 0 " + size + " " + size, width:size, height:size, class:"range-donut-svg"});
-    svg.appendChild(svgEl("circle", {cx, cy, r, fill:"none", stroke:"#EEF1F0", "stroke-width":strokeW}));
-
-    let frac = 0;
-    segments.forEach(seg => {
-      const segFrac = activos ? seg.value / activos : 0;
-      if(segFrac > 0){
-        const len = segFrac * C;
-        svg.appendChild(svgEl("circle", {
-          cx, cy, r, fill:"none", stroke:seg.color, "stroke-width":strokeW,
-          "stroke-dasharray": len + " " + (C - len),
-          "stroke-dashoffset": -(frac * C),
-          transform: "rotate(-90 " + cx + " " + cy + ")"
-        }));
-        const midAngleDeg = -90 + (frac + segFrac / 2) * 360;
-        const rad = midAngleDeg * Math.PI / 180;
-        const labelR = r + strokeW / 2 + 13;
-        const lx = cx + labelR * Math.cos(rad);
-        const ly = cy + labelR * Math.sin(rad);
-        const pct = Math.round(segFrac * 1000) / 10;
-        const text = svgEl("text", {x:lx, y:ly, "text-anchor":"middle", "dominant-baseline":"middle", class:"range-donut-label"});
-        text.textContent = pct + "%";
-        svg.appendChild(text);
-      }
-      frac += segFrac;
-    });
-    return svg;
-  }
-
-  // Vista visual del curso: embudo Santander → Plataforma con su
-  // diferencia, y la dona de los 3 rangos junto a la comparación con la
-  // semana pasada.
+  // Franja de indicadores del curso: zona "Inscripción" (Santander vs.
+  // plataforma y su diferencia) + zona "Avance en plataforma" (segmentado
+  // en 0% / iniciaron / terminaron, más la tasa de término y su cambio
+  // contra la semana pasada).
   function renderCourseVisualInto(container, stats, deltas, opts){
     container.innerHTML = "";
     opts = opts || {};
     const esHistorico = opts.tipo === "historico";
-    const registrados = stats.total - stats.alta;
+    const registrados = Math.max(stats.total - stats.alta, 0);
+    const diff = stats.total - registrados;
+    const faltaPct = stats.total ? Math.round((diff / stats.total) * 1000) / 10 : 0;
+    const plataformaBarPct = stats.total ? Math.min(100, (registrados / stats.total) * 100) : 0;
 
-    const funnelWrap = el("div", {class:"funnel-wrap"});
+    const strip = el("div", {class:"fi-strip"});
+
+    // ---- zona: inscripción ----
+    const zoneIns = el("div", {class:"fi-zone fi-zone-inscripcion"});
+    zoneIns.appendChild(el("div", {class:"fi-label fi-label-blue"}, [document.createTextNode("INSCRIPCIÓN")]));
+    const metricsRow = el("div", {class:"fi-metrics-row"});
     if(esHistorico){
-      funnelWrap.appendChild(funnelRow("Total", stats.total, stats.total || 1, "var(--teal)"));
+      metricsRow.appendChild(fiMetric("Total", stats.total, 100, "var(--teal)"));
     } else {
-      const maxValue = Math.max(stats.total, registrados, 1);
-      funnelWrap.appendChild(funnelRow("Santander", stats.total, maxValue, "var(--teal-dark)"));
-      funnelWrap.appendChild(funnelRow("Plataforma", registrados, maxValue, "var(--teal)"));
-      funnelWrap.appendChild(el("div", {class:"funnel-diff"}, [
-        document.createTextNode("Diferencia: " + (stats.total - registrados))
-      ]));
+      metricsRow.appendChild(fiMetric("Santander", stats.total, 100, "var(--teal-dark)"));
+      metricsRow.appendChild(fiMetric("Plataforma", registrados, plataformaBarPct, "var(--teal)"));
+      metricsRow.appendChild(el("div", {class:"fi-divider-v"}));
+      const diffWrap = el("div", {class:"fi-metric"});
+      diffWrap.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode("Diferencia")]));
+      diffWrap.appendChild(el("div", {class:"fi-diff-value"}, [document.createTextNode((diff > 0 ? "-" : diff < 0 ? "+" : "") + Math.abs(diff))]));
+      diffWrap.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode("Falta " + Math.abs(faltaPct) + "%")]));
+      metricsRow.appendChild(diffWrap);
     }
-    container.appendChild(funnelWrap);
+    zoneIns.appendChild(metricsRow);
+    strip.appendChild(zoneIns);
 
-    const bottomRow = el("div", {class:"course-visual-bottom"});
-    bottomRow.appendChild(rangeDonutSVG(stats, 150));
+    // ---- zona: avance en plataforma ----
+    const zoneAv = el("div", {class:"fi-zone fi-zone-avance"});
+    const avHeader = el("div", {class:"fi-avance-header"});
+    avHeader.appendChild(el("div", {class:"fi-label fi-label-purple"}, [document.createTextNode("AVANCE EN PLATAFORMA")]));
+    avHeader.appendChild(el("div", {class:"fi-avance-count"}, [document.createTextNode(registrados + " inscritos")]));
+    zoneAv.appendChild(avHeader);
 
-    const compareWrap = el("div", {class:"week-compare"});
-    compareWrap.appendChild(el("div", {class:"week-compare-title"}, [document.createTextNode("Comparación con la semana pasada")]));
-    compareWrap.appendChild(el("div", {class:"week-compare-date"}, [
-      document.createTextNode(opts.baselineDate ? "Desde " + fmtDate(opts.baselineDate) : "Primera semana con datos")
+    const seg0 = stats.p0, segI = stats.p1 + stats.p2, segT = stats.p3;
+    const segTotal = (seg0 + segI + segT) || registrados || 1;
+    const pct0 = Math.round((seg0 / segTotal) * 1000) / 10;
+    const pctI = Math.round((segI / segTotal) * 1000) / 10;
+    const pctT = Math.round((segT / segTotal) * 1000) / 10;
+
+    const segWrap = el("div", {class:"fi-seg-wrap"});
+    const segBar = el("div", {class:"fi-segbar"});
+    [[pct0,"#C7CEE3"],[pctI,"var(--plum)"],[pctT,"var(--teal)"]].forEach(([pct,color]) => {
+      if(pct > 0){
+        const seg = el("div", {});
+        seg.style.height = "100%"; seg.style.width = pct + "%"; seg.style.background = color;
+        segBar.appendChild(seg);
+      }
+    });
+    segWrap.appendChild(segBar);
+    const legend = el("div", {class:"fi-seg-legend"});
+    legend.appendChild(fiLegendItem("#C7CEE3", "En 0%", seg0, pct0));
+    legend.appendChild(fiLegendItem("var(--plum)", "Iniciaron", segI, pctI));
+    legend.appendChild(fiLegendItem("var(--teal)", "Terminaron ≥80%", segT, pctT));
+    segWrap.appendChild(legend);
+    zoneAv.appendChild(segWrap);
+
+    zoneAv.appendChild(el("div", {class:"fi-hr"}));
+
+    const bottomRow = el("div", {class:"fi-bottom-row"});
+    bottomRow.appendChild(fiTasaBlock("Término sobre base madre", deltas.tasas.tasaSantander, deltas.deltaSantander));
+    bottomRow.appendChild(fiTasaBlock("Término sobre quienes iniciaron", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
+    bottomRow.appendChild(el("div", {class:"fi-compare-date"}, [
+      document.createTextNode(opts.baselineDate ? "vs. semana del " + fmtDate(opts.baselineDate) : "sin comparación previa")
     ]));
-    compareWrap.appendChild(tasaBlock("Tasa de término (sobre tabla madre)", deltas.tasas.tasaSantander, deltas.deltaSantander));
-    compareWrap.appendChild(tasaBlock("Tasa de término (sobre quienes iniciaron)", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
-    bottomRow.appendChild(compareWrap);
+    zoneAv.appendChild(bottomRow);
 
-    container.appendChild(bottomRow);
+    strip.appendChild(zoneAv);
+    container.appendChild(strip);
   }
 
   // ---------- tabs, search, download ----------
