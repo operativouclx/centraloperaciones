@@ -310,7 +310,8 @@
   .badge-progreso.p0{background:var(--rust-bg);color:var(--rust);}
   .badge-progreso.p1{background:var(--amber-bg);color:var(--amber);}
   .badge-progreso.p2{background:#FCEFC7;color:#8A6D1D;}
-  .badge-progreso.p3{background:var(--teal-bg);color:var(--teal-dark);}
+  .badge-progreso.p3{background:var(--plum-bg);color:var(--plum);}
+  .badge-progreso.p4{background:var(--teal-bg);color:var(--teal-dark);}
 
   .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap;}
   .tab{
@@ -453,9 +454,10 @@
           <div class="quick-filters" id="filters-madre">
             <button type="button" class="filter-chip active" data-filter-key="madre" data-filter-value="all">Todos</button>
             <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p0">No ha iniciado (0%)</button>
-            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p1">Iniciando (1–39%)</button>
-            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p2">A medio camino (40–79%)</button>
-            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p3">Finalizado (80%+)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p1">Iniciando (1–25%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p2">A medio camino (26–50%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p3">Avanzando (51–79%)</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p4">Finalizado (80%+)</button>
           </div>
           <button class="btn btn-ghost btn-small" data-download="madre">Descargar Excel</button>
         </div>
@@ -794,7 +796,7 @@ const db = firebase.firestore();
 
   // ---------- estadísticas del curso (para stat-strip y dashboard) ----------
   function emptyStats(){
-    return {total:0, alta:0, p0:0, p1:0, p2:0, p3:0};
+    return {total:0, alta:0, p0:0, p1:0, p2:0, p3:0, p4:0};
   }
   // Clasifica el valor crudo de la columna de estatus de Santander en una
   // de las 5 categorías conocidas. "pregranted" se revisa antes que
@@ -838,19 +840,25 @@ const db = firebase.firestore();
     const total = master.length;
     const alta = master.filter(r => r.estado !== "En plataforma").length;
     const p0 = master.filter(r => (r.progreso||0) <= 0).length;
-    const p1 = master.filter(r => (r.progreso||0) > 0 && r.progreso < 40).length;
-    const p2 = master.filter(r => (r.progreso||0) >= 40 && r.progreso < 80).length;
-    const p3 = master.filter(r => (r.progreso||0) >= 80).length;
-    return {total, alta, p0, p1, p2, p3};
+    const p1 = master.filter(r => (r.progreso||0) > 0 && r.progreso <= 25).length;
+    const p2 = master.filter(r => (r.progreso||0) > 25 && r.progreso <= 50).length;
+    const p3 = master.filter(r => (r.progreso||0) > 50 && r.progreso < 80).length;
+    const p4 = master.filter(r => (r.progreso||0) >= 80).length;
+    return {total, alta, p0, p1, p2, p3, p4};
   }
-  function computeTasas(stats){
+  // tasaSantander se calcula sobre el Total Santander oficial (Accepted+Granted,
+  // sin fusionar filas — ver computeStatusSnapshotFromRows). Si el curso no
+  // tiene columna de estatus mapeada, se usa el total de la tabla madre como
+  // antes. tasaIniciados siempre es sobre quienes iniciaron (progreso >= 1%).
+  function computeTasas(stats, santanderTotal){
     stats = stats || {};
     const total = stats.total || 0;
     const p0 = stats.p0 || 0;
-    const p3 = stats.p3 || 0;
+    const p4 = stats.p4 || 0;
+    const denomSantander = (typeof santanderTotal === "number" && santanderTotal > 0) ? santanderTotal : total;
     const iniciaron = total - p0;
-    const tasaSantander = total ? (p3 / total * 100) : 0;
-    const tasaIniciados = iniciaron > 0 ? (p3 / iniciaron * 100) : 0;
+    const tasaSantander = denomSantander ? (p4 / denomSantander * 100) : 0;
+    const tasaIniciados = iniciaron > 0 ? (p4 / iniciaron * 100) : 0;
     return {
       tasaSantander: Math.round(tasaSantander * 10) / 10,
       tasaIniciados: Math.round(tasaIniciados * 10) / 10
@@ -896,13 +904,13 @@ const db = firebase.firestore();
   // Guarda, una sola vez por semana ISO, el estado de las estadísticas justo
   // antes de la actualización — así el dashboard puede comparar "esta semana"
   // contra ese punto de partida sin depender de un cron en el servidor.
-  async function ensureWeeklySnapshot(slug, statsBeforeUpdate){
+  async function ensureWeeklySnapshot(slug, statsBeforeUpdate, santanderTotalBeforeUpdate){
     const label = isoWeekLabel(new Date());
     const ref = weeklyStatsColl(slug).doc(label);
     try{
       const snap = await ref.get();
       if(!snap.exists){
-        const tasas = computeTasas(statsBeforeUpdate);
+        const tasas = computeTasas(statsBeforeUpdate, santanderTotalBeforeUpdate);
         await ref.set({
           capturedAt: nowISO(),
           stats: statsBeforeUpdate || emptyStats(),
@@ -1286,7 +1294,7 @@ const db = firebase.firestore();
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
     renderCourseMetaCounts();
-    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline), {
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, app.meta && app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
       santanderManual: app.meta && (typeof app.meta.santanderManual === "number" ? app.meta.santanderManual : null),
@@ -1666,13 +1674,14 @@ const db = firebase.firestore();
 
     app.master.forEach(r => { if(!touched.has(r._key)) r.presenteUltimaCarga = false; });
 
+    const prevSantanderSnapshot = app.meta.santanderStatusSnapshot;
     app.meta.santanderMapping = {emailCol, nameMode:mode, firstCol, lastCol, fullNameCol, extraCols, watchCols, statusCol};
     app.meta.lastSantanderUpload = today;
     app.meta.lastSantanderFile = app.pending.santander.fileName;
     app.meta.santanderStatusSnapshot = computeStatusSnapshotFromRows(app.pending.santander.rows, statusCol);
     app.meta.updatedAt = nowISO();
 
-    await ensureWeeklySnapshot(app.slug, app.meta.stats);
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, prevSantanderSnapshot && prevSantanderSnapshot.santanderCount);
     app.meta.stats = computeMasterStats(app.master);
 
     const logEntry = {
@@ -1766,7 +1775,7 @@ const db = firebase.firestore();
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
 
-    await ensureWeeklySnapshot(app.slug, app.meta.stats);
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount);
     app.meta.stats = computeMasterStats(app.master);
 
     // Se guarda "revisar" (gente en plataforma que no está en Santander)
@@ -1920,7 +1929,7 @@ const db = firebase.firestore();
     document.getElementById("badge-historial").textContent = app.log.length;
 
     renderCourseMetaCounts();
-    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline), {
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, app.meta && app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
       santanderManual: app.meta && (typeof app.meta.santanderManual === "number" ? app.meta.santanderManual : null),
@@ -1982,7 +1991,7 @@ const db = firebase.firestore();
             td.appendChild(span);
           } else if(c === "Progreso"){
             const pct = parseFloat(val);
-            const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct < 40 ? "p1" : pct < 80 ? "p2" : "p3");
+            const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct <= 25 ? "p1" : pct <= 50 ? "p2" : pct < 80 ? "p3" : "p4");
             const span = el("span", {class:"badge-progreso " + cls}, [document.createTextNode(val)]);
             td.appendChild(span);
           } else if(c === "En última carga Santander"){
@@ -2027,8 +2036,8 @@ const db = firebase.firestore();
   }
 
   // ---------- resumen de progreso del curso (tasa de término y tendencia semanal) ----------
-  function computeDeltas(stats, baseline){
-    const tasas = computeTasas(stats);
+  function computeDeltas(stats, baseline, santanderTotal){
+    const tasas = computeTasas(stats, santanderTotal);
     if(!baseline) return {tasas, deltaSantander:null, deltaIniciados:null};
     const deltaSantander = Math.round((tasas.tasaSantander - baseline.tasaSantander) * 10) / 10;
     const deltaIniciados = Math.round((tasas.tasaIniciados - baseline.tasaIniciados) * 10) / 10;
@@ -2200,15 +2209,17 @@ const db = firebase.firestore();
     avHeader.appendChild(el("div", {class:"fi-avance-count"}, [document.createTextNode(registrados + " inscritos")]));
     zoneAv.appendChild(avHeader);
 
-    const seg0 = stats.p0, segI = stats.p1 + stats.p2, segT = stats.p3;
-    const segTotal = (seg0 + segI + segT) || registrados || 1;
+    const seg0 = stats.p0, seg1 = stats.p1, seg2 = stats.p2, seg3 = stats.p3, segT = stats.p4;
+    const segTotal = (seg0 + seg1 + seg2 + seg3 + segT) || registrados || 1;
     const pct0 = Math.round((seg0 / segTotal) * 1000) / 10;
-    const pctI = Math.round((segI / segTotal) * 1000) / 10;
+    const pct1 = Math.round((seg1 / segTotal) * 1000) / 10;
+    const pct2 = Math.round((seg2 / segTotal) * 1000) / 10;
+    const pct3 = Math.round((seg3 / segTotal) * 1000) / 10;
     const pctT = Math.round((segT / segTotal) * 1000) / 10;
 
     const segWrap = el("div", {class:"fi-seg-wrap"});
     const segBar = el("div", {class:"fi-segbar"});
-    [[pct0,"#C7CEE3"],[pctI,"var(--plum)"],[pctT,"var(--teal)"]].forEach(([pct,color]) => {
+    [[pct0,"#C7CEE3"],[pct1,"#D6CFFF"],[pct2,"#B3A3FF"],[pct3,"var(--plum)"],[pctT,"var(--teal)"]].forEach(([pct,color]) => {
       if(pct > 0){
         const seg = el("div", {});
         seg.style.height = "100%"; seg.style.width = pct + "%"; seg.style.background = color;
@@ -2218,7 +2229,9 @@ const db = firebase.firestore();
     segWrap.appendChild(segBar);
     const legend = el("div", {class:"fi-seg-legend"});
     legend.appendChild(fiLegendItem("#C7CEE3", "En 0%", seg0, pct0));
-    legend.appendChild(fiLegendItem("var(--plum)", "Iniciaron", segI, pctI));
+    legend.appendChild(fiLegendItem("#D6CFFF", "Iniciando (1–25%)", seg1, pct1));
+    legend.appendChild(fiLegendItem("#B3A3FF", "A medio camino (26–50%)", seg2, pct2));
+    legend.appendChild(fiLegendItem("var(--plum)", "Avanzando (51–79%)", seg3, pct3));
     legend.appendChild(fiLegendItem("var(--teal)", "Terminaron ≥80%", segT, pctT));
     segWrap.appendChild(legend);
     zoneAv.appendChild(segWrap);
@@ -2226,7 +2239,7 @@ const db = firebase.firestore();
     zoneAv.appendChild(el("div", {class:"fi-hr"}));
 
     const bottomRow = el("div", {class:"fi-bottom-row"});
-    bottomRow.appendChild(fiTasaBlock("Término sobre base madre", deltas.tasas.tasaSantander, deltas.deltaSantander));
+    bottomRow.appendChild(fiTasaBlock("Término sobre Total Santander", deltas.tasas.tasaSantander, deltas.deltaSantander));
     bottomRow.appendChild(fiTasaBlock("Término sobre quienes iniciaron", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
     bottomRow.appendChild(el("div", {class:"fi-compare-date"}, [
       document.createTextNode(opts.baselineDate ? "vs. semana del " + fmtDate(opts.baselineDate) : "sin comparación previa")
@@ -2257,13 +2270,14 @@ const db = firebase.firestore();
 
   function matchesFilter(row, filterValue){
     if(!filterValue || filterValue === "all") return true;
-    if(filterValue === "p0" || filterValue === "p1" || filterValue === "p2" || filterValue === "p3"){
+    if(filterValue === "p0" || filterValue === "p1" || filterValue === "p2" || filterValue === "p3" || filterValue === "p4"){
       const pct = parseFloat(row["Progreso"]);
       if(isNaN(pct)) return false;
       if(filterValue === "p0") return pct <= 0;
-      if(filterValue === "p1") return pct > 0 && pct < 40;
-      if(filterValue === "p2") return pct >= 40 && pct < 80;
-      if(filterValue === "p3") return pct >= 80;
+      if(filterValue === "p1") return pct > 0 && pct <= 25;
+      if(filterValue === "p2") return pct > 25 && pct <= 50;
+      if(filterValue === "p3") return pct > 50 && pct < 80;
+      if(filterValue === "p4") return pct >= 80;
     }
     return true;
   }
