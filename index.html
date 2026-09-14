@@ -252,20 +252,6 @@
   .radio-opt input{accent-color:var(--teal);}
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 
-  .chip-list{
-    max-height:120px;overflow-y:auto;border:1px solid var(--line-soft);border-radius:6px;
-    padding:8px;display:flex;flex-wrap:wrap;gap:6px;background:#FCFDFD;
-  }
-  .chip{
-    font-size:12.5px;border:1px solid var(--line);background:#fff;padding:4px 9px;
-    border-radius:20px;cursor:pointer;user-select:none;color:var(--ink-soft);
-  }
-  .chip.on{background:var(--teal);border-color:var(--teal);color:#fff;}
-  .chip.watch.on{background:var(--plum);border-color:var(--plum);}
-  .chip-tools{display:flex;gap:10px;margin-top:6px;}
-  .chip-tools button{background:none;border:none;color:var(--teal-dark);font-size:12px;cursor:pointer;padding:0;font-weight:600;}
-  .chip-tools button:hover{text-decoration:underline;}
-
   .status-line{font-size:12.5px;color:var(--ink-soft);margin-top:10px;}
   .status-line b{color:var(--ink);}
 
@@ -783,7 +769,8 @@ const db = firebase.firestore();
       lastListaFinalFile: null,
       stats: emptyStats(),
       archived: false,
-      santanderManual: null,
+      santanderInscritos: null,
+      santanderAsignados: null,
       santanderStatusSnapshot: null,
       lastRun: { revisar: [] }
     };
@@ -1298,7 +1285,8 @@ const db = firebase.firestore();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, app.meta && app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
-      santanderManual: app.meta && (typeof app.meta.santanderManual === "number" ? app.meta.santanderManual : null),
+      santanderInscritos: app.meta && (typeof app.meta.santanderInscritos === "number" ? app.meta.santanderInscritos : null),
+      santanderAsignados: app.meta && (typeof app.meta.santanderAsignados === "number" ? app.meta.santanderAsignados : null),
       santanderSnapshot: app.meta && app.meta.santanderStatusSnapshot
     });
   }
@@ -1452,12 +1440,6 @@ const db = firebase.firestore();
       statusRow.appendChild(statusSel);
       container.appendChild(statusRow);
 
-      const extraDefault = (savedMap && savedMap.extraCols) ? savedMap.extraCols.filter(c => headers.includes(c)) : [];
-      appendChipSection(container, "santander-extra", headers, extraDefault, "Otras columnas a incluir en la tabla madre", false);
-
-      const watchDefault = (savedMap && savedMap.watchCols) ? savedMap.watchCols.filter(c => headers.includes(c)) : headers.filter(h => /status|estado/.test(normalize(h)));
-      appendChipSection(container, "santander-watch", headers, watchDefault, "Columnas a vigilar por cambios de estatus", true);
-
     } else if(kind === "plataforma"){
       const nameRow = el("div", {class:"field-row"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
@@ -1524,14 +1506,6 @@ const db = firebase.firestore();
         populateGenValues(genColSel.value, "");
       });
 
-      const emailHeaderNorm = normalize(emailSel.value);
-      const nameHeaderNorm = normalize(nameSel.value);
-      const progHeaderNorm = normalize(progSel.value);
-      const defaultExtra = (savedMap && savedMap.extraCols)
-        ? savedMap.extraCols.filter(c => headers.includes(c))
-        : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm && normalize(h) !== progHeaderNorm);
-      appendChipSection(container, "plataforma-extra", headers, defaultExtra, "Columnas de plataforma a traer (progreso, hora, etc.)", false);
-
     } else if(kind === "listafinal"){
       const nameRow = el("div", {class:"field-row"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
@@ -1558,44 +1532,17 @@ const db = firebase.firestore();
       progRow.appendChild(progSel);
       container.appendChild(progRow);
       progSel.addEventListener("change", checkReady);
-
-      const emailHeaderNorm = normalize(emailSel.value);
-      const nameHeaderNorm = normalize(nameSel.value);
-      const progHeaderNorm = normalize(progSel.value);
-      const defaultExtra = (savedMap && savedMap.extraCols)
-        ? savedMap.extraCols.filter(c => headers.includes(c))
-        : headers.filter(h => normalize(h) !== emailHeaderNorm && normalize(h) !== nameHeaderNorm && normalize(h) !== progHeaderNorm);
-      appendChipSection(container, "listafinal-extra", headers, defaultExtra, "Otras columnas a incluir (hora de finalización, etc.)", false);
     }
 
     checkReady();
   }
 
-  function appendChipSection(container, key, headers, defaultOn, label, isWatch){
-    const wrap = el("div", {class:"field-row"});
-    wrap.appendChild(el("label", {}, [document.createTextNode(label)]));
-    const chipList = el("div", {class:"chip-list", id:"chips-" + key});
-    headers.forEach(h => {
-      const chip = el("span", {class:"chip" + (isWatch ? " watch" : "") + (defaultOn.includes(h) ? " on" : "")}, [document.createTextNode(h || "(sin nombre)")]);
-      chip.dataset.value = h;
-      chip.addEventListener("click", () => { chip.classList.toggle("on"); checkReady(); });
-      chipList.appendChild(chip);
-    });
-    wrap.appendChild(chipList);
-    const tools = el("div", {class:"chip-tools"});
-    const allBtn = el("button", {type:"button"}, [document.createTextNode("Todas")]);
-    allBtn.addEventListener("click", () => { chipList.querySelectorAll(".chip").forEach(c=>c.classList.add("on")); checkReady(); });
-    const noneBtn = el("button", {type:"button"}, [document.createTextNode("Ninguna")]);
-    noneBtn.addEventListener("click", () => { chipList.querySelectorAll(".chip").forEach(c=>c.classList.remove("on")); checkReady(); });
-    tools.appendChild(allBtn); tools.appendChild(noneBtn);
-    wrap.appendChild(tools);
-    container.appendChild(wrap);
-  }
-
-  function getSelectedChips(key){
-    const list = document.getElementById("chips-" + key);
-    if(!list) return [];
-    return Array.from(list.querySelectorAll(".chip.on")).map(c => c.dataset.value);
+  // La tabla madre siempre trae todas las columnas del archivo (menos las
+  // que ya se guardan en campos dedicados, como correo o nombre) — no hay
+  // selección manual de columnas.
+  function otherCols(headers, dedicatedCols){
+    const dedicatedNorm = new Set(dedicatedCols.filter(Boolean).map(normalize));
+    return headers.filter(h => !dedicatedNorm.has(normalize(h)));
   }
 
   function isReady(kind){
@@ -1660,10 +1607,10 @@ const db = firebase.firestore();
     const firstCol = mode === "split" ? document.getElementById("map-santander-first").value : null;
     const lastCol = mode === "split" ? document.getElementById("map-santander-last").value : null;
     const fullNameCol = mode === "single" ? document.getElementById("map-santander-fullname").value : null;
-    const extraCols = getSelectedChips("santander-extra");
-    const watchCols = getSelectedChips("santander-watch");
     const statusCol = document.getElementById("map-santander-status").value;
-    const allExtra = Array.from(new Set(extraCols.concat(watchCols)));
+    const extraCols = otherCols(app.pending.santander.headers, [emailCol, firstCol, lastCol, fullNameCol, statusCol]);
+    const watchCols = extraCols;
+    const allExtra = extraCols;
 
     const masterByKey = new Map(app.master.map(r => [r._key, r]));
     const touched = new Set();
@@ -1762,7 +1709,7 @@ const db = firebase.firestore();
     const progresoCol = document.getElementById("map-plataforma-progreso").value;
     const generacionCol = document.getElementById("map-plataforma-gencol").value;
     const generacionValor = generacionCol ? document.getElementById("map-plataforma-genval").value : "";
-    const extraCols = getSelectedChips("plataforma-extra");
+    const extraCols = otherCols(app.pending.plataforma.headers, [emailCol, nameCol, progresoCol, generacionCol]);
     const today = todayISO();
     let lockedCount = 0;
 
@@ -1864,7 +1811,7 @@ const db = firebase.firestore();
     const emailCol = document.getElementById("map-listafinal-email").value;
     const nameCol = document.getElementById("map-listafinal-fullname").value;
     const progresoCol = document.getElementById("map-listafinal-progreso").value;
-    const extraCols = getSelectedChips("listafinal-extra");
+    const extraCols = otherCols(app.pending.listafinal.headers, [emailCol, nameCol, progresoCol]);
     const today = todayISO();
     let lockedCount = 0;
     let nuevosCount = 0;
@@ -1979,7 +1926,8 @@ const db = firebase.firestore();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, app.meta && app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
-      santanderManual: app.meta && (typeof app.meta.santanderManual === "number" ? app.meta.santanderManual : null),
+      santanderInscritos: app.meta && (typeof app.meta.santanderInscritos === "number" ? app.meta.santanderInscritos : null),
+      santanderAsignados: app.meta && (typeof app.meta.santanderAsignados === "number" ? app.meta.santanderAsignados : null),
       santanderSnapshot: app.meta && app.meta.santanderStatusSnapshot
     });
   }
@@ -2140,12 +2088,12 @@ const db = firebase.firestore();
   // enlace deja anotar a mano cuántas personas hay en Santander, para
   // poder comparar contra el total de la lista final (plataforma) y ver
   // si faltan o sobran, igual que "Diferencia" en los cursos activos.
-  function fiEditSantanderLink(currentValue){
+  function fiEditManualLink(field, label, currentValue){
     const link = el("button", {type:"button", class:"fi-edit-santander-link"}, [
-      document.createTextNode(currentValue === null ? "+ Agregar total de Santander" : "Editar")
+      document.createTextNode(currentValue === null ? "+ Agregar " + label : "Editar")
     ]);
     link.addEventListener("click", async () => {
-      const input = prompt("¿Cuántas personas hay en Santander para este curso?", currentValue !== null ? String(currentValue) : "");
+      const input = prompt("¿Cuántas personas hay en " + label + " para este curso?", currentValue !== null ? String(currentValue) : "");
       if(input === null) return;
       const parsed = parseInt(String(input).replace(/[^\d]/g, ""), 10);
       if(isNaN(parsed) || parsed < 0){
@@ -2154,11 +2102,11 @@ const db = firebase.firestore();
       }
       link.disabled = true;
       try{
-        await courseDoc(app.slug).set({santanderManual: parsed}, {merge:true});
-        app.meta.santanderManual = parsed;
+        await courseDoc(app.slug).set({[field]: parsed}, {merge:true});
+        app.meta[field] = parsed;
         renderStats();
       }catch(err){
-        console.error("No se pudo guardar el total de Santander:", err);
+        console.error("No se pudo guardar " + label + ":", err);
         alert("No se pudo guardar: " + (err && err.message ? err.message : err));
         link.disabled = false;
       }
@@ -2212,14 +2160,22 @@ const db = firebase.firestore();
     const metricsRow = el("div", {class:"fi-metrics-row"});
     const snap = opts.santanderSnapshot;
     if(esHistorico){
-      const santanderManual = (typeof opts.santanderManual === "number") ? opts.santanderManual : null;
-      if(santanderManual !== null){
-        const diffH = santanderManual - stats.total;
-        const faltaPctH = santanderManual ? Math.round((diffH / santanderManual) * 1000) / 10 : 0;
-        const santMetric = fiMetric("Santander (manual)", santanderManual, 100, "var(--teal-dark)");
-        santMetric.appendChild(fiEditSantanderLink(santanderManual));
-        metricsRow.appendChild(santMetric);
-        metricsRow.appendChild(fiMetric("Plataforma", stats.total, santanderManual ? Math.min(100, (stats.total/santanderManual)*100) : 100, "var(--teal)"));
+      const inscritos = (typeof opts.santanderInscritos === "number") ? opts.santanderInscritos : null;
+      const asignados = (typeof opts.santanderAsignados === "number") ? opts.santanderAsignados : null;
+
+      const inscMetric = fiMetric("Inscritos (manual)", inscritos !== null ? inscritos : 0, 100, "var(--teal-dark)");
+      inscMetric.appendChild(fiEditManualLink("santanderInscritos", "Inscritos", inscritos));
+      metricsRow.appendChild(inscMetric);
+
+      const asigMetric = fiMetric("Asignados (manual)", asignados !== null ? asignados : 0, 100, "var(--teal-dark)");
+      asigMetric.appendChild(fiEditManualLink("santanderAsignados", "Asignados", asignados));
+      metricsRow.appendChild(asigMetric);
+
+      metricsRow.appendChild(fiMetric("Plataforma", stats.total, asignados ? Math.min(100, (stats.total/asignados)*100) : 100, "var(--teal)"));
+
+      if(asignados !== null){
+        const diffH = asignados - stats.total;
+        const faltaPctH = asignados ? Math.round((diffH / asignados) * 1000) / 10 : 0;
         metricsRow.appendChild(el("div", {class:"fi-divider-v"}));
         const diffWrapH = el("div", {class:"fi-metric"});
         diffWrapH.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode("Diferencia")]));
@@ -2227,10 +2183,6 @@ const db = firebase.firestore();
         const badgeText = diffH > 0 ? "Faltan " + Math.abs(faltaPctH) + "%" : diffH < 0 ? "Sobran " + Math.abs(faltaPctH) + "%" : "Coincide";
         diffWrapH.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode(badgeText)]));
         metricsRow.appendChild(diffWrapH);
-      } else {
-        const totalMetric = fiMetric("Total", stats.total, 100, "var(--teal)");
-        totalMetric.appendChild(fiEditSantanderLink(null));
-        metricsRow.appendChild(totalMetric);
       }
     } else {
       // Si se mapeó la columna de estatus, el total "oficial" de Santander
