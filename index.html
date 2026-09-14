@@ -307,7 +307,6 @@
   .tab[data-tab="madre"] .badge{background:var(--teal-bg);color:var(--teal-dark);}
   .tab[data-tab="alta"] .badge{background:var(--amber-bg);color:var(--amber);}
   .tab[data-tab="revisar"] .badge{background:var(--rust-bg);color:var(--rust);}
-  .tab[data-tab="nuevos"] .badge, .tab[data-tab="cambios"] .badge{background:var(--plum-bg);color:var(--plum);}
   .tab[data-tab="historial"] .badge{background:#E3E9E7;color:var(--ink-soft);}
 
   .tab-panel{display:none;}
@@ -406,7 +405,6 @@
           <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
           <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
           <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
-          <button class="btn btn-ghost btn-small" id="btn-archive-course" title="Lo oculta de la lista principal sin borrar nada. Se puede restaurar en cualquier momento desde &quot;Archivados&quot;.">Archivar este curso</button>
         </div>
       </div>
     </div>
@@ -428,8 +426,6 @@
       <div class="tabs">
         <button class="tab active" data-tab="madre">Tabla madre <span class="badge" id="badge-madre">0</span></button>
         <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
-        <button class="tab" data-tab="nuevos">Nuevos <span class="badge" id="badge-nuevos">0</span></button>
-        <button class="tab" data-tab="cambios">Cambios de estatus <span class="badge" id="badge-cambios">0</span></button>
         <button class="tab" data-tab="revisar">En plataforma, no en Santander <span class="badge" id="badge-revisar">0</span></button>
         <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
       </div>
@@ -455,24 +451,6 @@
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="alta">
           <button class="btn btn-ghost btn-small" data-download="alta">Descargar Excel</button>
-        </div>
-        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
-      </div>
-
-      <div class="tab-panel" data-panel="nuevos">
-        <div class="panel-note plum">Registros que aparecieron por primera vez en la última carga de Santander.</div>
-        <div class="table-toolbar">
-          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="nuevos">
-          <button class="btn btn-ghost btn-small" data-download="nuevos">Descargar Excel</button>
-        </div>
-        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
-      </div>
-
-      <div class="tab-panel" data-panel="cambios">
-        <div class="panel-note plum">Registros donde alguna columna vigilada cambió respecto a la carga anterior.</div>
-        <div class="table-toolbar">
-          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="cambios">
-          <button class="btn btn-ghost btn-small" data-download="cambios">Descargar Excel</button>
         </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
@@ -776,7 +754,7 @@ const db = firebase.firestore();
     baseline: null,      // snapshot semanal (para calcular "cuánto se movió" en la vista del curso)
     courseLoadToken: 0, // evita que una carga vieja pise los datos si el usuario cambia de curso
     pending: { santander:null, plataforma:null, listafinal:null },
-    lastRun: { nuevos:[], cambios:[], alta:[], revisar:[] }
+    lastRun: { alta:[], revisar:[] }
   };
 
   function emptyMeta(displayName, slug, tipo){
@@ -795,7 +773,7 @@ const db = firebase.firestore();
       lastListaFinalFile: null,
       stats: emptyStats(),
       archived: false,
-      lastRun: { nuevos: [], cambios: [], revisar: [] }
+      lastRun: { revisar: [] }
     };
   }
 
@@ -1144,23 +1122,6 @@ const db = firebase.firestore();
     if(e.key === "Enter") document.getElementById("btn-new-course").click();
   });
 
-  document.getElementById("btn-archive-course").addEventListener("click", async () => {
-    if(!app.slug) return;
-    const ok = confirm('¿Archivar "' + app.meta.displayName + '"? Se oculta de la lista principal para todo el equipo, pero no se borra ningún dato — puedes restaurarlo cuando quieras desde "Archivados".');
-    if(!ok) return;
-    setSaveStatus("Archivando...");
-    await setCourseArchived(app.slug, true);
-    const idx = app.coursesIndex.find(c => c.slug === app.slug);
-    if(idx) idx.archived = true;
-    app.slug = null; app.meta = null; app.master = []; app.log = [];
-    renderCourseSelect();
-    renderCourseTabs();
-    document.getElementById("course-select").value = "";
-    document.getElementById("course-head").classList.add("hidden");
-    document.getElementById("course-dependent").classList.add("hidden");
-    setSaveStatus("");
-  });
-
   document.getElementById("btn-open-archived").addEventListener("click", () => {
     openModal("modal-archived");
     renderArchivedModal();
@@ -1225,8 +1186,6 @@ const db = firebase.firestore();
     app.masterReady = false;
     const savedLastRun = app.meta.lastRun || {};
     app.lastRun = {
-      nuevos: savedLastRun.nuevos || [],
-      cambios: savedLastRun.cambios || [],
       revisar: savedLastRun.revisar || [],
       alta: []
     };
@@ -1293,8 +1252,6 @@ const db = firebase.firestore();
 
       renderMasterTable();
       renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
-      renderSideTable("nuevos", app.lastRun.nuevos);
-      renderSideTable("cambios", app.lastRun.cambios);
       renderSideTable("revisar", app.lastRun.revisar);
       renderHistorial();
       checkReady();
@@ -1319,8 +1276,6 @@ const db = firebase.firestore();
     const stats = (app.meta && app.meta.stats) || emptyStats();
     document.getElementById("badge-madre").textContent = stats.total;
     document.getElementById("badge-alta").textContent = stats.alta;
-    document.getElementById("badge-nuevos").textContent = app.lastRun.nuevos.length;
-    document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
     renderCourseMetaCounts();
@@ -1331,9 +1286,9 @@ const db = firebase.firestore();
   }
 
   function renderTablesLoading(){
-    // "nuevos"/"cambios"/"revisar" ya se conocen desde meta.lastRun (sin
-    // esperar la tabla madre completa); solo "madre" y "alta" necesitan la
-    // tabla madre y muestran el aviso de carga mientras tanto.
+    // "revisar" ya se conoce desde meta.lastRun (sin esperar la tabla
+    // madre completa); solo "madre" y "alta" necesitan la tabla madre y
+    // muestran el aviso de carga mientras tanto.
     ["madre","alta"].forEach(key => {
       const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
       panel.querySelector("thead").innerHTML = "";
@@ -1344,8 +1299,6 @@ const db = firebase.firestore();
       td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "24px";
       tr.appendChild(td); tbody.appendChild(tr);
     });
-    renderSideTable("nuevos", app.lastRun.nuevos);
-    renderSideTable("cambios", app.lastRun.cambios);
     renderSideTable("revisar", app.lastRun.revisar);
     const histPanel = document.querySelector('.tab-panel[data-panel="historial"]');
     histPanel.querySelector("thead").innerHTML = "";
@@ -1695,11 +1648,6 @@ const db = firebase.firestore();
     await ensureWeeklySnapshot(app.slug, app.meta.stats);
     app.meta.stats = computeMasterStats(app.master);
 
-    // Se guarda el resultado de esta carga (no solo en memoria) para que no
-    // desaparezca de las pestañas "Nuevos" / "Cambios de estatus" la
-    // próxima vez que alguien abra el curso.
-    app.meta.lastRun = Object.assign({}, app.meta.lastRun, {nuevos: capForStorage(nuevos), cambios: capForStorage(cambios)});
-
     const logEntry = {
       date: nowISO(), tipo:"Santander", archivo: app.pending.santander.fileName,
       resumen: nuevos.length + " nuevos, " + cambios.length + " cambios, " + (app.pending.santander.rows.length - nuevos.length - cambios.length) + " sin cambios",
@@ -1709,19 +1657,14 @@ const db = firebase.firestore();
 
     await persistUpdate(logEntry);
 
-    app.lastRun.nuevos = nuevos;
-    app.lastRun.cambios = cambios;
-
     document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
 
     renderStats();
     renderMasterTable();
-    renderSideTable("nuevos", app.lastRun.nuevos);
-    renderSideTable("cambios", app.lastRun.cambios);
     renderHistorial();
 
     btn.disabled = false; btn.textContent = "Procesar actualización";
-    document.querySelector('.tab[data-tab="nuevos"]').click();
+    document.querySelector('.tab[data-tab="madre"]').click();
     closeModal("modal-santander");
   });
 
@@ -1946,8 +1889,6 @@ const db = firebase.firestore();
 
     document.getElementById("badge-madre").textContent = stats.total;
     document.getElementById("badge-alta").textContent = stats.alta;
-    document.getElementById("badge-nuevos").textContent = app.lastRun.nuevos.length;
-    document.getElementById("badge-cambios").textContent = app.lastRun.cambios.length;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = app.log.length;
 
@@ -2258,7 +2199,7 @@ const db = firebase.firestore();
       const rows = currentRowsFor(key);
       if(!rows.length) return;
       const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
-      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", nuevos:"nuevos", cambios:"cambios-de-estatus", revisar:"en-plataforma-sin-santander"};
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander"};
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Datos");
