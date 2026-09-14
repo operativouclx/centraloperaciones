@@ -1129,16 +1129,32 @@ const db = firebase.firestore();
     if(!app.slug) return;
     const ok = confirm('¿Eliminar por completo "' + app.meta.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
     if(!ok) return;
+    const btn = document.getElementById("btn-delete-course");
+    const slugToDelete = app.slug;
+    const nameToDelete = app.meta.displayName;
+    btn.disabled = true;
     setSaveStatus("Eliminando...");
-    await deleteCourseRemote(app.slug);
-    app.coursesIndex = app.coursesIndex.filter(c => c.slug !== app.slug);
-    app.slug = null; app.meta = null; app.master = []; app.log = [];
-    renderCourseSelect();
-    renderCourseTabs();
-    document.getElementById("course-select").value = "";
-    document.getElementById("course-head").classList.add("hidden");
-    document.getElementById("course-dependent").classList.add("hidden");
-    setSaveStatus("");
+    try{
+      await deleteCourseRemote(slugToDelete);
+      app.coursesIndex = app.coursesIndex.filter(c => c.slug !== slugToDelete);
+      app.slug = null; app.meta = null; app.master = []; app.log = [];
+      renderCourseSelect();
+      renderCourseTabs();
+      document.getElementById("course-select").value = "";
+      document.getElementById("course-head").classList.add("hidden");
+      document.getElementById("course-dependent").classList.add("hidden");
+      setSaveStatus("");
+    }catch(err){
+      console.error("No se pudo eliminar el curso:", err);
+      setSaveStatus("");
+      alert(
+        'No se pudo eliminar "' + nameToDelete + '".\n\n' +
+        'Detalle: ' + (err && err.message ? err.message : err) + '\n\n' +
+        'Lo más probable es que las reglas de seguridad de Firestore no permitan borrar documentos con tu cuenta. Revísalas en la consola de Firebase.'
+      );
+    }finally{
+      btn.disabled = false;
+    }
   });
 
   document.getElementById("btn-open-archived").addEventListener("click", () => {
@@ -1171,10 +1187,20 @@ const db = firebase.firestore();
         const ok = confirm('¿Eliminar por completo "' + c.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
         if(!ok) return;
         btnDelete.disabled = true;
-        await deleteCourseRemote(c.slug);
-        app.coursesIndex = app.coursesIndex.filter(x => x.slug !== c.slug);
-        renderCourseTabs();
-        renderArchivedModal();
+        try{
+          await deleteCourseRemote(c.slug);
+          app.coursesIndex = app.coursesIndex.filter(x => x.slug !== c.slug);
+          renderCourseTabs();
+          renderArchivedModal();
+        }catch(err){
+          console.error("No se pudo eliminar el curso:", err);
+          btnDelete.disabled = false;
+          alert(
+            'No se pudo eliminar "' + c.displayName + '".\n\n' +
+            'Detalle: ' + (err && err.message ? err.message : err) + '\n\n' +
+            'Lo más probable es que las reglas de seguridad de Firestore no permitan borrar documentos con tu cuenta.'
+          );
+        }
       });
       const actions = el("div", {class:"archived-actions"}, [btnRestore, btnDelete]);
       row.appendChild(actions);
