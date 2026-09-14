@@ -853,6 +853,17 @@ const db = firebase.firestore();
       tasaIniciados: Math.round(tasaIniciados * 10) / 10
     };
   }
+  // El denominador oficial de Santander depende del tipo de curso: en
+  // "activo" es el snapshot de estatus (Accepted+Granted); en "historico"
+  // es el Asignados capturado a mano. Antes de este fix, históricos caía
+  // siempre al total de la tabla madre porque no tiene snapshot de estatus.
+  function getSantanderTotalFor(meta){
+    if(!meta) return null;
+    if(meta.tipo === "historico"){
+      return (typeof meta.santanderAsignados === "number") ? meta.santanderAsignados : null;
+    }
+    return (meta.santanderStatusSnapshot && meta.santanderStatusSnapshot.santanderCount) || null;
+  }
   function isoWeekLabel(d){
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     const dayNum = (date.getUTCDay() + 6) % 7;
@@ -1283,7 +1294,7 @@ const db = firebase.firestore();
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
     renderCourseMetaCounts();
-    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, app.meta && app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount), {
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
       santanderInscritos: app.meta && (typeof app.meta.santanderInscritos === "number" ? app.meta.santanderInscritos : null),
@@ -1770,7 +1781,7 @@ const db = firebase.firestore();
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
 
-    await ensureWeeklySnapshot(app.slug, app.meta.stats, app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount);
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, getSantanderTotalFor(app.meta));
     app.meta.stats = computeMasterStats(app.master);
 
     // Se guarda "revisar" (gente en plataforma que no está en Santander)
@@ -1864,7 +1875,7 @@ const db = firebase.firestore();
     app.meta.lastListaFinalFile = app.pending.listafinal.fileName;
     app.meta.updatedAt = nowISO();
 
-    await ensureWeeklySnapshot(app.slug, app.meta.stats);
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, getSantanderTotalFor(app.meta));
     app.meta.stats = computeMasterStats(app.master);
 
     let resumen = app.pending.listafinal.rows.length + " registros procesados, " + nuevosCount + " nuevos";
@@ -1924,7 +1935,7 @@ const db = firebase.firestore();
     document.getElementById("badge-historial").textContent = app.log.length;
 
     renderCourseMetaCounts();
-    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, app.meta && app.meta.santanderStatusSnapshot && app.meta.santanderStatusSnapshot.santanderCount), {
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
       santanderInscritos: app.meta && (typeof app.meta.santanderInscritos === "number" ? app.meta.santanderInscritos : null),
@@ -2248,8 +2259,8 @@ const db = firebase.firestore();
     zoneAv.appendChild(el("div", {class:"fi-hr"}));
 
     const bottomRow = el("div", {class:"fi-bottom-row"});
-    bottomRow.appendChild(fiTasaBlock("Término sobre Total Santander", deltas.tasas.tasaSantander, deltas.deltaSantander));
-    bottomRow.appendChild(fiTasaBlock("Término sobre quienes iniciaron", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
+    bottomRow.appendChild(fiTasaBlock("Tasa término Santander", deltas.tasas.tasaSantander, deltas.deltaSantander));
+    bottomRow.appendChild(fiTasaBlock("Tasa de término Operativa", deltas.tasas.tasaIniciados, deltas.deltaIniciados));
     bottomRow.appendChild(el("div", {class:"fi-compare-date"}, [
       document.createTextNode(opts.baselineDate ? "vs. semana del " + fmtDate(opts.baselineDate) : "sin comparación previa")
     ]));
