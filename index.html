@@ -389,6 +389,7 @@
         <button class="btn btn-ghost btn-small" id="btn-open-archived" type="button">Archivados</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
+      <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
       <select id="course-select" class="hidden"><option value="">Cargando...</option></select>
 
       <div id="course-head" class="course-head hidden">
@@ -1044,12 +1045,18 @@ const db = firebase.firestore();
   // ---------- init / course list ----------
   async function init(){
     document.getElementById("course-select").innerHTML = '<option value="">Cargando...</option>';
+    const errorBox = document.getElementById("courses-load-error");
     try{
       app.coursesIndex = await fetchCoursesIndex();
+      errorBox.classList.add("hidden");
+      errorBox.textContent = "";
     }catch(e){
       app.coursesIndex = [];
-      document.getElementById("gate-error").textContent = "";
-      console.error(e);
+      console.error("No se pudieron cargar los cursos:", e);
+      errorBox.textContent = "No se pudieron cargar los cursos: " + (e && e.message ? e.message : e) +
+        ". Lo más probable es que las reglas de seguridad de Firestore no dejen leer con tu cuenta (" +
+        ((auth.currentUser && auth.currentUser.email) || "sesión actual") + "). Avísale a quien administra el proyecto de Firebase.";
+      errorBox.classList.remove("hidden");
     }
     renderCourseSelect();
     renderCourseTabs();
