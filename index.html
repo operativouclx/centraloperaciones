@@ -182,6 +182,13 @@
   .fi-avance-header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;}
   .fi-avance-count{font-size:11px;color:var(--ink-soft);}
 
+  .fi-edit-santander-link{
+    font-family:inherit;font-size:10px;font-weight:600;color:var(--teal-dark);
+    background:none;border:none;padding:0;margin-top:4px;cursor:pointer;text-decoration:underline;
+  }
+  .fi-edit-santander-link:hover{color:var(--ink);}
+  .fi-edit-santander-link:disabled{opacity:.5;cursor:default;}
+
   .fi-seg-wrap{display:flex;flex-direction:column;gap:8px;}
   .fi-segbar{display:flex;width:100%;height:12px;border-radius:6px;overflow:hidden;background:#DEE5F5;}
   .fi-seg-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--ink);}
@@ -765,6 +772,7 @@ const db = firebase.firestore();
       lastListaFinalFile: null,
       stats: emptyStats(),
       archived: false,
+      santanderManual: null,
       lastRun: { revisar: [] }
     };
   }
@@ -1232,7 +1240,8 @@ const db = firebase.firestore();
     renderCourseMetaCounts();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline), {
       tipo: app.meta && app.meta.tipo,
-      baselineDate: app.baseline && app.baseline.capturedAt
+      baselineDate: app.baseline && app.baseline.capturedAt,
+      santanderManual: app.meta && (typeof app.meta.santanderManual === "number" ? app.meta.santanderManual : null)
     });
   }
 
@@ -1846,7 +1855,8 @@ const db = firebase.firestore();
     renderCourseMetaCounts();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline), {
       tipo: app.meta && app.meta.tipo,
-      baselineDate: app.baseline && app.baseline.capturedAt
+      baselineDate: app.baseline && app.baseline.capturedAt,
+      santanderManual: app.meta && (typeof app.meta.santanderManual === "number" ? app.meta.santanderManual : null)
     });
   }
 
@@ -2002,6 +2012,36 @@ const db = firebase.firestore();
     return item;
   }
 
+  // Cursos históricos no tienen archivo de Santander que cruzar — este
+  // enlace deja anotar a mano cuántas personas hay en Santander, para
+  // poder comparar contra el total de la lista final (plataforma) y ver
+  // si faltan o sobran, igual que "Diferencia" en los cursos activos.
+  function fiEditSantanderLink(currentValue){
+    const link = el("button", {type:"button", class:"fi-edit-santander-link"}, [
+      document.createTextNode(currentValue === null ? "+ Agregar total de Santander" : "Editar")
+    ]);
+    link.addEventListener("click", async () => {
+      const input = prompt("¿Cuántas personas hay en Santander para este curso?", currentValue !== null ? String(currentValue) : "");
+      if(input === null) return;
+      const parsed = parseInt(String(input).replace(/[^\d]/g, ""), 10);
+      if(isNaN(parsed) || parsed < 0){
+        alert("Escribe un número válido (solo dígitos).");
+        return;
+      }
+      link.disabled = true;
+      try{
+        await courseDoc(app.slug).set({santanderManual: parsed}, {merge:true});
+        app.meta.santanderManual = parsed;
+        renderStats();
+      }catch(err){
+        console.error("No se pudo guardar el total de Santander:", err);
+        alert("No se pudo guardar: " + (err && err.message ? err.message : err));
+        link.disabled = false;
+      }
+    });
+    return link;
+  }
+
   // Franja de indicadores del curso: zona "Inscripción" (Santander vs.
   // plataforma y su diferencia) + zona "Avance en plataforma" (segmentado
   // en 0% / iniciaron / terminaron, más la tasa de término y su cambio
@@ -2022,7 +2062,26 @@ const db = firebase.firestore();
     zoneIns.appendChild(el("div", {class:"fi-label fi-label-blue"}, [document.createTextNode("INSCRIPCIÓN")]));
     const metricsRow = el("div", {class:"fi-metrics-row"});
     if(esHistorico){
-      metricsRow.appendChild(fiMetric("Total", stats.total, 100, "var(--teal)"));
+      const santanderManual = (typeof opts.santanderManual === "number") ? opts.santanderManual : null;
+      if(santanderManual !== null){
+        const diffH = santanderManual - stats.total;
+        const faltaPctH = santanderManual ? Math.round((diffH / santanderManual) * 1000) / 10 : 0;
+        const santMetric = fiMetric("Santander (manual)", santanderManual, 100, "var(--teal-dark)");
+        santMetric.appendChild(fiEditSantanderLink(santanderManual));
+        metricsRow.appendChild(santMetric);
+        metricsRow.appendChild(fiMetric("Plataforma", stats.total, santanderManual ? Math.min(100, (stats.total/santanderManual)*100) : 100, "var(--teal)"));
+        metricsRow.appendChild(el("div", {class:"fi-divider-v"}));
+        const diffWrapH = el("div", {class:"fi-metric"});
+        diffWrapH.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode("Diferencia")]));
+        diffWrapH.appendChild(el("div", {class:"fi-diff-value"}, [document.createTextNode((diffH > 0 ? "-" : diffH < 0 ? "+" : "") + Math.abs(diffH))]));
+        const badgeText = diffH > 0 ? "Faltan " + Math.abs(faltaPctH) + "%" : diffH < 0 ? "Sobran " + Math.abs(faltaPctH) + "%" : "Coincide";
+        diffWrapH.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode(badgeText)]));
+        metricsRow.appendChild(diffWrapH);
+      } else {
+        const totalMetric = fiMetric("Total", stats.total, 100, "var(--teal)");
+        totalMetric.appendChild(fiEditSantanderLink(null));
+        metricsRow.appendChild(totalMetric);
+      }
     } else {
       metricsRow.appendChild(fiMetric("Santander", stats.total, 100, "var(--teal-dark)"));
       metricsRow.appendChild(fiMetric("Plataforma", registrados, plataformaBarPct, "var(--teal)"));
