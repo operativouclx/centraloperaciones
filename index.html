@@ -199,7 +199,10 @@
   .fi-status-chip.warn{background:var(--amber-bg);color:var(--amber);}
   .fi-status-chip.bad{background:var(--rust-bg);color:var(--rust);}
 
+  .fi-avance-cards{margin-bottom:14px;}
+  .fi-avance-card-pct{font-size:10.5px;color:var(--ink-soft);margin-top:2px;}
   .fi-seg-wrap{display:flex;flex-direction:column;gap:8px;}
+  .fi-seg-label{font-size:10px;color:var(--ink-soft);}
   .fi-segbar{display:flex;width:100%;height:12px;border-radius:6px;overflow:hidden;background:#DEE5F5;}
   .fi-seg-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--ink);}
   .fi-seg-legend-item{display:flex;align-items:center;gap:6px;}
@@ -2085,6 +2088,12 @@ const db = firebase.firestore();
     return m;
   }
 
+  function fiAvanceCard(label, count, pct, color){
+    const card = fiMetric(label, count, pct, color);
+    card.appendChild(el("div", {class:"fi-avance-card-pct"}, [document.createTextNode(pct + "% de Plataforma")]));
+    return card;
+  }
+
   function fiLegendItem(color, label, count, pct){
     const item = el("div", {class:"fi-seg-legend-item"});
     const dot = el("span", {class:"fi-seg-dot"});
@@ -2229,17 +2238,33 @@ const db = firebase.firestore();
     avHeader.appendChild(el("div", {class:"fi-avance-count"}, [document.createTextNode(registrados + " inscritos")]));
     zoneAv.appendChild(avHeader);
 
+    // Tarjetas superiores: En 0% / Iniciaron / Terminaron, cada una como
+    // porcentaje del total de Plataforma (inscritos).
     const seg0 = stats.p0, seg1 = stats.p1, seg2 = stats.p2, seg3 = stats.p3, segT = stats.p4;
-    const segTotal = (seg0 + seg1 + seg2 + seg3 + segT) || registrados || 1;
-    const pct0 = Math.round((seg0 / segTotal) * 1000) / 10;
+    const iniciaron = seg1 + seg2 + seg3;
+    const totalPlataforma = registrados || (seg0 + iniciaron + segT) || 1;
+    const pct0 = Math.round((seg0 / totalPlataforma) * 1000) / 10;
+    const pctIniciaron = Math.round((iniciaron / totalPlataforma) * 1000) / 10;
+    const pctT = Math.round((segT / totalPlataforma) * 1000) / 10;
+
+    const cardsRow = el("div", {class:"fi-metrics-row fi-avance-cards"});
+    cardsRow.appendChild(fiAvanceCard("En 0%", seg0, pct0, "#C7CEE3"));
+    cardsRow.appendChild(fiAvanceCard("Iniciaron", iniciaron, pctIniciaron, "var(--plum)"));
+    cardsRow.appendChild(fiAvanceCard("Terminaron ≥80%", segT, pctT, "var(--teal)"));
+    zoneAv.appendChild(cardsRow);
+
+    // Barra segmentada: los 3 grupos de avance DENTRO de quienes iniciaron
+    // (1-25% / 26-50% / 51-79%), como porcentaje de quienes iniciaron.
+    const segTotal = iniciaron || 1;
     const pct1 = Math.round((seg1 / segTotal) * 1000) / 10;
     const pct2 = Math.round((seg2 / segTotal) * 1000) / 10;
     const pct3 = Math.round((seg3 / segTotal) * 1000) / 10;
-    const pctT = Math.round((segT / segTotal) * 1000) / 10;
 
     const segWrap = el("div", {class:"fi-seg-wrap"});
+    const segLabel = el("div", {class:"fi-seg-label"}, [document.createTextNode("Avance de quienes iniciaron")]);
+    segWrap.appendChild(segLabel);
     const segBar = el("div", {class:"fi-segbar"});
-    [[pct0,"#C7CEE3"],[pct1,"#D6CFFF"],[pct2,"#B3A3FF"],[pct3,"var(--plum)"],[pctT,"var(--teal)"]].forEach(([pct,color]) => {
+    [[pct1,"#D6CFFF"],[pct2,"#B3A3FF"],[pct3,"var(--plum)"]].forEach(([pct,color]) => {
       if(pct > 0){
         const seg = el("div", {});
         seg.style.height = "100%"; seg.style.width = pct + "%"; seg.style.background = color;
@@ -2248,11 +2273,9 @@ const db = firebase.firestore();
     });
     segWrap.appendChild(segBar);
     const legend = el("div", {class:"fi-seg-legend"});
-    legend.appendChild(fiLegendItem("#C7CEE3", "En 0%", seg0, pct0));
     legend.appendChild(fiLegendItem("#D6CFFF", "Iniciando (1–25%)", seg1, pct1));
     legend.appendChild(fiLegendItem("#B3A3FF", "A medio camino (26–50%)", seg2, pct2));
     legend.appendChild(fiLegendItem("var(--plum)", "Avanzando (51–79%)", seg3, pct3));
-    legend.appendChild(fiLegendItem("var(--teal)", "Terminaron ≥80%", segT, pctT));
     segWrap.appendChild(legend);
     zoneAv.appendChild(segWrap);
 
