@@ -386,7 +386,6 @@
     <div class="panel panel-compact">
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
-        <button class="btn btn-ghost btn-small" id="btn-open-archived" type="button">Archivados</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -407,7 +406,6 @@
           <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
           <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
           <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
-          <button class="btn btn-danger btn-small" id="btn-delete-course" type="button">Eliminar este curso</button>
         </div>
       </div>
     </div>
@@ -572,15 +570,6 @@
     </div>
   </div>
 
-  <!-- ======================= MODAL: cursos archivados ======================= -->
-  <div class="modal-overlay hidden" id="modal-archived">
-    <div class="modal-box">
-      <button class="modal-close" type="button" data-close-modal="modal-archived">&times;</button>
-      <h3 class="modal-title">Cursos archivados</h3>
-      <p class="modal-sub">Ocultos de la lista principal, pero con todos sus datos intactos. Restáuralos cuando quieras.</p>
-      <div id="archived-list"></div>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -848,9 +837,6 @@ const db = firebase.firestore();
     });
   }
 
-  async function setCourseArchived(slug, archived){
-    await courseDoc(slug).set({archived}, {merge:true});
-  }
 
   // Guarda, una sola vez por semana ISO, el estado de las estadísticas justo
   // antes de la actualización — así el dashboard puede comparar "esta semana"
@@ -1094,10 +1080,6 @@ const db = firebase.firestore();
     addGroup("Activos", activos, 0);
     if(activos.length && historicos.length) wrap.appendChild(el("div", {class:"course-tabs-break"}));
     addGroup("Históricos", historicos, activos.length);
-
-    const archivedCount = app.coursesIndex.filter(c => c.archived).length;
-    const archBtn = document.getElementById("btn-open-archived");
-    if(archBtn) archBtn.textContent = "Archivados" + (archivedCount ? " (" + archivedCount + ")" : "");
   }
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
@@ -1131,89 +1113,6 @@ const db = firebase.firestore();
   document.getElementById("course-new-name").addEventListener("keydown", (e) => {
     if(e.key === "Enter") document.getElementById("btn-new-course").click();
   });
-
-  document.getElementById("btn-delete-course").addEventListener("click", async () => {
-    if(!app.slug) return;
-    const ok = confirm('¿Eliminar por completo "' + app.meta.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
-    if(!ok) return;
-    const btn = document.getElementById("btn-delete-course");
-    const slugToDelete = app.slug;
-    const nameToDelete = app.meta.displayName;
-    btn.disabled = true;
-    setSaveStatus("Eliminando...");
-    try{
-      await deleteCourseRemote(slugToDelete);
-      app.coursesIndex = app.coursesIndex.filter(c => c.slug !== slugToDelete);
-      app.slug = null; app.meta = null; app.master = []; app.log = [];
-      renderCourseSelect();
-      renderCourseTabs();
-      document.getElementById("course-select").value = "";
-      document.getElementById("course-head").classList.add("hidden");
-      document.getElementById("course-dependent").classList.add("hidden");
-      setSaveStatus("");
-    }catch(err){
-      console.error("No se pudo eliminar el curso:", err);
-      setSaveStatus("");
-      alert(
-        'No se pudo eliminar "' + nameToDelete + '".\n\n' +
-        'Detalle: ' + (err && err.message ? err.message : err) + '\n\n' +
-        'Lo más probable es que las reglas de seguridad de Firestore no permitan borrar documentos con tu cuenta. Revísalas en la consola de Firebase.'
-      );
-    }finally{
-      btn.disabled = false;
-    }
-  });
-
-  document.getElementById("btn-open-archived").addEventListener("click", () => {
-    openModal("modal-archived");
-    renderArchivedModal();
-  });
-
-  async function renderArchivedModal(){
-    const listEl = document.getElementById("archived-list");
-    listEl.innerHTML = "";
-    const archived = app.coursesIndex.filter(c => c.archived).sort((a,b)=>a.displayName.localeCompare(b.displayName));
-    if(!archived.length){
-      listEl.appendChild(el("div", {class:"dashboard-empty"}, [document.createTextNode("No hay cursos archivados.")]));
-      return;
-    }
-    archived.forEach(c => {
-      const row = el("div", {class:"archived-row"});
-      row.appendChild(el("div", {class:"archived-name"}, [document.createTextNode(c.displayName)]));
-      row.appendChild(el("div", {class:"archived-meta"}, [document.createTextNode(((c.stats && c.stats.total) || 0) + " en tabla madre")]));
-      const btnRestore = el("button", {class:"btn btn-primary btn-small", type:"button"}, [document.createTextNode("Restaurar")]);
-      btnRestore.addEventListener("click", async () => {
-        btnRestore.disabled = true;
-        await setCourseArchived(c.slug, false);
-        c.archived = false;
-        renderCourseTabs();
-        renderArchivedModal();
-      });
-      const btnDelete = el("button", {class:"btn btn-danger btn-small", type:"button"}, [document.createTextNode("Eliminar definitivamente")]);
-      btnDelete.addEventListener("click", async () => {
-        const ok = confirm('¿Eliminar por completo "' + c.displayName + '" y todo su histórico para TODO el equipo? Esto no se puede deshacer.');
-        if(!ok) return;
-        btnDelete.disabled = true;
-        try{
-          await deleteCourseRemote(c.slug);
-          app.coursesIndex = app.coursesIndex.filter(x => x.slug !== c.slug);
-          renderCourseTabs();
-          renderArchivedModal();
-        }catch(err){
-          console.error("No se pudo eliminar el curso:", err);
-          btnDelete.disabled = false;
-          alert(
-            'No se pudo eliminar "' + c.displayName + '".\n\n' +
-            'Detalle: ' + (err && err.message ? err.message : err) + '\n\n' +
-            'Lo más probable es que las reglas de seguridad de Firestore no permitan borrar documentos con tu cuenta.'
-          );
-        }
-      });
-      const actions = el("div", {class:"archived-actions"}, [btnRestore, btnDelete]);
-      row.appendChild(actions);
-      listEl.appendChild(row);
-    });
-  }
 
   async function loadCourse(slug){
     const loadToken = ++app.courseLoadToken;
