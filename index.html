@@ -2106,6 +2106,13 @@ const storage = firebase.storage();
     return m;
   }
 
+  function fiStatBlock(label, pct, count){
+    const m = el("div", {class:"fi-metric"});
+    m.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode(label)]));
+    m.appendChild(el("div", {class:"fi-metric-value"}, [document.createTextNode(pct + "% — " + count)]));
+    return m;
+  }
+
   function fiAvanceCard(label, count, pct, color){
     const card = fiMetric(label, count, pct, color);
     card.appendChild(el("div", {class:"fi-avance-card-pct"}, [document.createTextNode(pct + "% de Plataforma")]));
@@ -2199,6 +2206,7 @@ const storage = firebase.storage();
     const metricsRow = el("div", {class:"fi-metrics-row"});
     const snap = opts.santanderSnapshot;
     let metricsRow2 = null;
+    let metricsRow3 = null;
     if(esHistorico){
       const inscritos = (typeof opts.santanderInscritos === "number") ? opts.santanderInscritos : null;
       const asignados = (typeof opts.santanderAsignados === "number") ? opts.santanderAsignados : null;
@@ -2227,25 +2235,39 @@ const storage = firebase.storage();
       }
     } else {
       // Si se mapeó la columna de estatus, el total "oficial" de Santander
-      // para comparar es Accepted+Granted; si no, se usa toda la tabla
-      // madre (comportamiento de antes).
-      const santanderTotal = snap ? snap.santanderCount : stats.total;
-      const diff = santanderTotal - registrados;
-      const faltaPct = santanderTotal ? Math.round((diff / santanderTotal) * 1000) / 10 : 0;
-      const plataformaBarPct = santanderTotal ? Math.min(100, (registrados / santanderTotal) * 100) : 0;
+      // para comparar es Accepted+Granted (Becas asignadas); si no, se usa
+      // toda la tabla madre (comportamiento de antes).
+      const totalInscritos = snap ? snap.totalFilas : stats.total;
+      const becasAsignadas = snap ? snap.santanderCount : stats.total;
+      const diff = becasAsignadas - registrados;
+      const faltaPct = becasAsignadas ? Math.round((diff / becasAsignadas) * 1000) / 10 : 0;
+      const plataformaBarPct = becasAsignadas ? Math.min(100, (registrados / becasAsignadas) * 100) : 0;
 
-      metricsRow.appendChild(fiMetric("Santander", santanderTotal, 100, "var(--teal-dark)"));
-      metricsRow.appendChild(fiMetric("Plataforma", registrados, plataformaBarPct, "var(--teal)"));
-      metricsRow.appendChild(el("div", {class:"fi-divider-v"}));
+      metricsRow.appendChild(fiMetric("Total Inscritos", totalInscritos, 100, "var(--teal-dark)"));
+      metricsRow.appendChild(fiMetric("Total Becas asignadas", becasAsignadas, totalInscritos ? Math.min(100, (becasAsignadas/totalInscritos)*100) : 100, "var(--teal-dark)"));
+
+      metricsRow2 = el("div", {class:"fi-metrics-row fi-metrics-row-2"});
+      metricsRow2.appendChild(fiMetric("Plataforma", registrados, plataformaBarPct, "var(--teal)"));
+      metricsRow2.appendChild(el("div", {class:"fi-divider-v"}));
       const diffWrap = el("div", {class:"fi-metric"});
       diffWrap.appendChild(el("div", {class:"fi-metric-label"}, [document.createTextNode("Diferencia")]));
       diffWrap.appendChild(el("div", {class:"fi-diff-value"}, [document.createTextNode((diff > 0 ? "-" : diff < 0 ? "+" : "") + Math.abs(diff))]));
       const badgeText = diff > 0 ? "Faltan " + Math.abs(faltaPct) + "%" : diff < 0 ? "Sobran " + Math.abs(faltaPct) + "%" : "Coincide";
       diffWrap.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode(badgeText)]));
-      metricsRow.appendChild(diffWrap);
+      metricsRow2.appendChild(diffWrap);
+
+      const activos = (stats.p1||0) + (stats.p2||0) + (stats.p3||0) + (stats.p4||0);
+      const inactivos = stats.p0 || 0;
+      const actBase = registrados || 1;
+      const pctActivos = Math.round((activos/actBase)*1000)/10;
+      const pctInactivos = Math.round((inactivos/actBase)*1000)/10;
+      metricsRow3 = el("div", {class:"fi-metrics-row fi-metrics-row-2"});
+      metricsRow3.appendChild(fiStatBlock("Activos", pctActivos, activos));
+      metricsRow3.appendChild(fiStatBlock("Inactivos", pctInactivos, inactivos));
     }
     zoneIns.appendChild(metricsRow);
     if(metricsRow2) zoneIns.appendChild(metricsRow2);
+    if(metricsRow3) zoneIns.appendChild(metricsRow3);
     if(!esHistorico && snap) zoneIns.appendChild(fiStatusBreakdown(snap.statusCounts));
     strip.appendChild(zoneIns);
 
