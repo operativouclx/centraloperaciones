@@ -127,7 +127,7 @@
   .course-tabs-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .course-tabs-row .course-tabs{margin-bottom:0;flex:1;}
 
-  .course-head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;}
+  .course-head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
   .modal-overlay{
     position:fixed;inset:0;background:rgba(22,35,44,0.45);
@@ -433,11 +433,6 @@
           <div class="save-status" id="save-status"></div>
         </div>
         <div id="course-family-meta-panel"></div>
-        <div class="course-head-actions">
-          <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
-          <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
-          <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
-        </div>
       </div>
     </div>
   </section>
@@ -454,6 +449,12 @@
             <div class="course-meta-item" id="cm-item-operacion-status"></div>
           </div>
         </div>
+      </div>
+
+      <div class="course-head-actions" style="margin-bottom:16px;">
+        <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
+        <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
+        <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
       </div>
 
       <div id="course-progress-summary" class="progress-summary"></div>
