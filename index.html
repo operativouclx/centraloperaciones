@@ -212,8 +212,10 @@
   .fi-hr{height:1px;background:#DED4FF;}
 
   .fi-bottom-row{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
-  .fi-tasa{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-width:150px;}
-  .fi-tasa-label{font-size:12px;font-weight:600;color:var(--ink);}
+  .fi-tasa{display:flex;flex-direction:column;gap:3px;min-width:170px;}
+  .fi-tasa-label{font-size:11px;color:var(--ink-soft);}
+  .fi-tasa-value-row{display:flex;align-items:baseline;gap:8px;}
+  .fi-tasa-value{font-size:20px;font-weight:700;color:var(--ink);}
   .fi-tasa-delta{font-size:11px;font-weight:600;white-space:nowrap;}
   .fi-tasa-delta.up{color:var(--teal-dark);}
   .fi-tasa-delta.down{color:var(--rust);}
@@ -2079,12 +2081,14 @@ const storage = firebase.storage();
     };
   }
 
-  function fiTasaBlock(label, value, delta, sublabel, ringColor){
+  function fiTasaBlock(label, value, delta, sublabel){
     const wrap = el("div", {class:"fi-tasa"});
-    wrap.appendChild(dashDonutWithCenter(value, ringColor, "#E4E1FF", value + "%", null, 84));
     wrap.appendChild(el("div", {class:"fi-tasa-label"}, [document.createTextNode(label)]));
     const d = fiDeltaParts(delta);
-    wrap.appendChild(el("div", {class:"fi-tasa-delta " + d.cls}, [document.createTextNode(d.arrow + " " + d.label)]));
+    const row = el("div", {class:"fi-tasa-value-row"});
+    row.appendChild(el("div", {class:"fi-tasa-value"}, [document.createTextNode(value + "%")]));
+    row.appendChild(el("div", {class:"fi-tasa-delta " + d.cls}, [document.createTextNode(d.arrow + " " + d.label)]));
+    wrap.appendChild(row);
     if(sublabel) wrap.appendChild(el("div", {class:"fi-tasa-sublabel"}, [document.createTextNode(sublabel)]));
     return wrap;
   }
@@ -2280,16 +2284,10 @@ const storage = firebase.storage();
     const avBase = registrados || 1;
     const pctActivosAv = Math.round((activosAv/avBase)*1000)/10;
     const pctInactivosAv = Math.round((inactivosAv/avBase)*1000)/10;
-    const avDonutRow = el("div", {style:"display:flex;align-items:center;gap:22px;flex-wrap:wrap"});
-    avDonutRow.appendChild(dashDonutMulti(
-      [{pct:pctActivosAv, color:"#2E4F91"}, {pct:pctInactivosAv, color:"#C7CEE3"}],
-      120, activosAv, "activos", "#2E4F91"
-    ));
-    const avLegend = el("div", {style:"display:flex;flex-direction:column;gap:10px"});
-    avLegend.appendChild(fiLegendItem("#2E4F91", "Activos", activosAv, pctActivosAv));
-    avLegend.appendChild(fiLegendItem("#C7CEE3", "Inactivos", inactivosAv, pctInactivosAv));
-    avDonutRow.appendChild(avLegend);
-    zoneAv.appendChild(avDonutRow);
+    const avStatRow = el("div", {class:"fi-metrics-row"});
+    avStatRow.appendChild(fiStatBlock("Activos", pctActivosAv, activosAv));
+    avStatRow.appendChild(fiStatBlock("Inactivos", pctInactivosAv, inactivosAv));
+    zoneAv.appendChild(avStatRow);
 
     // Barra segmentada: los 3 grupos de avance DENTRO de quienes iniciaron
     // (1-25% / 26-50% / 51-79%), como porcentaje de quienes iniciaron.
@@ -2327,9 +2325,9 @@ const storage = firebase.storage();
 
     const bottomRow = el("div", {class:"fi-bottom-row"});
     bottomRow.appendChild(fiTasaBlock("Tasa término Santander", deltas.tasas.tasaSantander, deltas.deltaSantander,
-      (santanderDenom !== null) ? (terminaron + " de " + santanderDenom) : null, "#2E4F91"));
+      (santanderDenom !== null) ? (terminaron + " de " + santanderDenom) : null));
     bottomRow.appendChild(fiTasaBlock("Tasa de término Operativa", deltas.tasas.tasaIniciados, deltas.deltaIniciados,
-      terminaron + " de " + operativaDenom, "#9987FF"));
+      terminaron + " de " + operativaDenom));
     bottomRow.appendChild(el("div", {class:"fi-compare-date"}, [
       document.createTextNode(opts.baselineDate ? "vs. semana del " + fmtDate(opts.baselineDate) : "sin comparación previa")
     ]));
@@ -2424,26 +2422,37 @@ const storage = firebase.storage();
     return box;
   }
 
+  // html2canvas (usado para exportar a PDF) no siempre interpreta bien los
+  // colores hex de 8 dígitos (#RRGGBBAA); usamos rgba() para que el PDF
+  // renderice igual que en pantalla.
+  function hexToRgba(hex, alpha){
+    const h = hex.replace("#", "");
+    const r = parseInt(h.substring(0,2), 16);
+    const g = parseInt(h.substring(2,4), 16);
+    const b = parseInt(h.substring(4,6), 16);
+    return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+  }
+
   function dashBoxMetric(label, value, pct, color){
-    const box = el("div", {style:"border:1px solid " + color + "33;background:" + color + "0d;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;flex:1;min-width:0"});
-    box.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:28px;color:" + color}, [document.createTextNode(String(value))]));
-    box.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode(label)]));
+    const box = el("div", {style:"border:1px solid " + hexToRgba(color, 0.2) + ";background:" + hexToRgba(color, 0.05) + ";border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:7px;flex:1;min-width:0"});
+    box.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:22px;color:" + color}, [document.createTextNode(String(value))]));
+    box.appendChild(el("div", {style:"font-size:11px;color:#5c5c7a"}, [document.createTextNode(label)]));
     if(typeof pct === "number"){
-      const track = el("div", {style:"width:100%;height:16px;border-radius:8px;background:#ffffff;overflow:hidden"});
-      const fill = el("div", {style:"height:100%;border-radius:8px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
+      const track = el("div", {style:"width:100%;height:12px;border-radius:6px;background:#ffffff;overflow:hidden"});
+      const fill = el("div", {style:"height:100%;border-radius:6px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
       track.appendChild(fill);
       box.appendChild(track);
-      box.appendChild(el("div", {style:"font-size:11px;font-weight:600;color:" + color}, [document.createTextNode(Math.round(pct) + "%")]));
+      box.appendChild(el("div", {style:"font-size:10.5px;font-weight:600;color:" + color}, [document.createTextNode(Math.round(pct) + "%")]));
     }
     return box;
   }
 
   function dashStatRow(label, pct, count, color){
-    const row = el("div", {style:"display:flex;align-items:center;gap:10px"});
-    row.appendChild(el("div", {style:"width:11px;height:11px;border-radius:50%;background:" + color + ";flex-shrink:0"}));
-    const col = el("div", {style:"display:flex;flex-direction:column;gap:2px"});
-    col.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode(label)]));
-    col.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-size:20px;font-weight:600;color:" + color}, [document.createTextNode(Math.round(pct) + "% — " + count)]));
+    const row = el("div", {style:"display:flex;align-items:center;gap:9px"});
+    row.appendChild(el("div", {style:"width:10px;height:10px;border-radius:50%;background:" + color + ";flex-shrink:0"}));
+    const col = el("div", {style:"display:flex;flex-direction:column;gap:1px"});
+    col.appendChild(el("div", {style:"font-size:11px;color:#5c5c7a"}, [document.createTextNode(label)]));
+    col.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-size:16px;font-weight:600;color:" + color}, [document.createTextNode(Math.round(pct) + "% — " + count)]));
     row.appendChild(col);
     return row;
   }
@@ -2467,10 +2476,13 @@ const storage = firebase.storage();
     const blocksWrap = el("div", {style:"display:flex;gap:4px;flex:1"});
     for(let i=0; i<totalBlocks; i++){
       const color = i < filled ? dashBlockColor(i/(totalBlocks-1)) : "#e5e7f5";
-      blocksWrap.appendChild(el("div", {style:"flex:1;height:16px;border-radius:4px;background:" + color}));
+      blocksWrap.appendChild(el("div", {style:"flex:1;height:12px;border-radius:3px;background:" + color}));
     }
     row.appendChild(blocksWrap);
-    row.appendChild(el("div", {style:"width:90px;flex-shrink:0;text-align:right;font-size:13px;font-weight:600;color:#0e0e55"}, [document.createTextNode(count + " · " + pct + "%")]));
+    const valueWrap = el("div", {style:"width:90px;flex-shrink:0;text-align:right;font-size:12.5px;color:#8a8aab"});
+    valueWrap.appendChild(document.createTextNode(count + " · "));
+    valueWrap.appendChild(el("span", {style:"font-size:15px;font-weight:700;color:#5c57d8"}, [document.createTextNode(pct + "%")]));
+    row.appendChild(valueWrap);
     return row;
   }
 
@@ -2496,21 +2508,11 @@ const storage = firebase.storage();
     return svg;
   }
 
-  function dashDonutWithCenter(pct, fgColor, bgColor, centerBig, centerSmall, size){
-    size = size || 110;
-    const wrap = el("div", {style:"position:relative;width:" + size + "px;height:" + size + "px;flex-shrink:0"});
-    wrap.appendChild(dashDonut(pct, fgColor, bgColor, size, Math.round(size*0.16)));
-    const center = el("div", {style:"position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"});
-    center.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:" + Math.round(size*0.22) + "px;color:#0e0e55"}, [document.createTextNode(String(centerBig))]));
-    if(centerSmall) center.appendChild(el("div", {style:"font-size:10px;color:#8a8aab;text-transform:uppercase;letter-spacing:0.03em"}, [document.createTextNode(centerSmall)]));
-    wrap.appendChild(center);
-    return wrap;
-  }
-
   // Anillo multi-segmento (varios valores en un mismo donut, cada uno con
   // su % impreso sobre el arco) — usado para Activos/Inactivos.
-  function dashDonutMulti(segments, size, centerBig, centerSmall, centerColor){
+  function dashDonutMulti(segments, size, centerBig, centerSmall, centerColor, showLabels){
     size = size || 140;
+    showLabels = showLabels !== false;
     const stroke = Math.round(size*0.2);
     const r = (size-stroke)/2, c = 2*Math.PI*r;
     const svgNS = "http://www.w3.org/2000/svg";
@@ -2527,7 +2529,7 @@ const storage = firebase.storage();
       circle.setAttribute("stroke-dashoffset", String(-(cum/100)*c));
       circle.setAttribute("transform", "rotate(-90 " + (size/2) + " " + (size/2) + ")");
       svg.appendChild(circle);
-      if(seg.pct >= 6){
+      if(showLabels && seg.pct >= 6){
         const mid = cum + seg.pct/2;
         const angle = (mid/100)*2*Math.PI - Math.PI/2;
         const lx = size/2 + r*Math.cos(angle);
@@ -2554,13 +2556,17 @@ const storage = firebase.storage();
     return wrap;
   }
 
-  function dashTasaCard(titleLines, value, sublabel, ringColor){
-    const card = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
-    card.appendChild(dashDonutWithCenter(value, ringColor, "#eef0fb", value + "%", null, 96));
-    const titleWrap = el("div", {style:"display:flex;flex-direction:column;gap:2px"});
-    titleLines.forEach(line => titleWrap.appendChild(el("div", {style:"font-size:13px;font-weight:600;color:#0e0e55;line-height:1.3"}, [document.createTextNode(line)])));
-    card.appendChild(titleWrap);
-    card.appendChild(el("div", {style:"font-size:12px;color:#8a8aab"}, [document.createTextNode(sublabel)]));
+  function dashTasaCard(titleLines, value, sublabel, bg, bgImage){
+    const card = el("div", {style:
+      "border-radius:14px;padding:16px;color:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:12px;" +
+      "background:" + (bgImage || bg)
+    });
+    const left = el("div", {style:"display:flex;flex-direction:column;gap:5px;min-width:0"});
+    titleLines.forEach(line => left.appendChild(el("div", {style:"font-size:12px;color:#e2e5ff;line-height:1.25"}, [document.createTextNode(line)])));
+    left.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:28px"}, [document.createTextNode(value + "%")]));
+    left.appendChild(el("div", {style:"font-size:11px;color:#dfe2ff"}, [document.createTextNode(sublabel)]));
+    card.appendChild(left);
+    card.appendChild(dashDonut(value, "#ffffff", "rgba(255,255,255,0.25)", 44, 5));
     return card;
   }
 
@@ -2606,61 +2612,64 @@ const storage = firebase.storage();
     const tasaVsIniciaron = iniciaron ? Math.round((terminaron/iniciaron)*100) : 0;
 
     const wrap = el("div", {id:"dash-export-root", style:
-      "max-width:1180px;margin:0 auto;padding:24px 0 40px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;" +
-      "color:#0e0e55;display:flex;flex-direction:column;gap:24px;background:#f6f6fb"
+      "max-width:1180px;margin:0 auto;padding:16px 0 20px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;" +
+      "color:#0e0e55;display:flex;flex-direction:column;gap:14px;background:#f6f6fb"
     });
 
     // ---- encabezado ----
-    const header = el("div", {style:"display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap"});
-    const headerLeft = el("div", {style:"display:flex;align-items:center;gap:20px"});
+    const header = el("div", {style:"display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap"});
+    const headerLeft = el("div", {style:"display:flex;align-items:center;gap:14px"});
     headerLeft.appendChild(dashLogoSlot(meta));
-    headerLeft.appendChild(el("div", {style:"width:1px;height:40px;background:#d8d8ea;flex-shrink:0"}));
+    headerLeft.appendChild(el("div", {style:"width:1px;height:32px;background:#d8d8ea;flex-shrink:0"}));
     const titleWrap = el("div", {style:"flex:1;min-width:0"});
-    titleWrap.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:26px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"}, [
+    titleWrap.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:21px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"}, [
       document.createTextNode(meta.displayName || app.slug)
     ]));
     titleWrap.appendChild(dashCohortLine(meta));
     headerLeft.appendChild(titleWrap);
     header.appendChild(headerLeft);
 
-    const headerRight = el("div", {style:"display:flex;align-items:center;gap:12px;flex-shrink:0"});
-    const uclxBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:10px;padding:12px 20px;display:flex;align-items:center;height:60px"});
-    uclxBox.appendChild(el("img", {src:"./assets/uclx-logo.svg", alt:"UCLX", style:"height:32px;width:auto;object-fit:contain"}));
+    const headerRight = el("div", {style:"display:flex;align-items:center;gap:10px;flex-shrink:0"});
+    const uclxBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:8px;padding:8px 14px;display:flex;align-items:center;height:44px"});
+    uclxBox.appendChild(el("img", {src:"./assets/uclx-logo.svg", alt:"UCLX", style:"height:24px;width:auto;object-fit:contain"}));
     headerRight.appendChild(uclxBox);
-    const soaBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:10px;padding:12px 20px;display:flex;align-items:center;height:60px"});
-    soaBox.appendChild(el("img", {src:"./assets/santander-open-academy.svg", alt:"Santander Open Academy", style:"height:22px;width:auto;object-fit:contain"}));
+    const soaBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:8px;padding:8px 14px;display:flex;align-items:center;height:44px"});
+    soaBox.appendChild(el("img", {src:"./assets/santander-open-academy.svg", alt:"Santander Open Academy", style:"height:16px;width:auto;object-fit:contain"}));
     headerRight.appendChild(soaBox);
     header.appendChild(headerRight);
 
     wrap.appendChild(header);
 
     // ---- convocatoria / plataforma ----
-    const grid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px"});
+    const grid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px"});
 
-    const convCard = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
+    const convCard = el("div", {style:"background:#ffffff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     const convHead = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
-    convHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode("Convocatoria")]));
+    convHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:14px"}, [document.createTextNode("Convocatoria")]));
     convHead.appendChild(dashStatusBadge("convocatoriaStatus", meta.convocatoriaStatus || "En progreso"));
     convCard.appendChild(convHead);
-    const convRow = el("div", {style:"display:flex;gap:14px"});
+    const convRow = el("div", {style:"display:flex;gap:12px"});
     convRow.appendChild(dashBoxMetric("Total Inscritos", inscritos, 100, "#5c57d8"));
     const pctBecas = inscritos ? Math.round((becasAsignadas/inscritos)*100) : 0;
     convRow.appendChild(dashBoxMetric("Total Beca asignada", becasAsignadas, pctBecas, "#5c57d8"));
     convCard.appendChild(convRow);
     grid.appendChild(convCard);
 
-    const platCard = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
+    const platCard = el("div", {style:"background:#ffffff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     const platHead = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
-    platHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode("Plataforma")]));
+    platHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:14px"}, [document.createTextNode("Plataforma")]));
     platHead.appendChild(dashStatusBadge("operacionStatus", meta.operacionStatus || "En progreso"));
     platCard.appendChild(platHead);
-    const platRow = el("div", {style:"display:flex;gap:18px;align-items:center"});
-    const totalPlatBox = el("div", {style:"display:flex;flex-direction:column;gap:8px;width:96px;flex-shrink:0"});
-    totalPlatBox.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode("Total plataforma")]));
-    totalPlatBox.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:24px;color:#6884fd"}, [document.createTextNode(String(enPlataforma))]));
+    const platRow = el("div", {style:"display:flex;gap:14px;align-items:center"});
+    const totalPlatBox = el("div", {style:"display:flex;flex-direction:column;gap:6px;width:84px;flex-shrink:0"});
+    totalPlatBox.appendChild(el("div", {style:"font-size:11px;color:#5c5c7a"}, [document.createTextNode("Total plataforma")]));
+    totalPlatBox.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:20px;color:#6884fd"}, [document.createTextNode(String(enPlataforma))]));
     platRow.appendChild(totalPlatBox);
-    platRow.appendChild(dashDonutWithCenter(pctActivos, "#6884fd", "#e2e2ee", Math.round(pctActivos) + "%", "activos", 100));
-    const statCol = el("div", {style:"display:flex;flex-direction:column;gap:18px;flex:1"});
+    platRow.appendChild(dashDonutMulti(
+      [{pct:pctActivos, color:"#6884fd"}, {pct:pctInactivos, color:"#c7c9e0"}],
+      76, undefined, undefined, undefined, false
+    ));
+    const statCol = el("div", {style:"display:flex;flex-direction:column;gap:10px;flex:1"});
     statCol.appendChild(dashStatRow("Activos", pctActivos, activos, "#6884fd"));
     statCol.appendChild(dashStatRow("Inactivos", pctInactivos, inactivos, "#8a8aab"));
     platRow.appendChild(statCol);
@@ -2670,15 +2679,15 @@ const storage = firebase.storage();
     wrap.appendChild(grid);
 
     // ---- close-up de avance ----
-    const closeup = el("div", {style:"background:#ffffff;border-radius:16px;padding:28px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
-    closeup.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px;margin-bottom:20px"}, [document.createTextNode("Close-up de avance")]));
-    const closeupRow = el("div", {style:"display:flex;align-items:center;gap:24px;flex-wrap:wrap"});
-    const activosBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:12px;padding:20px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:140px;flex-shrink:0"});
-    activosBox.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode("de")]));
-    activosBox.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:30px;color:#0e0e55"}, [document.createTextNode(String(activos))]));
-    activosBox.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode("activos")]));
+    const closeup = el("div", {style:"background:#ffffff;border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
+    closeup.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:14px;margin-bottom:12px"}, [document.createTextNode("Close-up de avance")]));
+    const closeupRow = el("div", {style:"display:flex;align-items:center;gap:16px;flex-wrap:wrap"});
+    const activosBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:10px;padding:12px 18px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:110px;flex-shrink:0"});
+    activosBox.appendChild(el("div", {style:"font-size:11px;color:#5c5c7a"}, [document.createTextNode("de")]));
+    activosBox.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:22px;color:#0e0e55"}, [document.createTextNode(String(activos))]));
+    activosBox.appendChild(el("div", {style:"font-size:11px;color:#5c5c7a"}, [document.createTextNode("activos")]));
     closeupRow.appendChild(activosBox);
-    const barsCol = el("div", {style:"display:flex;flex-direction:column;gap:14px;flex:1;min-width:280px"});
+    const barsCol = el("div", {style:"display:flex;flex-direction:column;gap:9px;flex:1;min-width:280px"});
     barsCol.appendChild(dashBlockBar("Iniciando (1–25%)", p1, pctP1Act));
     barsCol.appendChild(dashBlockBar("A medio camino (26–50%)", p2, pctP2Act));
     barsCol.appendChild(dashBlockBar("Avanzando (51–79%)", p3, pctP3Act));
@@ -2688,9 +2697,9 @@ const storage = firebase.storage();
     wrap.appendChild(closeup);
 
     // ---- tasas de terminación ----
-    const bottomGrid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px"});
-    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Santander", "vs. Becas asignadas"], tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#5c57d8"));
-    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Operativa", "vs. Activos plataforma"], tasaVsIniciaron, terminaron + " de " + activos + " activos", "#6884fd"));
+    const bottomGrid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px"});
+    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Santander", "vs. Becas asignadas"], tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#0e0e55"));
+    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Operativa", "vs. Activos plataforma"], tasaVsIniciaron, terminaron + " de " + activos + " activos", null, "linear-gradient(135deg,#5c57d8,#6884fd)"));
     wrap.appendChild(bottomGrid);
 
     root.appendChild(wrap);
@@ -2700,12 +2709,19 @@ const storage = firebase.storage();
     const dashEl = document.getElementById("dash-export-root");
     if(!dashEl || typeof html2pdf === "undefined") return;
     const nombre = (app.meta && app.meta.displayName) || app.slug || "curso";
+    // Página a la medida exacta del contenido para que todo quepa en una
+    // sola hoja, sin que html2pdf lo corte en varias páginas.
+    const rect = dashEl.getBoundingClientRect();
+    const pxToMm = px => px * 25.4 / 96;
+    const widthMm = pxToMm(rect.width);
+    const heightMm = pxToMm(rect.height);
     html2pdf().set({
-      margin: 10,
+      margin: 0,
       filename: "Dashboard " + nombre + ".pdf",
       image: {type:"jpeg", quality:0.98},
-      html2canvas: {scale:2, backgroundColor:"#f6f6fb"},
-      jsPDF: {unit:"mm", format:"a4", orientation:"landscape"}
+      html2canvas: {scale:2, backgroundColor:"#f6f6fb", windowWidth: dashEl.scrollWidth},
+      jsPDF: {unit:"mm", format:[widthMm, heightMm], orientation: widthMm >= heightMm ? "landscape" : "portrait"},
+      pagebreak: {mode: ["avoid-all"]}
     }).from(dashEl).save();
   });
 
