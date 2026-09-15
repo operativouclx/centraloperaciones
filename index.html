@@ -2396,49 +2396,70 @@ const storage = firebase.storage();
     return box;
   }
 
-  function dashMetric(value, label, color, pct){
-    const m = el("div", {style:"display:flex;flex-direction:column;gap:6px"});
-    m.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:30px;color:" + color}, [document.createTextNode(String(value))]));
-    m.appendChild(el("div", {style:"font-size:12.5px;color:#5c5c7a"}, [document.createTextNode(label)]));
+  function dashBoxMetric(label, value, pct, color){
+    const box = el("div", {style:"border:1px solid #e2e2ee;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px;flex:1;min-width:0"});
+    box.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode(label)]));
+    box.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:26px;color:" + color}, [document.createTextNode(String(value))]));
     if(typeof pct === "number"){
       const track = el("div", {style:"width:100%;height:6px;border-radius:4px;background:#eef0fb;overflow:hidden"});
       const fill = el("div", {style:"height:100%;border-radius:4px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
       track.appendChild(fill);
-      m.appendChild(track);
-      m.appendChild(el("div", {style:"font-size:10.5px;color:#8a8aab"}, [document.createTextNode(Math.round(pct) + "%")]));
+      box.appendChild(track);
+      box.appendChild(el("div", {style:"font-size:10.5px;color:#8a8aab"}, [document.createTextNode(Math.round(pct) + "%")]));
     }
-    return m;
+    return box;
   }
 
-  function dashCard(title, meta, statusField, items, metricColor, pctBase){
-    const card = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
-    const head = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
-    head.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode(title)]));
-    head.appendChild(dashStatusBadge(statusField, meta[statusField] || "En progreso"));
-    card.appendChild(head);
-    const base = pctBase || Math.max(1, ...items.map(([,value]) => value));
-    const grid = el("div", {style:"display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px"});
-    items.forEach(([label, value]) => grid.appendChild(dashMetric(value, label, metricColor, (value / base) * 100)));
-    card.appendChild(grid);
-    return card;
-  }
-
-  function dashLegendRow(color, label, count, pct){
-    const row = el("div", {style:"display:flex;align-items:center;gap:12px"});
-    row.appendChild(el("div", {style:"width:12px;height:12px;border-radius:3px;background:" + color + ";flex-shrink:0"}));
-    row.appendChild(el("div", {style:"flex:1;font-size:14px"}, [document.createTextNode(label)]));
-    row.appendChild(el("div", {style:"font-weight:600;font-size:14px"}, [document.createTextNode(count + " · " + pct + "%")]));
+  function dashStatRow(label, pct, count, color){
+    const row = el("div", {style:"display:flex;flex-direction:column;gap:2px"});
+    row.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode(label)]));
+    row.appendChild(el("div", {style:"font-size:15px;font-weight:600;color:" + color}, [document.createTextNode(Math.round(pct) + "% — " + count)]));
     return row;
   }
 
-  function dashTasaCard(label, value, sublabel, bg, bgImage){
+  function dashRateBar(label, count, pct, color){
+    const row = el("div", {style:"display:flex;align-items:center;gap:12px"});
+    row.appendChild(el("div", {style:"width:160px;flex-shrink:0;font-size:13px;color:#0e0e55"}, [document.createTextNode(label)]));
+    const track = el("div", {style:"flex:1;height:10px;border-radius:5px;background:#eef0fb;overflow:hidden"});
+    track.appendChild(el("div", {style:"height:100%;border-radius:5px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"}));
+    row.appendChild(track);
+    row.appendChild(el("div", {style:"width:90px;flex-shrink:0;text-align:right;font-size:13px;font-weight:600;color:#0e0e55"}, [document.createTextNode(count + " · " + pct + "%")]));
+    return row;
+  }
+
+  function dashRing(pct){
+    const size = 56, stroke = 6, r = (size-stroke)/2, c = 2*Math.PI*r;
+    const clamped = Math.max(0, Math.min(100, pct));
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", size); svg.setAttribute("height", size);
+    svg.style.flexShrink = "0";
+    const bg = document.createElementNS(svgNS, "circle");
+    bg.setAttribute("cx", size/2); bg.setAttribute("cy", size/2); bg.setAttribute("r", r);
+    bg.setAttribute("fill", "none"); bg.setAttribute("stroke", "rgba(255,255,255,0.25)"); bg.setAttribute("stroke-width", stroke);
+    svg.appendChild(bg);
+    const fg = document.createElementNS(svgNS, "circle");
+    fg.setAttribute("cx", size/2); fg.setAttribute("cy", size/2); fg.setAttribute("r", r);
+    fg.setAttribute("fill", "none"); fg.setAttribute("stroke", "#ffffff"); fg.setAttribute("stroke-width", stroke);
+    fg.setAttribute("stroke-dasharray", String(c));
+    fg.setAttribute("stroke-dashoffset", String(c - (clamped/100)*c));
+    fg.setAttribute("stroke-linecap", "round");
+    fg.setAttribute("transform", "rotate(-90 " + (size/2) + " " + (size/2) + ")");
+    svg.appendChild(fg);
+    return svg;
+  }
+
+  function dashTasaCard(titleLines, value, sublabel, bg, bgImage){
     const card = el("div", {style:
-      "border-radius:16px;padding:26px;color:#ffffff;display:flex;flex-direction:column;gap:8px;" +
+      "border-radius:16px;padding:26px;color:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:16px;" +
       "background:" + (bgImage || bg)
     });
-    card.appendChild(el("div", {style:"font-size:13px;color:#e2e5ff"}, [document.createTextNode(label)]));
-    card.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:40px"}, [document.createTextNode(value + "%")]));
-    card.appendChild(el("div", {style:"font-size:12.5px;color:#dfe2ff"}, [document.createTextNode(sublabel)]));
+    const left = el("div", {style:"display:flex;flex-direction:column;gap:8px;min-width:0"});
+    titleLines.forEach(line => left.appendChild(el("div", {style:"font-size:13px;color:#e2e5ff;line-height:1.3"}, [document.createTextNode(line)])));
+    left.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:40px"}, [document.createTextNode(value + "%")]));
+    left.appendChild(el("div", {style:"font-size:12.5px;color:#dfe2ff"}, [document.createTextNode(sublabel)]));
+    card.appendChild(left);
+    card.appendChild(dashRing(value));
     return card;
   }
 
@@ -2464,31 +2485,24 @@ const storage = firebase.storage();
     const avance0 = stats.p0 || 0;
     const p1 = stats.p1 || 0, p2 = stats.p2 || 0, p3 = stats.p3 || 0;
     const terminaron = stats.p4 || 0;
-    // enProgreso: avanzaron pero no llegaron a 80% (bucket exclusivo, para el
-    // donut). iniciaron: TODOS los que pasaron de 0%, incluyendo a quienes ya
-    // terminaron — es el que se usa como KPI y como base de la tasa, si no
-    // "vs. Iniciaron" da más de 100% cuando hay más terminados que en curso.
-    const enProgreso = p1 + p2 + p3;
-    const iniciaron = enProgreso + terminaron;
+    // Activos: todos los que pasaron de 0% (incluye a quienes ya terminaron).
+    // Inactivos: los que siguen en 0%. Entre los dos suman enPlataforma.
+    const activos = p1 + p2 + p3 + terminaron;
+    const inactivos = avance0;
+    const iniciaron = activos;
 
-    // El donut reparte a TODOS los que están en plataforma (0% + en progreso +
-    // terminaron = enPlataforma), no las becas asignadas — por eso la base
-    // de estos porcentajes y el centro del donut usan enPlataforma.
-    const base = enPlataforma || 1;
-    const pctAvance0 = Math.round((avance0/base)*100);
-    const pctEnProgreso = Math.round((enProgreso/base)*100);
-    const pctTerminaron = Math.round((terminaron/base)*100);
+    const plataformaBase = enPlataforma || 1;
+    const pctActivos = Math.round((activos/plataformaBase)*100);
+    const pctInactivos = Math.round((inactivos/plataformaBase)*100);
 
-    // Desglose de "en progreso" en sus 3 grupos, como % de ese subtotal
-    const enProgresoBase = enProgreso || 1;
-    const pctP1 = Math.round((p1/enProgresoBase)*100);
-    const pctP2 = Math.round((p2/enProgresoBase)*100);
-    const pctP3 = Math.round((p3/enProgresoBase)*100);
+    // Desglose del avance de los activos en sus 3 grupos, como % de activos
+    const activosBase = activos || 1;
+    const pctP1Act = Math.round((p1/activosBase)*100);
+    const pctP2Act = Math.round((p2/activosBase)*100);
+    const pctP3Act = Math.round((p3/activosBase)*100);
 
     const tasaVsBecas = becasAsignadas ? Math.round((terminaron/becasAsignadas)*100) : 0;
     const tasaVsIniciaron = iniciaron ? Math.round((terminaron/iniciaron)*100) : 0;
-
-    const donutGradient = "conic-gradient(#0e0e55 0% " + pctTerminaron + "%, #6884fd " + pctTerminaron + "% " + (pctTerminaron+pctEnProgreso) + "%, #c7cdfb " + (pctTerminaron+pctEnProgreso) + "% 100%)";
 
     const wrap = el("div", {id:"dash-export-root", style:
       "max-width:1180px;margin:0 auto;padding:24px 0 40px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;" +
@@ -2519,58 +2533,59 @@ const storage = firebase.storage();
 
     wrap.appendChild(header);
 
-    // ---- convocatoria / operación ----
+    // ---- convocatoria / plataforma ----
     const grid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px"});
-    grid.appendChild(dashCard("Convocatoria", meta, "convocatoriaStatus", [
-      ["Inscritos", inscritos],
-      ["Becas asignadas", becasAsignadas],
-      ["En plataforma", enPlataforma]
-    ], "#5c57d8"));
-    grid.appendChild(dashCard("Operación", meta, "operacionStatus", [
-      ["0% de avance", avance0],
-      ["Iniciaron", iniciaron],
-      ["Terminaron", terminaron]
-    ], "#6884fd", enPlataforma));
+
+    const convCard = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
+    const convHead = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
+    convHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode("Convocatoria")]));
+    convHead.appendChild(dashStatusBadge("convocatoriaStatus", meta.convocatoriaStatus || "En progreso"));
+    convCard.appendChild(convHead);
+    const convRow = el("div", {style:"display:flex;gap:14px"});
+    convRow.appendChild(dashBoxMetric("Total Inscritos", inscritos, 100, "#5c57d8"));
+    const pctBecas = inscritos ? Math.round((becasAsignadas/inscritos)*100) : 0;
+    convRow.appendChild(dashBoxMetric("Total Beca asignada", becasAsignadas, pctBecas, "#5c57d8"));
+    convCard.appendChild(convRow);
+    grid.appendChild(convCard);
+
+    const platCard = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
+    const platHead = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
+    platHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode("Plataforma")]));
+    platHead.appendChild(dashStatusBadge("operacionStatus", meta.operacionStatus || "En progreso"));
+    platCard.appendChild(platHead);
+    const platRow = el("div", {style:"display:flex;gap:20px;align-items:center"});
+    platRow.appendChild(dashBoxMetric("Total plataforma", enPlataforma, 100, "#6884fd"));
+    const statCol = el("div", {style:"display:flex;flex-direction:column;gap:14px"});
+    statCol.appendChild(dashStatRow("Activos", pctActivos, activos, "#6884fd"));
+    statCol.appendChild(dashStatRow("Inactivos", pctInactivos, inactivos, "#8a8aab"));
+    platRow.appendChild(statCol);
+    platCard.appendChild(platRow);
+    grid.appendChild(platCard);
+
     wrap.appendChild(grid);
 
-    // ---- close-up de avance (donut) ----
+    // ---- close-up de avance ----
     const closeup = el("div", {style:"background:#ffffff;border-radius:16px;padding:28px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     closeup.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px;margin-bottom:20px"}, [document.createTextNode("Close-up de avance")]));
     const closeupRow = el("div", {style:"display:flex;align-items:center;gap:24px;flex-wrap:wrap"});
-    const donutWrap = el("div", {style:"position:relative;width:180px;height:180px;flex-shrink:0"});
-    donutWrap.appendChild(el("div", {style:"width:100%;height:100%;border-radius:50%;background:" + donutGradient}));
-    const donutCenter = el("div", {style:"position:absolute;inset:22px;border-radius:50%;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center"});
-    donutCenter.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:26px"}, [document.createTextNode(String(enPlataforma))]));
-    donutCenter.appendChild(el("div", {style:"font-size:11px;color:#8a8aab;text-transform:uppercase;letter-spacing:0.05em;text-align:center"}, [document.createTextNode("en plataforma")]));
-    donutWrap.appendChild(donutCenter);
-    closeupRow.appendChild(donutWrap);
-    const legendCol = el("div", {style:"display:flex;flex-direction:column;gap:16px;max-width:280px"});
-    legendCol.appendChild(dashLegendRow("#c7cdfb", "0% de avance", avance0, pctAvance0));
-    legendCol.appendChild(dashLegendRow("#6884fd", "En progreso", enProgreso, pctEnProgreso));
-    legendCol.appendChild(dashLegendRow("#0e0e55", "Terminaron", terminaron, pctTerminaron));
-    closeupRow.appendChild(legendCol);
+    const activosBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:12px;padding:20px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:140px;flex-shrink:0"});
+    activosBox.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode("de")]));
+    activosBox.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:30px;color:#0e0e55"}, [document.createTextNode(String(activos))]));
+    activosBox.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode("activos")]));
+    closeupRow.appendChild(activosBox);
+    const barsCol = el("div", {style:"display:flex;flex-direction:column;gap:14px;flex:1;min-width:280px"});
+    barsCol.appendChild(dashRateBar("Iniciando (1–25%)", p1, pctP1Act, "#d6cfff"));
+    barsCol.appendChild(dashRateBar("A medio camino (26–50%)", p2, pctP2Act, "#b3a3ff"));
+    barsCol.appendChild(dashRateBar("Avanzando (51–79%)", p3, pctP3Act, "#5c57d8"));
+    closeupRow.appendChild(barsCol);
     closeup.appendChild(closeupRow);
-
-    // Desglose de quienes iniciaron (no llegaron a 80%) en sus 3 grupos
-    closeup.appendChild(el("div", {style:"height:1px;background:#eef0fb;margin:22px 0 18px"}));
-    closeup.appendChild(el("div", {style:"font-size:12.5px;color:#5c5c7a;margin-bottom:10px"}, [document.createTextNode("Avance de quienes iniciaron")]));
-    const subBar = el("div", {style:"display:flex;width:100%;height:10px;border-radius:5px;overflow:hidden;background:#eef0fb;margin-bottom:12px"});
-    [[pctP1,"#d6cfff"],[pctP2,"#b3a3ff"],[pctP3,"#5c57d8"]].forEach(([pct,color]) => {
-      if(pct > 0) subBar.appendChild(el("div", {style:"height:100%;width:" + pct + "%;background:" + color}));
-    });
-    closeup.appendChild(subBar);
-    const subLegend = el("div", {style:"display:flex;gap:24px;flex-wrap:wrap"});
-    subLegend.appendChild(dashLegendRow("#d6cfff", "Iniciando (1–25%)", p1, pctP1));
-    subLegend.appendChild(dashLegendRow("#b3a3ff", "A medio camino (26–50%)", p2, pctP2));
-    subLegend.appendChild(dashLegendRow("#5c57d8", "Avanzando (51–79%)", p3, pctP3));
-    closeup.appendChild(subLegend);
 
     wrap.appendChild(closeup);
 
     // ---- tasas de terminación ----
     const bottomGrid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px"});
-    bottomGrid.appendChild(dashTasaCard("Tasa de terminación vs. Becas asignadas", tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#0e0e55"));
-    bottomGrid.appendChild(dashTasaCard("Tasa de terminación vs. Iniciaron", tasaVsIniciaron, terminaron + " de " + iniciaron + " que iniciaron", null, "linear-gradient(135deg,#5c57d8,#6884fd)"));
+    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Santander", "vs. Becas asignadas"], tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#0e0e55"));
+    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Operativa", "vs. Activos plataforma"], tasaVsIniciaron, terminaron + " de " + activos + " activos", null, "linear-gradient(135deg,#5c57d8,#6884fd)"));
     wrap.appendChild(bottomGrid);
 
     root.appendChild(wrap);
