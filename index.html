@@ -108,6 +108,13 @@
   }
   .course-tabs-group-label:not(:first-child){margin-left:6px;}
   .course-tabs-break{flex-basis:100%;height:0;}
+
+  /* Grupos de cursos (por año / familia): cada grupo ocupa su propio
+     renglón completo, con la etiqueta arriba y los cursos en fila abajo. */
+  .course-tabs-grouped{display:flex;flex-direction:column;flex-wrap:nowrap;gap:10px;}
+  .course-tabs-yeargroup{display:flex;flex-direction:column;gap:6px;}
+  .course-tabs-yeargroup-row{display:flex;flex-wrap:wrap;gap:6px;}
+  .course-tabs-grouped .course-tabs-group-label{margin-left:0;padding:0;font-size:11.5px;}
   .course-tab.c0{background:var(--teal-bg);color:var(--teal-dark);}
   .course-tab.c0.active{background:var(--teal);color:#fff;}
   .course-tab.c1{background:var(--amber-bg);color:var(--amber);}
@@ -404,7 +411,7 @@
     <div class="panel panel-compact">
       <div class="course-tabs" id="cliente-tabs" style="margin-bottom:10px;"></div>
       <div class="course-tabs-row">
-        <div class="course-tabs" id="course-tabs"></div>
+        <div class="course-tabs course-tabs-grouped" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
@@ -1552,17 +1559,23 @@ const db = firebase.firestore();
     const wrap = document.getElementById("course-tabs");
     wrap.innerHTML = "";
 
+    // Cada grupo (año o familia) es su propio renglón: la etiqueta arriba
+    // y los cursos de ese grupo en una fila debajo.
     function addGroup(label, list, colorStart){
       if(!list.length) return;
-      wrap.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(label)]));
+      const groupWrap = el("div", {class:"course-tabs-yeargroup"});
+      groupWrap.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(label)]));
+      const row = el("div", {class:"course-tabs-yeargroup-row"});
       list.forEach((c, i) => {
         const btn = el("button", {
           type:"button",
           class:"course-tab c" + ((colorStart + i) % 4) + (c.slug === app.slug ? " active" : "")
         }, [document.createTextNode(c.displayName)]);
         btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
-        wrap.appendChild(btn);
+        row.appendChild(btn);
       });
+      groupWrap.appendChild(row);
+      wrap.appendChild(groupWrap);
     }
 
     const visible = app.coursesIndex.filter(c =>
@@ -1581,7 +1594,6 @@ const db = firebase.firestore();
         .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
       addGroup(familia, list, colorStart);
       colorStart += list.length;
-      wrap.appendChild(el("div", {class:"course-tabs-break"}));
     });
 
     const anios = Array.from(new Set(sinFamilia.map(c => c.anio).filter(Boolean))).sort();
@@ -1589,7 +1601,6 @@ const db = firebase.firestore();
       const list = sinFamilia.filter(c => c.anio === anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
       addGroup(String(anio), list, colorStart);
       colorStart += list.length;
-      wrap.appendChild(el("div", {class:"course-tabs-break"}));
     });
     const sinAnio = sinFamilia.filter(c => !c.anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
     addGroup(anios.length ? "Sin año" : "Cursos", sinAnio, colorStart);
