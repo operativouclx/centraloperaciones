@@ -412,8 +412,9 @@
     <div class="panel panel-compact">
       <div class="course-tabs" id="cliente-tabs" style="margin-bottom:10px;"></div>
       <div class="course-tabs" id="anio-tabs" style="margin-bottom:10px;"></div>
+      <div id="course-groups-summary" style="margin-bottom:10px;"></div>
       <div class="course-tabs-row">
-        <div class="course-tabs course-tabs-grouped" id="course-tabs"></div>
+        <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
@@ -1653,35 +1654,15 @@ const db = firebase.firestore();
     });
   }
 
-  // Renderiza solo los grupos (por familia) del año actualmente
-  // seleccionado — separado de renderCourseTabs para poder refrescar
-  // solo esta parte al cambiar de año, sin repintar las pestañas de año.
+  // Renderiza, para el año actualmente seleccionado: (1) un resumen por
+  // familia (etiqueta + meta de convocatoria + inscritos/meta) y (2) un
+  // desplegable único para elegir qué curso abrir — separado de
+  // renderCourseTabs para poder refrescar solo esto al cambiar de año.
   function renderCourseGroups(){
-    const wrap = document.getElementById("course-tabs");
-    wrap.innerHTML = "";
-
-    // Cada grupo (familia) es su propio renglón: la etiqueta (+ meta de
-    // convocatoria del grupo) arriba, y los cursos de ese grupo en una
-    // fila debajo.
-    function addGroup(label, list, colorStart){
-      if(!list.length) return;
-      const groupWrap = el("div", {class:"course-tabs-yeargroup"});
-      const labelRow = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;"});
-      labelRow.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(label)]));
-      if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)) labelRow.appendChild(buildGroupMetaControl(label, app.selectedCliente, app.selectedAnio));
-      groupWrap.appendChild(labelRow);
-      const row = el("div", {class:"course-tabs-yeargroup-row"});
-      list.forEach((c, i) => {
-        const btn = el("button", {
-          type:"button",
-          class:"course-tab c" + ((colorStart + i) % 4) + (c.slug === app.slug ? " active" : "")
-        }, [document.createTextNode(c.displayName)]);
-        btn.addEventListener("click", () => { if(c.slug !== app.slug) loadCourse(c.slug); });
-        row.appendChild(btn);
-      });
-      groupWrap.appendChild(row);
-      wrap.appendChild(groupWrap);
-    }
+    const summary = document.getElementById("course-groups-summary");
+    const sel = document.getElementById("course-year-select");
+    summary.innerHTML = "";
+    sel.innerHTML = "";
 
     const visible = app.coursesIndex.filter(c => {
       if(c.archived || (c.cliente || inferClienteLegacy(c.displayName)) !== app.selectedCliente) return false;
@@ -1690,18 +1671,34 @@ const db = firebase.firestore();
       return app.selectedAnio === SIN_ANIO ? !anio : anio === app.selectedAnio;
     });
 
+    if(!visible.length){
+      sel.appendChild(el("option", {value:""}, [document.createTextNode("No hay cursos en este año")]));
+      return;
+    }
+
     // Dentro del año, cada curso se agrupa por familia (todas sus
     // ediciones juntas) — igual que No+Violencia. Si no tiene familia
     // asignada, su propio nombre es su familia (grupo de un solo curso).
     const withFamilia = visible.map(c => Object.assign({}, c, {_familia: c.familia || inferFamiliaLegacy(c.slug) || c.displayName}));
     const familias = Array.from(new Set(withFamilia.map(c => c._familia))).sort();
-    let colorStart = 0;
+
+    sel.appendChild(el("option", {value:""}, [document.createTextNode("Elige un curso...")]));
     familias.forEach(familia => {
       const list = withFamilia.filter(c => c._familia === familia)
         .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
-      addGroup(familia, list, colorStart);
-      colorStart += list.length;
+
+      const row = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"});
+      row.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(familia)]));
+      if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)) row.appendChild(buildGroupMetaControl(familia, app.selectedCliente, app.selectedAnio));
+      summary.appendChild(row);
+
+      const group = el("optgroup", {label: familia});
+      list.forEach(c => {
+        group.appendChild(el("option", {value: c.slug}, [document.createTextNode(c.displayName)]));
+      });
+      sel.appendChild(group);
     });
+    if(app.slug) sel.value = app.slug;
   }
 
   function renderCourseTabs(){
@@ -1721,6 +1718,9 @@ const db = firebase.firestore();
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
     if(e.target.value) await loadCourse(e.target.value);
+  });
+  document.getElementById("course-year-select").addEventListener("change", async (e) => {
+    if(e.target.value && e.target.value !== app.slug) await loadCourse(e.target.value);
   });
 
   document.getElementById("btn-new-course").addEventListener("click", async () => {
