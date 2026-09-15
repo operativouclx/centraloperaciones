@@ -1062,12 +1062,19 @@ const db = firebase.firestore();
     return ANIO_LEGACY[slug] || null;
   }
 
-  // Las 3 ediciones de No+Violencia se muestran agrupadas juntas en las
-  // pestañas, en vez de separadas por año.
+  // Cada curso tiene su propia "familia" (el nombre base sin el número de
+  // edición) y todas sus ediciones se agrupan juntas en las pestañas, en
+  // vez de separarse por año — igual que No+Violencia.
   const FAMILIA_LEGACY = {
+    "crianza-responsable-ii": "Crianza responsable",
+    "crianza-responsable-iii": "Crianza responsable",
     "no-violencia-ii": "No+Violencia",
     "no-violencia-iiia": "No+Violencia",
-    "no-violencia-iiib": "No+Violencia"
+    "no-violencia-iiib": "No+Violencia",
+    "matematicamente": "Matemáticamente",
+    "mi-prepa": "Mi Prepa",
+    "voca-accion": "Voca Acción",
+    "vocaaccion": "Voca Acción"
   };
   function inferFamiliaLegacy(slug){
     return FAMILIA_LEGACY[slug] || null;
@@ -1582,28 +1589,19 @@ const db = firebase.firestore();
       !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
     );
 
-    // Los cursos con "familia" (p. ej. las 3 ediciones de No+Violencia) se
-    // agrupan juntos bajo ese nombre en vez de separarse por año.
-    const conFamilia = visible.filter(c => c.familia);
-    const sinFamilia = visible.filter(c => !c.familia);
+    // Cada curso se agrupa por familia (todas sus ediciones juntas, sin
+    // separarse por año) — igual que No+Violencia. Si no tiene familia
+    // asignada, su propio nombre es su familia (grupo de un solo curso),
+    // así todos los grupos se ven y se comportan igual.
+    const withFamilia = visible.map(c => Object.assign({}, c, {_familia: c.familia || c.displayName}));
+    const familias = Array.from(new Set(withFamilia.map(c => c._familia))).sort();
     let colorStart = 0;
-
-    const familias = Array.from(new Set(conFamilia.map(c => c.familia))).sort();
     familias.forEach(familia => {
-      const list = conFamilia.filter(c => c.familia === familia)
+      const list = withFamilia.filter(c => c._familia === familia)
         .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
       addGroup(familia, list, colorStart);
       colorStart += list.length;
     });
-
-    const anios = Array.from(new Set(sinFamilia.map(c => c.anio).filter(Boolean))).sort();
-    anios.forEach(anio => {
-      const list = sinFamilia.filter(c => c.anio === anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
-      addGroup(String(anio), list, colorStart);
-      colorStart += list.length;
-    });
-    const sinAnio = sinFamilia.filter(c => !c.anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
-    addGroup(anios.length ? "Sin año" : "Cursos", sinAnio, colorStart);
   }
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
