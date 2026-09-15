@@ -893,7 +893,7 @@ const db = firebase.firestore();
   // hay opción de archivar en el panel, así que esto es lo que hay.
   document.getElementById("btn-delete-old-addon").addEventListener("click", async () => {
     const btn = document.getElementById("btn-delete-old-addon");
-    const slugs = ["n-v-add-on-ii", "n-v-add-on-iiia", "n-v-add-on-iiib"];
+    const slugs = ["n-v-add-on-ii", "n-v-add-on-iiia", "n-v-add-on-iiib", "n-v-add-on-v"];
     const confirmMsg = "Esto BORRA POR COMPLETO estos 3 cursos y toda su información (no se puede deshacer):\n\n" +
       slugs.map(s => "  " + s).join("\n") +
       "\n\n¿Seguro que quieres continuar?";
