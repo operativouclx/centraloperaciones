@@ -226,6 +226,8 @@
     display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;
   }
   .course-head h2{font-size:20px;}
+  .btn-rename-course{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;margin-left:6px;padding:2px;vertical-align:middle;}
+  .btn-rename-course:hover{color:var(--teal-dark);}
   .course-meta-list{display:flex;flex-wrap:wrap;gap:18px;margin-top:8px;}
   .course-meta-item{font-size:12.5px;color:var(--ink-soft);}
   .course-meta-item b{color:var(--ink);display:block;font-size:15px;font-family:'Fraunces',serif;font-weight:600;}
@@ -408,7 +410,8 @@
 
       <div id="course-head" class="course-head hidden">
         <div>
-          <h2 id="course-name-display"></h2>
+          <h2 id="course-name-display" style="display:inline"></h2>
+          <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎</button>
           <div class="course-meta-list">
             <div class="course-meta-item" id="cm-item-santander-total"><b id="cm-santander-count">0</b><span id="cm-label-santander-total">Total Santander</span></div>
             <div class="course-meta-item" id="cm-item-plataforma-total"><b id="cm-plataforma-count">0</b>Total plataforma</div>
@@ -682,6 +685,26 @@ const db = firebase.firestore();
     if(defaultTipo) defaultTipo.checked = true;
     openModal("modal-course");
     document.getElementById("course-new-name").focus();
+  });
+  document.getElementById("btn-rename-course").addEventListener("click", async () => {
+    if(!app.slug || !app.meta) return;
+    const current = app.meta.displayName || "";
+    const input = prompt("Nuevo nombre para este curso:", current);
+    if(input === null) return;
+    const nuevo = input.trim();
+    if(!nuevo || nuevo === current) return;
+    try{
+      await courseDoc(app.slug).set({displayName: nuevo}, {merge:true});
+      app.meta.displayName = nuevo;
+      document.getElementById("course-name-display").textContent = nuevo;
+      const idx = app.coursesIndex.find(c => c.slug === app.slug);
+      if(idx) idx.displayName = nuevo;
+      renderCourseSelect();
+      renderCourseTabs();
+    }catch(err){
+      console.error("No se pudo renombrar el curso:", err);
+      alert("No se pudo renombrar: " + (err && err.message ? err.message : err));
+    }
   });
   document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
   document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
