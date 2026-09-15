@@ -1049,7 +1049,8 @@ const db = firebase.firestore();
     {prefix:"matematicamente", familia:"Matemáticamente"},
     {prefix:"mi-prepa", familia:"Mi Prepa"},
     {prefix:"voca-accion", familia:"Vocaaccion"},
-    {prefix:"vocaaccion", familia:"Vocaaccion"}
+    {prefix:"vocaaccion", familia:"Vocaaccion"},
+    {prefix:"vocaccion", familia:"Vocaaccion"}
   ];
   function inferFamiliaLegacy(slug){
     const s = slug || "";
@@ -1503,48 +1504,58 @@ const db = firebase.firestore();
     }
   }
 
-  // Los cursos que comparten familia + cliente (p. ej. las 3 ediciones de
-  // No+Violencia) son un solo grupo: la meta de convocatoria es una sola
-  // para todo el grupo, no por edición.
-  function cursosDelGrupo(familia, cliente){
-    return app.coursesIndex.filter(c => !c.archived &&
-      (c.cliente || inferClienteLegacy(c.displayName)) === cliente &&
-      (c.familia || inferFamiliaLegacy(c.slug)) === familia
-    );
+  // Los cursos que comparten familia + cliente + año (p. ej. las
+  // ediciones de No+Violencia de 2026) son un solo grupo: la meta de
+  // convocatoria es ANUAL — una sola para ese grupo en ese año, no por
+  // edición y no compartida entre años.
+  function cursosDelGrupo(familia, cliente, anio){
+    return app.coursesIndex.filter(c => {
+      if(c.archived) return false;
+      if((c.cliente || inferClienteLegacy(c.displayName)) !== cliente) return false;
+      if((c.familia || inferFamiliaLegacy(c.slug)) !== familia) return false;
+      const cAnio = c.anio || inferAnioLegacy(c.slug);
+      return anio === SIN_ANIO ? !cAnio : cAnio === anio;
+    });
   }
 
-  // Suma el "Total Inscritos" de todas las ediciones del grupo, para
-  // comparar contra la meta el avance de todo el grupo, no solo de esta
-  // edición.
-  function familiaInscritosTotal(familia, cliente){
+  // Suma el "Total Inscritos" de las ediciones del grupo en ESE año, para
+  // comparar contra la meta el avance de todo el grupo ese año.
+  function familiaInscritosTotal(familia, cliente, anio){
     if(!familia) return (app.meta.stats && app.meta.stats.total) || 0;
-    return cursosDelGrupo(familia, cliente)
+    return cursosDelGrupo(familia, cliente, anio)
       .reduce((sum, c) => sum + ((c.stats && c.stats.total) || 0), 0);
   }
 
-  // Guarda la meta de convocatoria para TODO el grupo (todas las
-  // ediciones que comparten familia + cliente) — se usa desde el control
-  // que aparece junto a la etiqueta del grupo en las pestañas de curso.
-  async function guardarMetaConvocatoriaGrupo(familia, cliente, metaConvocatoria){
-    const grupo = cursosDelGrupo(familia, cliente);
+  // Guarda la meta de convocatoria para el grupo en ese año — se usa
+  // desde el control que aparece junto a la etiqueta del grupo en las
+  // pestañas de curso.
+  async function guardarMetaConvocatoriaGrupo(familia, cliente, anio, metaConvocatoria){
+    const grupo = cursosDelGrupo(familia, cliente, anio);
     await Promise.all(grupo.map(c => courseDoc(c.slug).set({metaConvocatoria}, {merge:true})));
     grupo.forEach(c => { c.metaConvocatoria = metaConvocatoria; });
     if(app.meta && (app.meta.familia || inferFamiliaLegacy(app.slug)) === familia &&
-       (app.meta.cliente || inferClienteLegacy(app.meta.displayName)) === cliente){
+       (app.meta.cliente || inferClienteLegacy(app.meta.displayName)) === cliente &&
+       (app.meta.anio || inferAnioLegacy(app.slug)) === anio){
       app.meta.metaConvocatoria = metaConvocatoria;
       renderDashboard(app.meta.stats);
     }
+  }
+
+  // 2025 no lleva meta de convocatoria (son ediciones que ya cierran, no
+  // convocatoria activa) — solo aplica de 2026 en adelante.
+  function grupoTieneMeta(cliente, anio){
+    return cliente !== "alianza" && anio !== 2025;
   }
 
   // Control inline (input + progreso) para la meta de convocatoria de un
   // grupo, mostrado junto a su etiqueta en las pestañas de curso — así se
   // ve cuántos inscritos trae cada convocatoria y a qué % va, sin tener
   // que abrir el curso.
-  function buildGroupMetaControl(familia, cliente){
-    const grupo = cursosDelGrupo(familia, cliente);
+  function buildGroupMetaControl(familia, cliente, anio){
+    const grupo = cursosDelGrupo(familia, cliente, anio);
     const anyMeta = grupo.find(c => typeof c.metaConvocatoria === "number");
     const metaVal = anyMeta ? anyMeta.metaConvocatoria : null;
-    const inscritos = familiaInscritosTotal(familia, cliente);
+    const inscritos = familiaInscritosTotal(familia, cliente, anio);
 
     const wrap = el("span", {style:"display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:none;"});
     const input = el("input", {
@@ -1563,7 +1574,7 @@ const db = firebase.firestore();
       if(nuevo === metaVal) return;
       input.disabled = true;
       try{
-        await guardarMetaConvocatoriaGrupo(familia, cliente, nuevo);
+        await guardarMetaConvocatoriaGrupo(familia, cliente, anio, nuevo);
         renderCourseGroups();
       }catch(err){
         console.error("No se pudo guardar la meta de convocatoria del grupo:", err);
@@ -1657,7 +1668,7 @@ const db = firebase.firestore();
       const groupWrap = el("div", {class:"course-tabs-yeargroup"});
       const labelRow = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;"});
       labelRow.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(label)]));
-      if(app.selectedCliente !== "alianza") labelRow.appendChild(buildGroupMetaControl(label, app.selectedCliente));
+      if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)) labelRow.appendChild(buildGroupMetaControl(label, app.selectedCliente, app.selectedAnio));
       groupWrap.appendChild(labelRow);
       const row = el("div", {class:"course-tabs-yeargroup-row"});
       list.forEach((c, i) => {
@@ -3308,9 +3319,10 @@ const db = firebase.firestore();
     if(typeof meta.metaConvocatoria === "number" && meta.metaConvocatoria > 0){
       const clienteMeta = meta.cliente || inferClienteLegacy(meta.displayName);
       const familiaMeta = meta.familia || inferFamiliaLegacy(app.slug);
-      const inscritosGrupo = familiaInscritosTotal(familiaMeta, clienteMeta);
+      const anioMeta = meta.anio || inferAnioLegacy(app.slug);
+      const inscritosGrupo = familiaInscritosTotal(familiaMeta, clienteMeta, anioMeta);
       const pctMeta = Math.round((inscritosGrupo/meta.metaConvocatoria)*100);
-      convRow.appendChild(dashBoxMetric("Meta del grupo" + (familiaMeta ? " (" + familiaMeta + ")" : ""), meta.metaConvocatoria, pctMeta, "#5c57d8"));
+      convRow.appendChild(dashBoxMetric("Meta " + (anioMeta || "") + (familiaMeta ? " (" + familiaMeta + ")" : ""), meta.metaConvocatoria, pctMeta, "#5c57d8"));
     }
     convCard.appendChild(convRow);
     grid.appendChild(convCard);
