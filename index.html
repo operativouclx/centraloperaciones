@@ -2396,10 +2396,16 @@ const storage = firebase.storage();
     return box;
   }
 
-  function dashMetric(value, label, color){
-    const m = el("div", {style:"display:flex;flex-direction:column;gap:4px"});
+  function dashMetric(value, label, color, pct){
+    const m = el("div", {style:"display:flex;flex-direction:column;gap:6px"});
     m.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:30px;color:" + color}, [document.createTextNode(String(value))]));
     m.appendChild(el("div", {style:"font-size:12.5px;color:#5c5c7a"}, [document.createTextNode(label)]));
+    if(typeof pct === "number"){
+      const track = el("div", {style:"width:100%;height:6px;border-radius:4px;background:#eef0fb;overflow:hidden"});
+      const fill = el("div", {style:"height:100%;border-radius:4px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
+      track.appendChild(fill);
+      m.appendChild(track);
+    }
     return m;
   }
 
@@ -2409,8 +2415,9 @@ const storage = firebase.storage();
     head.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode(title)]));
     head.appendChild(dashStatusBadge(statusField, meta[statusField] || "En progreso"));
     card.appendChild(head);
+    const maxVal = Math.max(1, ...items.map(([,value]) => value));
     const grid = el("div", {style:"display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px"});
-    items.forEach(([label, value]) => grid.appendChild(dashMetric(value, label, metricColor)));
+    items.forEach(([label, value]) => grid.appendChild(dashMetric(value, label, metricColor, (value / maxVal) * 100)));
     card.appendChild(grid);
     return card;
   }
@@ -2484,6 +2491,16 @@ const storage = firebase.storage();
     titleWrap.appendChild(dashCohortLine(meta));
     headerLeft.appendChild(titleWrap);
     header.appendChild(headerLeft);
+
+    const headerRight = el("div", {style:"display:flex;align-items:center;gap:12px;flex-shrink:0"});
+    const uclxBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:10px;padding:12px 20px;display:flex;align-items:center;height:60px"});
+    uclxBox.appendChild(el("img", {src:"./assets/uclx-logo.svg", alt:"UCLX", style:"height:32px;width:auto;object-fit:contain"}));
+    headerRight.appendChild(uclxBox);
+    const soaBox = el("div", {style:"border:1px solid #e2e2ee;border-radius:10px;padding:12px 20px;display:flex;align-items:center;height:60px"});
+    soaBox.appendChild(el("img", {src:"./assets/santander-open-academy.svg", alt:"Santander Open Academy", style:"height:22px;width:auto;object-fit:contain"}));
+    headerRight.appendChild(soaBox);
+    header.appendChild(headerRight);
+
     wrap.appendChild(header);
 
     // ---- convocatoria / operación ----
