@@ -402,6 +402,7 @@
 
   <section id="section-course">
     <div class="panel panel-compact">
+      <div class="course-tabs" id="cliente-tabs" style="margin-bottom:10px;"></div>
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
@@ -415,8 +416,10 @@
           <h2 id="course-name-display" style="display:inline"></h2>
           <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎</button>
           <div class="course-meta-list">
-            <div class="course-meta-item" id="cm-item-santander-total"><b id="cm-santander-count">0</b><span id="cm-label-santander-total">Total Santander</span></div>
-            <div class="course-meta-item" id="cm-item-plataforma-total"><b id="cm-plataforma-count">0</b>Total plataforma</div>
+            <div class="course-meta-item" id="cm-item-cliente-anio" style="cursor:pointer" title="Cambiar cliente / año"><b id="cm-cliente-anio">—</b></div>
+            <div class="course-meta-item" id="cm-item-meta-convocatoria" style="cursor:pointer" title="Cambiar meta de convocatoria"><b id="cm-meta-convocatoria">—</b></div>
+            <div class="course-meta-item" id="cm-item-convocatoria-status"></div>
+            <div class="course-meta-item" id="cm-item-operacion-status"></div>
             <div class="course-meta-item"><b id="cm-last-santander">—</b><span id="cm-label-santander">última carga Santander</span></div>
             <div class="course-meta-item" id="cm-item-plataforma"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
           </div>
@@ -530,6 +533,18 @@
           <label class="radio-opt"><input type="radio" name="course-new-tipo" value="historico"> Histórico (una sola lista final)</label>
         </div>
         <div class="status-line">Un curso histórico no cruza contra Santander: solo sube una lista final con nombre, correo y % de avance.</div>
+      </div>
+      <div class="field-row">
+        <label for="course-new-cliente">Cliente</label>
+        <select id="course-new-cliente" class="input-text">
+          <option value="soa">Santander Open Academy</option>
+          <option value="santander">Santander</option>
+          <option value="alianza">Alianza</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="course-new-anio">Año</label>
+        <input id="course-new-anio" type="number" class="input-text" placeholder="p. ej. 2025">
       </div>
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;">
         <button class="btn btn-ghost btn-small" type="button" data-close-modal="modal-course">Cancelar</button>
@@ -1003,13 +1018,31 @@ const db = firebase.firestore();
     baseline: null,      // snapshot semanal (para calcular "cuánto se movió" en la vista del curso)
     courseLoadToken: 0, // evita que una carga vieja pise los datos si el usuario cambia de curso
     pending: { santander:null, plataforma:null, listafinal:null, addon:null },
-    lastRun: { alta:[], revisar:[] }
+    lastRun: { alta:[], revisar:[] },
+    selectedCliente: (function(){
+      try{ return localStorage.getItem("uclx-cliente") || "soa"; }catch(e){ return "soa"; }
+    })()
   };
 
-  function emptyMeta(displayName, slug, tipo){
+  // Los 3 clientes de la plataforma. Los cursos que ya existían antes de
+  // agregar este campo no tienen "cliente" guardado en Firestore, así que
+  // se infieren con esta regla: todos son de Santander Open Academy salvo
+  // Salud Financiera, que es de Santander.
+  const CLIENTES = [
+    {id:"soa", label:"Santander Open Academy"},
+    {id:"santander", label:"Santander"},
+    {id:"alianza", label:"Alianza"}
+  ];
+  function inferClienteLegacy(displayName){
+    return (displayName || "").trim().toLowerCase() === "salud financiera" ? "santander" : "soa";
+  }
+
+  function emptyMeta(displayName, slug, tipo, cliente, anio){
     return {
       displayName, slug,
       tipo: tipo === "historico" ? "historico" : "activo",
+      cliente: cliente || "soa",
+      anio: anio || null,
       createdAt: nowISO(), updatedAt: nowISO(),
       santanderMapping: null,
       plataformaMapping: null,
@@ -1031,6 +1064,7 @@ const db = firebase.firestore();
       cohort: "",
       convocatoriaStatus: "En progreso",
       operacionStatus: "En progreso",
+      metaConvocatoria: null,
       lastRun: { revisar: [] }
     };
   }
@@ -1150,6 +1184,8 @@ const db = firebase.firestore();
         updatedAt: data.updatedAt,
         stats: data.stats || emptyStats(),
         tipo: data.tipo === "historico" ? "historico" : "activo",
+        cliente: data.cliente || inferClienteLegacy(data.displayName || d.id),
+        anio: data.anio || null,
         lastSantanderUpload: data.lastSantanderUpload || null,
         lastPlataformaUpload: data.lastPlataformaUpload || null,
         lastListaFinalUpload: data.lastListaFinalUpload || null,
@@ -1366,6 +1402,7 @@ const db = firebase.firestore();
       errorBox.classList.remove("hidden");
     }
     renderCourseSelect();
+    renderClienteTabs();
     renderCourseTabs();
   }
 
@@ -1375,6 +1412,99 @@ const db = firebase.firestore();
     sel.appendChild(el("option", {value:""}, [document.createTextNode(app.coursesIndex.length ? "Elige un curso..." : "Aún no hay cursos guardados")]));
     app.coursesIndex.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach(c => {
       sel.appendChild(el("option", {value:c.slug}, [document.createTextNode(c.displayName)]));
+    });
+  }
+
+  function renderClienteAnioLabel(){
+    const cliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
+    const clienteLabel = (CLIENTES.find(c => c.id === cliente) || {}).label || cliente;
+    document.getElementById("cm-cliente-anio").textContent =
+      clienteLabel + (app.meta.anio ? " · " + app.meta.anio : " · sin año — clic para asignar");
+  }
+
+  document.getElementById("cm-item-cliente-anio").addEventListener("click", async () => {
+    if(!app.slug) return;
+    const clienteActual = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
+    const opciones = CLIENTES.map(c => c.id + " = " + c.label).join("\n");
+    const clienteInput = prompt("Cliente de este curso:\n" + opciones, clienteActual);
+    if(clienteInput === null) return;
+    const clienteId = CLIENTES.some(c => c.id === clienteInput.trim()) ? clienteInput.trim() : clienteActual;
+
+    const anioInput = prompt("Año de este curso (ej. 2025), vacío para quitarlo:", app.meta.anio || "");
+    if(anioInput === null) return;
+    const anio = anioInput.trim() ? parseInt(anioInput.trim(), 10) : null;
+
+    try{
+      await courseDoc(app.slug).set({cliente: clienteId, anio}, {merge:true});
+      app.meta.cliente = clienteId;
+      app.meta.anio = anio;
+      const idx = app.coursesIndex.find(c => c.slug === app.slug);
+      if(idx){ idx.cliente = clienteId; idx.anio = anio; }
+      renderClienteAnioLabel();
+      app.selectedCliente = clienteId;
+      try{ localStorage.setItem("uclx-cliente", clienteId); }catch(e){}
+      renderClienteTabs();
+      renderCourseTabs();
+    }catch(err){
+      console.error("No se pudo guardar cliente/año:", err);
+      alert("No se pudo guardar: " + (err && err.message ? err.message : err));
+    }
+  });
+
+  function renderMetaConvocatoriaLabel(){
+    const meta = app.meta.metaConvocatoria;
+    document.getElementById("cm-meta-convocatoria").textContent =
+      typeof meta === "number" ? "Meta convocatoria: " + meta : "Sin meta de convocatoria — clic para asignar";
+  }
+
+  document.getElementById("cm-item-meta-convocatoria").addEventListener("click", async () => {
+    if(!app.slug) return;
+    const input = prompt("Meta de convocatoria de este curso (número de personas), vacío para quitarla:",
+      typeof app.meta.metaConvocatoria === "number" ? app.meta.metaConvocatoria : "");
+    if(input === null) return;
+    const metaConvocatoria = input.trim() ? parseInt(input.trim(), 10) : null;
+    try{
+      await courseDoc(app.slug).set({metaConvocatoria}, {merge:true});
+      app.meta.metaConvocatoria = metaConvocatoria;
+      renderMetaConvocatoriaLabel();
+      renderDashboard(app.meta.stats);
+    }catch(err){
+      console.error("No se pudo guardar la meta de convocatoria:", err);
+      alert("No se pudo guardar: " + (err && err.message ? err.message : err));
+    }
+  });
+
+  // Reutiliza dashStatusBadge (definido más abajo) para que el estatus se
+  // pueda ver y cambiar tanto en el encabezado del curso como en el
+  // dashboard, sin duplicar la lógica de guardado.
+  function renderCourseHeadStatusBadges(){
+    const convBox = document.getElementById("cm-item-convocatoria-status");
+    convBox.innerHTML = "";
+    convBox.appendChild(document.createTextNode("Convocatoria: "));
+    convBox.appendChild(dashStatusBadge("convocatoriaStatus", app.meta.convocatoriaStatus || "En progreso", renderCourseHeadStatusBadges));
+
+    const opBox = document.getElementById("cm-item-operacion-status");
+    opBox.innerHTML = "";
+    opBox.appendChild(document.createTextNode("Operación: "));
+    opBox.appendChild(dashStatusBadge("operacionStatus", app.meta.operacionStatus || "En progreso", renderCourseHeadStatusBadges));
+  }
+
+  function renderClienteTabs(){
+    const wrap = document.getElementById("cliente-tabs");
+    wrap.innerHTML = "";
+    CLIENTES.forEach((cli, i) => {
+      const btn = el("button", {
+        type:"button",
+        class:"course-tab c" + (i % 4) + (app.selectedCliente === cli.id ? " active" : "")
+      }, [document.createTextNode(cli.label)]);
+      btn.addEventListener("click", () => {
+        if(app.selectedCliente === cli.id) return;
+        app.selectedCliente = cli.id;
+        try{ localStorage.setItem("uclx-cliente", cli.id); }catch(e){}
+        renderClienteTabs();
+        renderCourseTabs();
+      });
+      wrap.appendChild(btn);
     });
   }
 
@@ -1395,12 +1525,19 @@ const db = firebase.firestore();
       });
     }
 
-    const visible = app.coursesIndex.filter(c => !c.archived);
-    const activos = visible.filter(c => c.tipo !== "historico").sort((a,b)=>a.displayName.localeCompare(b.displayName));
-    const historicos = visible.filter(c => c.tipo === "historico").sort((a,b)=>a.displayName.localeCompare(b.displayName));
-    addGroup("Activos", activos, 0);
-    if(activos.length && historicos.length) wrap.appendChild(el("div", {class:"course-tabs-break"}));
-    addGroup("Históricos", historicos, activos.length);
+    const visible = app.coursesIndex.filter(c =>
+      !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
+    );
+    const anios = Array.from(new Set(visible.map(c => c.anio).filter(Boolean))).sort();
+    let colorStart = 0;
+    anios.forEach(anio => {
+      const list = visible.filter(c => c.anio === anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+      addGroup(String(anio), list, colorStart);
+      colorStart += list.length;
+      wrap.appendChild(el("div", {class:"course-tabs-break"}));
+    });
+    const sinAnio = visible.filter(c => !c.anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    addGroup(anios.length ? "Sin año" : "Cursos", sinAnio, colorStart);
   }
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
@@ -1416,11 +1553,14 @@ const db = firebase.firestore();
     if(existing){ document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; closeModal("modal-course"); return; }
 
     const tipoSel = document.querySelector('input[name="course-new-tipo"]:checked');
-    const meta = emptyMeta(name, slug, tipoSel ? tipoSel.value : "activo");
+    const clienteSel = document.getElementById("course-new-cliente");
+    const anioInput = document.getElementById("course-new-anio");
+    const anio = anioInput.value.trim() ? parseInt(anioInput.value.trim(), 10) : null;
+    const meta = emptyMeta(name, slug, tipoSel ? tipoSel.value : "activo", clienteSel ? clienteSel.value : "soa", anio);
     setSaveStatus("Creando curso...");
     await createCourseRemote(meta);
     app.coursesIndex.push({
-      slug, displayName:name, updatedAt: meta.updatedAt, tipo: meta.tipo,
+      slug, displayName:name, updatedAt: meta.updatedAt, tipo: meta.tipo, cliente: meta.cliente, anio: meta.anio,
       stats: meta.stats, lastSantanderUpload: null, lastPlataformaUpload: null, lastListaFinalUpload: null, archived: false
     });
     renderCourseSelect();
@@ -1462,6 +1602,12 @@ const db = firebase.firestore();
       alta: []
     };
     setSaveStatus("");
+    const metaCliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
+    if(metaCliente !== app.selectedCliente){
+      app.selectedCliente = metaCliente;
+      try{ localStorage.setItem("uclx-cliente", metaCliente); }catch(e){}
+      renderClienteTabs();
+    }
     renderCourseTabs();
     resetTableFilter("madre");
 
@@ -1469,7 +1615,9 @@ const db = firebase.firestore();
 
     document.getElementById("course-head").classList.remove("hidden");
     document.getElementById("course-name-display").textContent = app.meta.displayName;
-    renderCourseMetaCounts();
+    renderClienteAnioLabel();
+    renderMetaConvocatoriaLabel();
+    renderCourseHeadStatusBadges();
     if(esHistorico){
       document.getElementById("cm-label-santander").textContent = "última carga de lista final";
       document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastListaFinalUpload);
@@ -1535,16 +1683,6 @@ const db = firebase.firestore();
     }
   }
 
-  function renderCourseMetaCounts(){
-    const stats = (app.meta && app.meta.stats) || emptyStats();
-    const esHistorico = app.meta && app.meta.tipo === "historico";
-    const snap = app.meta && app.meta.santanderStatusSnapshot;
-    document.getElementById("cm-santander-count").textContent = snap ? snap.santanderCount : stats.total;
-    document.getElementById("cm-label-santander-total").textContent = esHistorico ? "Total" : "Total Santander";
-    document.getElementById("cm-item-plataforma-total").classList.toggle("hidden", esHistorico);
-    document.getElementById("cm-plataforma-count").textContent = Math.max(stats.total - stats.alta, 0);
-  }
-
   function renderStatsFromMeta(){
     const stats = (app.meta && app.meta.stats) || emptyStats();
     document.getElementById("badge-madre").textContent = stats.total;
@@ -1552,7 +1690,6 @@ const db = firebase.firestore();
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
     document.getElementById("badge-addon").textContent = "…";
-    renderCourseMetaCounts();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
@@ -2321,7 +2458,6 @@ const db = firebase.firestore();
     document.getElementById("badge-historial").textContent = app.log.length;
     document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
 
-    renderCourseMetaCounts();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), {
       tipo: app.meta && app.meta.tipo,
       baselineDate: app.baseline && app.baseline.capturedAt,
@@ -2702,7 +2838,7 @@ const db = firebase.firestore();
       : { bg:"#e6ecff", fg:"#3d4fd8" };
   }
 
-  function dashStatusBadge(field, currentStatus){
+  function dashStatusBadge(field, currentStatus, onChange){
     const c = dashStatusColors(currentStatus);
     const badge = el("button", {type:"button", style:
       "font-size:12px;font-weight:600;padding:6px 12px;border:none;border-radius:100px;cursor:pointer;" +
@@ -2715,6 +2851,7 @@ const db = firebase.firestore();
         await courseDoc(app.slug).set({[field]: next}, {merge:true});
         app.meta[field] = next;
         renderDashboard(app.meta.stats);
+        if(onChange) onChange();
       }catch(err){
         console.error("No se pudo guardar el estatus:", err);
         alert("No se pudo guardar: " + (err && err.message ? err.message : err));
@@ -2986,19 +3123,23 @@ const db = firebase.firestore();
     const convCard = el("div", {style:"background:#ffffff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     const convHead = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
     convHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:14px"}, [document.createTextNode("Convocatoria")]));
-    convHead.appendChild(dashStatusBadge("convocatoriaStatus", meta.convocatoriaStatus || "En progreso"));
+    convHead.appendChild(dashStatusBadge("convocatoriaStatus", meta.convocatoriaStatus || "En progreso", renderCourseHeadStatusBadges));
     convCard.appendChild(convHead);
     const convRow = el("div", {style:"display:flex;gap:12px"});
     convRow.appendChild(dashBoxMetric("Total Inscritos", inscritos, 100, "#5c57d8"));
     const pctBecas = inscritos ? Math.round((becasAsignadas/inscritos)*100) : 0;
     convRow.appendChild(dashBoxMetric("Total Beca asignada", becasAsignadas, pctBecas, "#5c57d8"));
+    if(typeof meta.metaConvocatoria === "number" && meta.metaConvocatoria > 0){
+      const pctMeta = Math.round((becasAsignadas/meta.metaConvocatoria)*100);
+      convRow.appendChild(dashBoxMetric("Meta anual (" + (meta.anio || "s/año") + ")", meta.metaConvocatoria, pctMeta, "#5c57d8"));
+    }
     convCard.appendChild(convRow);
     grid.appendChild(convCard);
 
     const platCard = el("div", {style:"background:#ffffff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     const platHead = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
     platHead.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:14px"}, [document.createTextNode("Plataforma")]));
-    platHead.appendChild(dashStatusBadge("operacionStatus", meta.operacionStatus || "En progreso"));
+    platHead.appendChild(dashStatusBadge("operacionStatus", meta.operacionStatus || "En progreso", renderCourseHeadStatusBadges));
     platCard.appendChild(platHead);
     const platRow = el("div", {style:"display:flex;gap:14px;align-items:center"});
     const totalPlatBox = el("div", {style:"display:flex;flex-direction:column;gap:6px;width:84px;flex-shrink:0"});
