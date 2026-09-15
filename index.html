@@ -405,6 +405,7 @@
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
+        <button class="btn btn-ghost btn-small" id="btn-migrate-addon" type="button">Migrar N+V add on (antiguos)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -449,6 +450,7 @@
         <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
         <button class="tab" data-tab="revisar">En plataforma, no en Santander <span class="badge" id="badge-revisar">0</span></button>
         <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
+        <button class="tab" data-tab="addon">Add on <span class="badge" id="badge-addon">0</span></button>
         <button class="tab" data-tab="dashboard">Dashboard</button>
       </div>
 
@@ -489,6 +491,16 @@
 
       <div class="tab-panel" data-panel="historial">
         <div class="panel-note teal">Cada actualización que se ha corrido para este curso, la haya subido quien la haya subido.</div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="addon">
+        <div class="panel-note plum">Avance del add on de este curso, cruzado contra el mismo roster de Santander — no tiene su propia carga de Santander.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="addon">
+          <button class="btn btn-primary btn-small" id="btn-open-addon" type="button">Actualizar plataforma add on</button>
+          <button class="btn btn-ghost btn-small" data-download="addon">Descargar Excel</button>
+        </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
 
@@ -571,6 +583,30 @@
       <div class="cross-cta hidden" id="cta-plataforma">
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: cargar plataforma add on ======================= -->
+  <div class="modal-overlay hidden" id="modal-addon">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-addon">&times;</button>
+      <h3 class="modal-title">Actualizar plataforma — Add on</h3>
+      <p class="modal-sub">Sube el archivo de avance del add on. Se cruza contra el mismo roster de este curso (no necesita su propio Santander).</p>
+      <div class="panel-head">
+        <h3>Archivo de plataforma add on</h3>
+        <span class="file-tag hidden" id="tag-addon"></span>
+      </div>
+      <div class="drop" id="drop-addon">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx</div>
+      </div>
+      <input type="file" id="file-addon" accept=".xlsx,.xls">
+      <div id="mapping-addon" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-addon">
+        <button class="btn btn-primary" id="btn-process-addon" disabled>Cruzar con el roster</button>
+        <div class="status-line" id="addon-hint">Configura las columnas para continuar.</div>
       </div>
     </div>
   </div>
@@ -850,6 +886,86 @@ const db = firebase.firestore();
     }
   });
 
+  // ---------- migración única: N+V add on (cursos viejos) -> pestaña Add on ----------
+  // Los "N+V add on II/III/IV" existieron como cursos aparte antes de que
+  // el add on se volviera una pestaña dentro de No+Violencia. Esto copia
+  // su avance de plataforma ya cargado (estado/progreso/columnas extra)
+  // hacia los registros correspondientes en el curso nuevo, cruzando por
+  // correo o nombre. No borra ni toca los cursos viejos.
+  document.getElementById("btn-migrate-addon").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-migrate-addon");
+    const pairs = [
+      {old:"n-v-add-on-ii", nuevo:"no-violencia-ii"},
+      {old:"n-v-add-on-iiia", nuevo:"no-violencia-iiia"},
+      {old:"n-v-add-on-iiib", nuevo:"no-violencia-iiib"}
+    ];
+    const confirmMsg = "Esto copia el avance de plataforma ya cargado de los cursos viejos hacia el curso nuevo, como Add on:\n\n" +
+      pairs.map(p => "  " + p.old + "  →  " + p.nuevo).join("\n") +
+      "\n\nCruza por correo o nombre contra la tabla madre del curso nuevo. No borra ni modifica los cursos viejos. ¿Continuar?";
+    if(!confirm(confirmMsg)) return;
+
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    const reportes = [];
+    try{
+      for(const {old, nuevo} of pairs){
+        btn.textContent = "Migrando " + old + "...";
+        try{
+          const [oldDetail, newMetaSnap, newDetail] = await Promise.all([
+            loadCourseDetailRemote(old),
+            courseDoc(nuevo).get(),
+            loadCourseDetailRemote(nuevo)
+          ]);
+          if(!newMetaSnap.exists){
+            reportes.push(old + " → " + nuevo + ": el curso nuevo no existe, se omitió.");
+            continue;
+          }
+          const oldByEmail = new Map();
+          const oldByName = new Map();
+          oldDetail.master.forEach(r => {
+            const e = normalize(r.email);
+            const n = normalize(r.nombre);
+            if(e && !oldByEmail.has(e)) oldByEmail.set(e, r);
+            if(n && !oldByName.has(n)) oldByName.set(n, r);
+          });
+
+          const today = todayISO();
+          let matched = 0;
+          newDetail.master.forEach(record => {
+            const eNorm = normalize(record.email);
+            const nNorm = normalize(record.nombre);
+            let match = null;
+            if(eNorm && oldByEmail.has(eNorm)) match = oldByEmail.get(eNorm);
+            else if(nNorm && oldByName.has(nNorm)) match = oldByName.get(nNorm);
+            if(match){
+              matched++;
+              record.addOnExtra = match.plataformaExtra || {};
+              record.addOnEstado = match.estado || "Falta registrar";
+              if(typeof match.progreso === "number") record.addOnProgreso = match.progreso;
+              record.addOnUltimaActualizacion = match.ultimaActualizacionPlataforma || today;
+            }
+          });
+
+          const saveResult = await saveMasterBatched(nuevo, newDetail.master);
+          if(!saveResult.ok){
+            reportes.push(old + " → " + nuevo + ": " + matched + " coincidencias encontradas, pero el guardado falló parcialmente (" +
+              saveResult.failedRecords + " de " + saveResult.totalRecords + " no se guardaron) — vuelve a correr la migración.");
+          } else {
+            reportes.push(old + " → " + nuevo + ": " + matched + " de " + oldDetail.master.length + " registros migrados como Add on.");
+          }
+        }catch(err){
+          console.error("Error migrando " + old + ":", err);
+          reportes.push(old + " → " + nuevo + ": error — " + (err && err.message ? err.message : err));
+        }
+      }
+      alert("Migración de Add on terminada:\n\n" + reportes.join("\n"));
+      if(app.slug && pairs.some(p => p.nuevo === app.slug)) loadCourse(app.slug);
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+
   // ---------- modales ----------
   function openModal(id){ document.getElementById(id).classList.remove("hidden"); }
   function closeModal(id){ document.getElementById(id).classList.add("hidden"); }
@@ -967,7 +1083,7 @@ const db = firebase.firestore();
     masterReady: false, // false mientras la tabla madre completa sigue cargando de fondo
     baseline: null,      // snapshot semanal (para calcular "cuánto se movió" en la vista del curso)
     courseLoadToken: 0, // evita que una carga vieja pise los datos si el usuario cambia de curso
-    pending: { santander:null, plataforma:null, listafinal:null },
+    pending: { santander:null, plataforma:null, listafinal:null, addon:null },
     lastRun: { alta:[], revisar:[] }
   };
 
@@ -979,12 +1095,15 @@ const db = firebase.firestore();
       santanderMapping: null,
       plataformaMapping: null,
       listaFinalMapping: null,
+      addOnMapping: null,
       lastSantanderUpload: null,
       lastPlataformaUpload: null,
       lastListaFinalUpload: null,
+      lastAddOnUpload: null,
       lastSantanderFile: null,
       lastPlataformaFile: null,
       lastListaFinalFile: null,
+      lastAddOnFile: null,
       stats: emptyStats(),
       archived: false,
       santanderInscritos: null,
@@ -1449,7 +1568,7 @@ const db = firebase.firestore();
 
     document.getElementById("course-dependent").classList.remove("hidden");
 
-    ["santander","plataforma","listafinal"].forEach(kind => {
+    ["santander","plataforma","listafinal","addon"].forEach(kind => {
       document.getElementById("mapping-" + kind).classList.add("hidden");
       document.getElementById("mapping-" + kind).innerHTML = "";
       document.getElementById("cta-" + kind).classList.add("hidden");
@@ -1513,6 +1632,7 @@ const db = firebase.firestore();
     document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = "…";
+    document.getElementById("badge-addon").textContent = "…";
     renderCourseMetaCounts();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), {
       tipo: app.meta && app.meta.tipo,
@@ -1596,6 +1716,7 @@ const db = firebase.firestore();
     const headers = app.pending[kind].headers;
     const savedMap = kind === "santander" ? app.meta.santanderMapping
       : kind === "plataforma" ? app.meta.plataformaMapping
+      : kind === "addon" ? app.meta.addOnMapping
       : app.meta.listaFinalMapping;
 
     if(sheetNames.length > 1){
@@ -1765,6 +1886,33 @@ const db = firebase.firestore();
       progRow.appendChild(progSel);
       container.appendChild(progRow);
       progSel.addEventListener("change", checkReady);
+
+    } else if(kind === "addon"){
+      const nameRow = el("div", {class:"field-row"});
+      nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
+      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
+      const nameSel = makeHeaderSelect(headers, nameDefault);
+      nameSel.id = "map-addon-fullname";
+      nameRow.appendChild(nameSel);
+      container.appendChild(nameRow);
+      nameSel.addEventListener("change", checkReady);
+
+      const progRow = el("div", {class:"field-row"});
+      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
+      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
+        ? savedMap.progresoCol
+        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
+      const progSel = el("select");
+      progSel.id = "map-addon-progreso";
+      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === progDefault) opt.selected = true;
+        progSel.appendChild(opt);
+      });
+      progRow.appendChild(progSel);
+      container.appendChild(progRow);
+      progSel.addEventListener("change", checkReady);
     }
 
     checkReady();
@@ -1800,7 +1948,7 @@ const db = firebase.firestore();
   }
 
   function checkReady(){
-    ["santander","plataforma","listafinal"].forEach(kind => {
+    ["santander","plataforma","listafinal","addon"].forEach(kind => {
       const mappingReady = isReady(kind);
       const ready = mappingReady && app.masterReady;
       const btn = document.getElementById("btn-process-" + kind);
@@ -1816,6 +1964,9 @@ const db = firebase.firestore();
   wireUpload("santander");
   wireUpload("plataforma");
   wireUpload("listafinal");
+  wireUpload("addon");
+
+  document.getElementById("btn-open-addon").addEventListener("click", () => openModal("modal-addon"));
 
   function getSantanderName(row){
     const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
@@ -2035,6 +2186,83 @@ const db = firebase.firestore();
     closeModal("modal-plataforma");
   });
 
+  // ---------- procesar plataforma add on (comparte el roster de Santander, sin su propia carga de Santander) ----------
+  document.getElementById("btn-process-addon").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-process-addon");
+    btn.disabled = true; btn.textContent = "Procesando...";
+    setSaveStatus("Cruzando add on con el roster...");
+
+    const emailCol = document.getElementById("map-addon-email").value;
+    const nameCol = document.getElementById("map-addon-fullname").value;
+    const progresoCol = document.getElementById("map-addon-progreso").value;
+    const extraCols = otherCols(app.pending.addon.headers, [emailCol, nameCol, progresoCol]);
+    const today = todayISO();
+    let lockedCount = 0;
+    let matchedCount = 0;
+
+    const rows = app.pending.addon.rows;
+    const byEmail = new Map();
+    const byName = new Map();
+    rows.forEach(row => {
+      const e = normalize(row[emailCol]);
+      const n = normalize(row[nameCol]);
+      if(e && !byEmail.has(e)) byEmail.set(e, row);
+      if(n && !byName.has(n)) byName.set(n, row);
+    });
+
+    app.master.forEach(record => {
+      const eNorm = normalize(record.email);
+      const nNorm = normalize(record.nombre);
+      let match = null;
+      if(eNorm && byEmail.has(eNorm)) match = byEmail.get(eNorm);
+      else if(nNorm && byName.has(nNorm)) match = byName.get(nNorm);
+
+      if(match){
+        matchedCount++;
+        const vals = {};
+        extraCols.forEach(c => vals[c] = match[c]);
+        record.addOnExtra = vals;
+        record.addOnEstado = "En plataforma";
+        record.addOnUltimaActualizacion = today;
+        if(progresoCol){
+          const parsed = parsePct(match[progresoCol]);
+          if(parsed !== null){
+            const prevProgreso = typeof record.addOnProgreso === "number" ? record.addOnProgreso : 0;
+            if(parsed < prevProgreso) lockedCount++;
+            record.addOnProgreso = Math.max(prevProgreso, parsed);
+          }
+        }
+      }
+    });
+    const noEncontrados = rows.length - matchedCount;
+
+    app.meta.addOnMapping = {emailCol, nameCol, progresoCol, extraCols};
+    app.meta.lastAddOnUpload = today;
+    app.meta.lastAddOnFile = app.pending.addon.fileName;
+    app.meta.updatedAt = nowISO();
+
+    let resumen = matchedCount + " coinciden con el roster";
+    if(noEncontrados > 0) resumen += ", " + noEncontrados + " fila(s) del archivo no se encontraron en la tabla madre (revisa nombre/correo)";
+    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s)";
+    const logEntry = {
+      date: nowISO(), tipo:"Add on", archivo: app.pending.addon.fileName,
+      resumen: resumen,
+      por: (auth.currentUser && auth.currentUser.email) || ""
+    };
+    app.log.unshift(logEntry);
+
+    await persistUpdate(logEntry);
+
+    document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
+
+    renderMasterTable();
+    renderHistorial();
+
+    btn.disabled = false; btn.textContent = "Cruzar con el roster";
+    document.querySelector('.tab[data-tab="addon"]').click();
+    closeModal("modal-addon");
+  });
+
   // ---------- procesar lista final (cursos históricos, sin cruce con Santander) ----------
   document.getElementById("btn-process-listafinal").addEventListener("click", async () => {
     const btn = document.getElementById("btn-process-listafinal");
@@ -2146,6 +2374,24 @@ const db = firebase.firestore();
     return row;
   }
 
+  // El add on comparte el roster de Santander del curso — no tiene su
+  // propia tabla madre, solo su propio avance de plataforma por persona.
+  function flattenAddOnRow(record){
+    const row = {};
+    row["Estado Add on"] = record.addOnEstado || "Falta registrar";
+    row["Progreso Add on"] = (typeof record.addOnProgreso === "number") ? record.addOnProgreso + "%" : "—";
+    row["Nombre"] = record.nombre;
+    row["Email"] = record.email;
+    const usedKeys = new Set(["Estado Add on","Progreso Add on","Nombre","Email"]);
+    Object.keys(record.addOnExtra || {}).forEach(c => {
+      const label = usedKeys.has(c) ? c + " (Add on)" : c;
+      row[label] = record.addOnExtra[c];
+      usedKeys.add(label);
+    });
+    row["Última actualización add on"] = record.addOnUltimaActualizacion || "";
+    return row;
+  }
+
   function renderStats(){
     const stats = computeMasterStats(app.master);
     app.meta.stats = stats;
@@ -2154,6 +2400,7 @@ const db = firebase.firestore();
     document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-historial").textContent = app.log.length;
+    document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
 
     renderCourseMetaCounts();
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), {
@@ -2174,6 +2421,7 @@ const db = firebase.firestore();
     // tabla completa (crítico con cursos de miles de registros).
     refreshTableView("madre");
     renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
+    renderSideTable("addon", app.master.map(flattenAddOnRow));
   }
 
   function renderSideTable(key, rows){
@@ -2215,10 +2463,10 @@ const db = firebase.firestore();
         cols.forEach(c => {
           const val = r[c];
           const td = el("td");
-          if(c === "Estado"){
+          if(c === "Estado" || c === "Estado Add on"){
             const span = el("span", {class:"badge-status " + (val === "En plataforma" ? "ok" : "falta")}, [document.createTextNode(val)]);
             td.appendChild(span);
-          } else if(c === "Progreso"){
+          } else if(c === "Progreso" || c === "Progreso Add on"){
             const pct = parseFloat(val);
             const cls = isNaN(pct) ? "" : (pct <= 0 ? "p0" : pct <= 25 ? "p1" : pct <= 50 ? "p2" : pct < 80 ? "p3" : "p4");
             const span = el("span", {class:"badge-progreso " + cls}, [document.createTextNode(val)]);
@@ -2900,6 +3148,7 @@ const db = firebase.firestore();
   function currentRowsFor(key){
     if(key === "madre") return app.master.map(flattenMasterRow);
     if(key === "alta") return app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow);
+    if(key === "addon") return app.master.map(flattenAddOnRow);
     return app.lastRun[key] || [];
   }
 
@@ -2958,7 +3207,7 @@ const db = firebase.firestore();
       const rows = currentRowsFor(key);
       if(!rows.length) return;
       const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
-      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander"};
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on"};
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Datos");
