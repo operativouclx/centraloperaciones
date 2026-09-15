@@ -426,9 +426,10 @@
           <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎ renombrar</button>
           <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷 cliente / año</button>
           <button type="button" id="btn-delete-course" class="btn-rename-course" title="Eliminar este curso por completo" style="color:var(--rust);">🗑 eliminar curso</button>
-          <div class="course-meta-list">
-            <div class="course-meta-item" id="cm-item-santander"><b id="cm-last-santander">—</b><span id="cm-label-santander">última carga Santander</span></div>
-            <div class="course-meta-item" id="cm-item-plataforma"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
+          <div class="course-head-actions" style="margin-top:10px;">
+            <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
+            <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
+            <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
           </div>
           <div class="save-status" id="save-status"></div>
         </div>
@@ -449,12 +450,6 @@
             <div class="course-meta-item" id="cm-item-operacion-status"></div>
           </div>
         </div>
-      </div>
-
-      <div class="course-head-actions" style="margin-bottom:16px;">
-        <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
-        <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
-        <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
       </div>
 
       <div id="course-progress-summary" class="progress-summary"></div>
@@ -1880,23 +1875,6 @@ const db = firebase.firestore();
     renderCourseNameDisplay();
     renderCourseHeadStatusBadges();
     renderFamilyMetaPanel();
-    if(esHistorico){
-      document.getElementById("cm-item-santander").classList.remove("hidden");
-      document.getElementById("cm-label-santander").textContent = "última carga de lista final";
-      document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastListaFinalUpload);
-      document.getElementById("cm-item-plataforma").classList.add("hidden");
-    } else if(esAlianza){
-      document.getElementById("cm-item-santander").classList.add("hidden");
-      document.getElementById("cm-item-plataforma").classList.remove("hidden");
-      document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
-    } else {
-      document.getElementById("cm-item-santander").classList.remove("hidden");
-      document.getElementById("cm-label-santander").textContent = "última carga Santander";
-      document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
-      document.getElementById("cm-item-plataforma").classList.remove("hidden");
-      document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
-    }
-
     document.getElementById("btn-open-santander").classList.toggle("hidden", esHistorico || esAlianza);
     document.getElementById("btn-open-plataforma").classList.toggle("hidden", esHistorico);
     document.getElementById("btn-open-listafinal").classList.toggle("hidden", !esHistorico);
@@ -2389,8 +2367,6 @@ const db = firebase.firestore();
 
     await persistUpdate(logEntry);
 
-    document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastSantanderUpload);
-
     renderStats();
     renderMasterTable();
     renderHistorial();
@@ -2498,7 +2474,6 @@ const db = firebase.firestore();
     await persistUpdate(logEntry);
 
     app.lastRun.revisar = revisar;
-    document.getElementById("cm-last-plataforma").textContent = fmtDate(app.meta.lastPlataformaUpload);
 
     renderStats();
     renderMasterTable();
@@ -2661,8 +2636,6 @@ const db = firebase.firestore();
     app.log.unshift(logEntry);
 
     await persistUpdate(logEntry);
-
-    document.getElementById("cm-last-santander").textContent = fmtDate(app.meta.lastListaFinalUpload);
 
     renderStats();
     renderMasterTable();
