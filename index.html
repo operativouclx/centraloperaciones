@@ -405,7 +405,6 @@
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
-        <button class="btn btn-ghost btn-small" id="btn-delete-old-addon" type="button">Eliminar N+V add on (antiguos)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -880,43 +879,6 @@ const db = firebase.firestore();
     }catch(err){
       console.error("No se pudo exportar la base completa:", err);
       alert("No se pudo exportar: " + (err && err.message ? err.message : err));
-    }finally{
-      btn.disabled = false;
-      btn.textContent = originalText;
-    }
-  });
-
-  // ---------- eliminación única: cursos viejos "N+V add on" ----------
-  // El add on ya es una pestaña dentro de No+Violencia (con su avance ya
-  // migrado), así que estos 3 cursos aparte ya no hacen falta. Se borran
-  // por completo (documento + subcolecciones master/log/weeklyStats) — no
-  // hay opción de archivar en el panel, así que esto es lo que hay.
-  document.getElementById("btn-delete-old-addon").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-delete-old-addon");
-    const slugs = ["n-v-add-on-ii", "n-v-add-on-iiia", "n-v-add-on-iiib", "n-v-add-on-v"];
-    const confirmMsg = "Esto BORRA POR COMPLETO estos 3 cursos y toda su información (no se puede deshacer):\n\n" +
-      slugs.map(s => "  " + s).join("\n") +
-      "\n\n¿Seguro que quieres continuar?";
-    if(!confirm(confirmMsg)) return;
-
-    btn.disabled = true;
-    const originalText = btn.textContent;
-    const reportes = [];
-    try{
-      for(const slug of slugs){
-        btn.textContent = "Borrando " + slug + "...";
-        try{
-          await deleteCourseRemote(slug);
-          reportes.push(slug + ": borrado.");
-        }catch(err){
-          console.error("Error borrando " + slug + ":", err);
-          reportes.push(slug + ": error — " + (err && err.message ? err.message : err));
-        }
-      }
-      alert("Listo:\n\n" + reportes.join("\n"));
-      app.coursesIndex = app.coursesIndex.filter(c => !slugs.includes(c.slug));
-      renderCourseSelect();
-      renderCourseTabs();
     }finally{
       btn.disabled = false;
       btn.textContent = originalText;
