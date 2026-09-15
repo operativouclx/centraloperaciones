@@ -425,8 +425,9 @@
         <div>
           <h2 id="course-name-display" style="display:inline"></h2>
           <span id="course-edition-display" style="display:inline;font-size:13px;color:var(--ink-soft);font-weight:600;margin-left:6px;"></span>
-          <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎</button>
-          <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷</button>
+          <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎ renombrar</button>
+          <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷 cliente / año</button>
+          <button type="button" id="btn-delete-course" class="btn-rename-course" title="Eliminar este curso por completo" style="color:var(--rust);">🗑 eliminar curso</button>
           <div class="course-meta-list">
             <div class="course-meta-item" id="cm-item-santander"><b id="cm-last-santander">—</b><span id="cm-label-santander">última carga Santander</span></div>
             <div class="course-meta-item" id="cm-item-plataforma"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
@@ -932,6 +933,50 @@ const db = firebase.firestore();
       alert("No se pudo renombrar: " + (err && err.message ? err.message : err));
     }
   });
+  // Borra todos los documentos de una subcolección en tandas (el límite
+  // de Firestore es 500 operaciones por batch) — se usa para limpiar
+  // master/log/weeklyStats antes de borrar el curso completo.
+  async function deleteCollectionDocs(collRef){
+    const snap = await collRef.get();
+    const docs = snap.docs;
+    for(let i = 0; i < docs.length; i += 400){
+      const batch = db.batch();
+      docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+
+  document.getElementById("btn-delete-course").addEventListener("click", async () => {
+    if(!app.slug || !app.meta) return;
+    const nombre = app.meta.displayName || app.slug;
+    const confirmacion = prompt(
+      "Esto borra el curso \"" + nombre + "\" por completo (todo su histórico, cargas y estatus) y no se puede deshacer.\n\n" +
+      "Escribe el nombre exacto del curso para confirmar:"
+    );
+    if(confirmacion === null) return;
+    if(confirmacion.trim() !== nombre){
+      alert("El nombre no coincide — no se borró nada.");
+      return;
+    }
+    const slugToDelete = app.slug;
+    setSaveStatus("Eliminando curso...");
+    try{
+      await deleteCollectionDocs(masterColl(slugToDelete));
+      await deleteCollectionDocs(logColl(slugToDelete));
+      await deleteCollectionDocs(weeklyStatsColl(slugToDelete));
+      await courseDoc(slugToDelete).delete();
+      app.coursesIndex = app.coursesIndex.filter(c => c.slug !== slugToDelete);
+      closeOpenCourse();
+      renderCourseSelect();
+      renderCourseTabs();
+      setSaveStatus("Curso eliminado.");
+    }catch(err){
+      console.error("No se pudo eliminar el curso:", err);
+      alert("No se pudo eliminar: " + (err && err.message ? err.message : err));
+      setSaveStatus("");
+    }
+  });
+
   document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
   document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
   document.getElementById("btn-open-listafinal").addEventListener("click", () => openModal("modal-listafinal"));
