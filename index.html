@@ -8,7 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://api.fontshare.com/v2/css?f[]=clash-display@600,500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- Firebase (compat SDK: se puede usar con etiquetas script normales, sin bundler) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -365,6 +364,14 @@
   }
   .g-btn:hover{border-color:var(--ink-soft);}
   #gate-error{color:var(--rust);font-size:13px;max-width:44ch;}
+
+  @media print{
+    body *{visibility:hidden;}
+    #dashboard-root, #dashboard-root *{visibility:visible;}
+    #dashboard-root{position:absolute;left:0;top:0;width:100%;margin:0;padding:0;}
+    #dash-export-root{max-width:none;}
+    @page{size:landscape;margin:10mm;}
+  }
 </style>
 </head>
 <body>
@@ -482,7 +489,7 @@
 
       <div class="tab-panel" data-panel="dashboard">
         <div class="table-toolbar">
-          <button class="btn btn-ghost btn-small" id="btn-download-dashboard-pdf">Descargar PDF</button>
+          <button class="btn btn-ghost btn-small" id="btn-download-dashboard-pdf">Descargar / Imprimir PDF</button>
         </div>
         <div id="dashboard-root"></div>
       </div>
@@ -2673,24 +2680,13 @@ const db = firebase.firestore();
     root.appendChild(wrap);
   }
 
+  // Antes se usaba html2canvas/jsPDF para generar el PDF, pero renderizaba
+  // en blanco de forma intermitente (problemas conocidos de html2canvas con
+  // SVG, fuentes web y gradientes). La impresión nativa del navegador usa el
+  // mismo motor que ya pinta la pantalla correctamente, así que es mucho más
+  // confiable — el usuario elige "Guardar como PDF" como destino.
   document.getElementById("btn-download-dashboard-pdf").addEventListener("click", () => {
-    const dashEl = document.getElementById("dash-export-root");
-    if(!dashEl || typeof html2pdf === "undefined") return;
-    const nombre = (app.meta && app.meta.displayName) || app.slug || "curso";
-    // Página a la medida exacta del contenido para que todo quepa en una
-    // sola hoja, sin que html2pdf lo corte en varias páginas.
-    const rect = dashEl.getBoundingClientRect();
-    const pxToMm = px => px * 25.4 / 96;
-    const widthMm = pxToMm(rect.width);
-    const heightMm = pxToMm(rect.height);
-    html2pdf().set({
-      margin: 0,
-      filename: "Dashboard " + nombre + ".pdf",
-      image: {type:"jpeg", quality:0.98},
-      html2canvas: {scale:2, backgroundColor:"#f6f6fb", windowWidth: dashEl.scrollWidth},
-      jsPDF: {unit:"mm", format:[widthMm, heightMm], orientation: widthMm >= heightMm ? "landscape" : "portrait"},
-      pagebreak: {mode: ["avoid-all"]}
-    }).from(dashEl).save();
+    window.print();
   });
 
   // ---------- tabs, search, download ----------
