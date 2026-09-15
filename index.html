@@ -411,8 +411,8 @@
   <section id="section-course">
     <div class="panel panel-compact">
       <div class="course-tabs" id="cliente-tabs" style="margin-bottom:10px;"></div>
-      <div class="course-tabs" id="anio-tabs" style="margin-bottom:10px;"></div>
-      <div id="course-groups-summary" style="margin-bottom:10px;"></div>
+      <div class="course-tabs" id="anio-tabs" style="margin-bottom:6px;"></div>
+      <div id="course-groups-summary" style="margin-bottom:4px;"></div>
       <div class="course-tabs-row">
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
@@ -1550,7 +1550,7 @@ const db = firebase.firestore();
   // 2025 no lleva meta de convocatoria (son ediciones que ya cierran, no
   // convocatoria activa) — solo aplica de 2026 en adelante.
   function grupoTieneMeta(cliente, anio){
-    return cliente !== "alianza" && anio !== 2025;
+    return cliente !== "alianza" && anio !== 2025 && anio !== SIN_ANIO;
   }
 
   // Control inline (input + progreso) para la meta de convocatoria de un
@@ -1707,7 +1707,7 @@ const db = firebase.firestore();
         .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
 
       if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)){
-        const row = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"});
+        const row = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;"});
         row.appendChild(buildGroupMetaControl(familia, app.selectedCliente, app.selectedAnio));
         summary.appendChild(row);
       }
