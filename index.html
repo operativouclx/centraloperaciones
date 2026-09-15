@@ -390,7 +390,6 @@
 <!-- ======================= SIGN-IN GATE ======================= -->
 <div id="gate" class="wrap">
   <h1>Central operativa - Base madre</h1>
-  <p>Herramienta compartida del equipo para dar seguimiento a los cursos. Inicia sesión con tu cuenta de Google para ver y actualizar el histórico.</p>
   <button class="g-btn" id="btn-signin">Iniciar sesión con Google</button>
   <div id="gate-error"></div>
 </div>
@@ -412,7 +411,6 @@
     <div class="panel panel-compact">
       <div class="course-tabs" id="cliente-tabs" style="margin-bottom:10px;"></div>
       <div class="course-tabs" id="anio-tabs" style="margin-bottom:6px;"></div>
-      <div id="course-groups-summary" style="margin-bottom:4px;"></div>
       <div class="course-tabs-row">
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
@@ -457,6 +455,7 @@
         </div>
       </div>
 
+      <div id="course-family-meta-panel"></div>
       <div id="course-progress-summary" class="progress-summary"></div>
 
       <div class="tabs">
@@ -1531,6 +1530,7 @@ const db = firebase.firestore();
       renderClienteTabs();
       renderCourseTabs();
       renderCourseNameDisplay();
+      renderFamilyMetaPanel();
     }catch(err){
       console.error("No se pudo guardar cliente/año:", err);
       alert("No se pudo guardar: " + (err && err.message ? err.message : err));
@@ -1598,35 +1598,35 @@ const db = firebase.firestore();
     return cliente !== "alianza" && anio !== 2025 && anio !== SIN_ANIO;
   }
 
-  // Control inline (input + progreso) para la meta de convocatoria de un
-  // grupo, mostrado junto a su etiqueta en las pestañas de curso — así se
-  // ve cuántos inscritos trae cada convocatoria y a qué % va, sin tener
-  // que abrir el curso.
-  function buildGroupMetaControl(familia, cliente, anio){
+  // Panel de meta de convocatoria del grupo — es lo primero que se ve al
+  // abrir un curso. Muestra la meta (editable) y, si ya está asignada,
+  // cuánto aporta cada edición de la familia en número y porcentaje.
+  function renderFamilyMetaPanel(){
+    const panel = document.getElementById("course-family-meta-panel");
+    panel.innerHTML = "";
+    if(!app.meta) return;
+
+    const cliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
+    const anio = app.meta.anio || inferAnioLegacy(app.slug, app.meta.displayName) || SIN_ANIO;
+    const familia = app.meta.familia || inferFamiliaLegacy(app.slug, app.meta.displayName) || app.meta.displayName;
+    if(!grupoTieneMeta(cliente, anio)) return;
+
     const grupo = cursosDelGrupo(familia, cliente, anio);
     const anyMeta = grupo.find(c => typeof c.metaConvocatoria === "number");
     const metaVal = anyMeta ? anyMeta.metaConvocatoria : null;
-    const inscritos = familiaInscritosTotal(familia, cliente, anio);
 
-    const wrap = el("span", {style:"display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:none;"});
-    const input = el("input", {
-      type:"number", class:"input-text",
-      style:"width:60px;padding:2px 5px;font-size:11px;", placeholder:"meta"
-    });
+    const box = el("div", {class:"panel panel-compact", style:"margin-bottom:16px;"});
+    const head = el("div", {style:"display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;"});
+    head.appendChild(el("h3", {style:"margin:0;font-size:15px;"}, [document.createTextNode("Meta de convocatoria — " + familia + " " + anio)]));
+    const input = el("input", {type:"number", class:"input-text", style:"width:90px;", placeholder:"p. ej. 500"});
     input.value = typeof metaVal === "number" ? metaVal : "";
-    input.addEventListener("click", (e) => e.stopPropagation());
-    const progress = el("span", {});
-    if(typeof metaVal === "number" && metaVal > 0){
-      const pct = Math.round((inscritos/metaVal)*100);
-      progress.textContent = inscritos + " / " + metaVal + " (" + pct + "%)";
-    }
     input.addEventListener("blur", async () => {
       const nuevo = input.value.trim() ? parseInt(input.value.trim(), 10) : null;
       if(nuevo === metaVal) return;
       input.disabled = true;
       try{
         await guardarMetaConvocatoriaGrupo(familia, cliente, anio, nuevo);
-        renderCourseGroups();
+        renderFamilyMetaPanel();
       }catch(err){
         console.error("No se pudo guardar la meta de convocatoria del grupo:", err);
         alert("No se pudo guardar: " + (err && err.message ? err.message : err));
@@ -1634,9 +1634,30 @@ const db = firebase.firestore();
       }
     });
     input.addEventListener("keydown", (e) => { if(e.key === "Enter") input.blur(); });
-    wrap.appendChild(input);
-    wrap.appendChild(progress);
-    return wrap;
+    head.appendChild(input);
+    box.appendChild(head);
+
+    if(typeof metaVal === "number" && metaVal > 0){
+      const totalInscritos = familiaInscritosTotal(familia, cliente, anio);
+      const list = el("div", {style:"display:flex;flex-direction:column;gap:6px;"});
+      grupo.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach(c => {
+        const inscritosC = (c.stats && c.stats.total) || 0;
+        const pctC = Math.round((inscritosC/metaVal)*100);
+        const row = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:13px;" +
+          (c.slug === app.slug ? "font-weight:700;color:var(--teal-dark);" : "color:var(--ink-soft);")});
+        row.appendChild(el("span", {}, [document.createTextNode(c.displayName)]));
+        row.appendChild(el("span", {}, [document.createTextNode(inscritosC + " (" + pctC + "%)")]));
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+      const totalPct = Math.round((totalInscritos/metaVal)*100);
+      const totalRow = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);"});
+      totalRow.appendChild(el("span", {}, [document.createTextNode("Total")]));
+      totalRow.appendChild(el("span", {}, [document.createTextNode(totalInscritos + " / " + metaVal + " (" + totalPct + "%)")]));
+      box.appendChild(totalRow);
+    }
+
+    panel.appendChild(box);
   }
 
   // Reutiliza dashStatusBadge (definido más abajo) para que el estatus se
@@ -1714,16 +1735,15 @@ const db = firebase.firestore();
     app.courseLoadToken++;
     document.getElementById("course-head").classList.add("hidden");
     document.getElementById("course-dependent").classList.add("hidden");
+    document.getElementById("course-family-meta-panel").innerHTML = "";
   }
 
-  // Renderiza, para el año actualmente seleccionado: (1) un resumen por
-  // familia (etiqueta + meta de convocatoria + inscritos/meta) y (2) un
-  // desplegable único para elegir qué curso abrir — separado de
-  // renderCourseTabs para poder refrescar solo esto al cambiar de año.
+  // Renderiza, para el año actualmente seleccionado, el desplegable
+  // único (agrupado por familia via optgroup) para elegir qué curso
+  // abrir — separado de renderCourseTabs para poder refrescar solo esto
+  // al cambiar de año.
   function renderCourseGroups(){
-    const summary = document.getElementById("course-groups-summary");
     const sel = document.getElementById("course-year-select");
-    summary.innerHTML = "";
     sel.innerHTML = "";
 
     const visible = app.coursesIndex.filter(c => {
@@ -1750,12 +1770,6 @@ const db = firebase.firestore();
     familias.forEach(familia => {
       const list = withFamilia.filter(c => c._familia === familia)
         .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
-
-      if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)){
-        const row = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;"});
-        row.appendChild(buildGroupMetaControl(familia, app.selectedCliente, app.selectedAnio));
-        summary.appendChild(row);
-      }
 
       const group = el("optgroup", {label: familia});
       list.forEach(c => {
@@ -1864,6 +1878,7 @@ const db = firebase.firestore();
     document.getElementById("course-head").classList.remove("hidden");
     renderCourseNameDisplay();
     renderCourseHeadStatusBadges();
+    renderFamilyMetaPanel();
     if(esHistorico){
       document.getElementById("cm-item-santander").classList.remove("hidden");
       document.getElementById("cm-label-santander").textContent = "última carga de lista final";
