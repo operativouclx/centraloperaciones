@@ -432,6 +432,7 @@
           </div>
           <div class="save-status" id="save-status"></div>
         </div>
+        <div id="course-family-meta-panel"></div>
         <div class="course-head-actions">
           <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
           <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
@@ -455,7 +456,6 @@
         </div>
       </div>
 
-      <div id="course-family-meta-panel"></div>
       <div id="course-progress-summary" class="progress-summary"></div>
 
       <div class="tabs">
@@ -1615,10 +1615,10 @@ const db = firebase.firestore();
     const anyMeta = grupo.find(c => typeof c.metaConvocatoria === "number");
     const metaVal = anyMeta ? anyMeta.metaConvocatoria : null;
 
-    const box = el("div", {class:"panel panel-compact", style:"margin-bottom:16px;"});
-    const head = el("div", {style:"display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;"});
-    head.appendChild(el("h3", {style:"margin:0;font-size:15px;"}, [document.createTextNode("Meta de convocatoria — " + familia + " " + anio)]));
-    const input = el("input", {type:"number", class:"input-text", style:"width:90px;", placeholder:"p. ej. 500"});
+    const box = el("div", {style:"background:var(--teal-bg);border-radius:8px;padding:10px 14px;min-width:220px;max-width:300px;"});
+    const head = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"});
+    head.appendChild(el("div", {style:"margin:0;font-size:12.5px;font-weight:700;color:var(--teal-dark);"}, [document.createTextNode("Meta " + familia + " " + anio)]));
+    const input = el("input", {type:"number", class:"input-text", style:"width:76px;padding:4px 8px;font-size:12.5px;", placeholder:"p. ej. 500"});
     input.value = typeof metaVal === "number" ? metaVal : "";
     input.addEventListener("blur", async () => {
       const nuevo = input.value.trim() ? parseInt(input.value.trim(), 10) : null;
@@ -1639,11 +1639,11 @@ const db = firebase.firestore();
 
     if(typeof metaVal === "number" && metaVal > 0){
       const totalInscritos = familiaInscritosTotal(familia, cliente, anio);
-      const list = el("div", {style:"display:flex;flex-direction:column;gap:6px;"});
+      const list = el("div", {style:"display:flex;flex-direction:column;gap:3px;"});
       grupo.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach(c => {
         const inscritosC = (c.stats && c.stats.total) || 0;
         const pctC = Math.round((inscritosC/metaVal)*100);
-        const row = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:13px;" +
+        const row = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:11.5px;" +
           (c.slug === app.slug ? "font-weight:700;color:var(--teal-dark);" : "color:var(--ink-soft);")});
         row.appendChild(el("span", {}, [document.createTextNode(c.displayName)]));
         row.appendChild(el("span", {}, [document.createTextNode(inscritosC + " (" + pctC + "%)")]));
@@ -1651,7 +1651,7 @@ const db = firebase.firestore();
       });
       box.appendChild(list);
       const totalPct = Math.round((totalInscritos/metaVal)*100);
-      const totalRow = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);"});
+      const totalRow = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:11.5px;font-weight:700;margin-top:4px;padding-top:4px;border-top:1px solid rgba(46,79,145,0.2);"});
       totalRow.appendChild(el("span", {}, [document.createTextNode("Total")]));
       totalRow.appendChild(el("span", {}, [document.createTextNode(totalInscritos + " / " + metaVal + " (" + totalPct + "%)")]));
       box.appendChild(totalRow);
