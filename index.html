@@ -405,7 +405,7 @@
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
-        <button class="btn btn-ghost btn-small" id="btn-migrate-addon" type="button">Migrar N+V add on (antiguos)</button>
+        <button class="btn btn-ghost btn-small" id="btn-delete-old-addon" type="button">Eliminar N+V add on (antiguos)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -886,80 +886,37 @@ const db = firebase.firestore();
     }
   });
 
-  // ---------- migración única: N+V add on (cursos viejos) -> pestaña Add on ----------
-  // Los "N+V add on II/III/IV" existieron como cursos aparte antes de que
-  // el add on se volviera una pestaña dentro de No+Violencia. Esto copia
-  // su avance de plataforma ya cargado (estado/progreso/columnas extra)
-  // hacia los registros correspondientes en el curso nuevo, cruzando por
-  // correo o nombre. No borra ni toca los cursos viejos.
-  document.getElementById("btn-migrate-addon").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-migrate-addon");
-    const pairs = [
-      {old:"n-v-add-on-ii", nuevo:"no-violencia-ii"},
-      {old:"n-v-add-on-iiia", nuevo:"no-violencia-iiia"},
-      {old:"n-v-add-on-iiib", nuevo:"no-violencia-iiib"}
-    ];
-    const confirmMsg = "Esto copia el avance de plataforma ya cargado de los cursos viejos hacia el curso nuevo, como Add on:\n\n" +
-      pairs.map(p => "  " + p.old + "  →  " + p.nuevo).join("\n") +
-      "\n\nCruza por correo o nombre contra la tabla madre del curso nuevo. No borra ni modifica los cursos viejos. ¿Continuar?";
+  // ---------- eliminación única: cursos viejos "N+V add on" ----------
+  // El add on ya es una pestaña dentro de No+Violencia (con su avance ya
+  // migrado), así que estos 3 cursos aparte ya no hacen falta. Se borran
+  // por completo (documento + subcolecciones master/log/weeklyStats) — no
+  // hay opción de archivar en el panel, así que esto es lo que hay.
+  document.getElementById("btn-delete-old-addon").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-delete-old-addon");
+    const slugs = ["n-v-add-on-ii", "n-v-add-on-iiia", "n-v-add-on-iiib"];
+    const confirmMsg = "Esto BORRA POR COMPLETO estos 3 cursos y toda su información (no se puede deshacer):\n\n" +
+      slugs.map(s => "  " + s).join("\n") +
+      "\n\n¿Seguro que quieres continuar?";
     if(!confirm(confirmMsg)) return;
 
     btn.disabled = true;
     const originalText = btn.textContent;
     const reportes = [];
     try{
-      for(const {old, nuevo} of pairs){
-        btn.textContent = "Migrando " + old + "...";
+      for(const slug of slugs){
+        btn.textContent = "Borrando " + slug + "...";
         try{
-          const [oldDetail, newMetaSnap, newDetail] = await Promise.all([
-            loadCourseDetailRemote(old),
-            courseDoc(nuevo).get(),
-            loadCourseDetailRemote(nuevo)
-          ]);
-          if(!newMetaSnap.exists){
-            reportes.push(old + " → " + nuevo + ": el curso nuevo no existe, se omitió.");
-            continue;
-          }
-          const oldByEmail = new Map();
-          const oldByName = new Map();
-          oldDetail.master.forEach(r => {
-            const e = normalize(r.email);
-            const n = normalize(r.nombre);
-            if(e && !oldByEmail.has(e)) oldByEmail.set(e, r);
-            if(n && !oldByName.has(n)) oldByName.set(n, r);
-          });
-
-          const today = todayISO();
-          let matched = 0;
-          newDetail.master.forEach(record => {
-            const eNorm = normalize(record.email);
-            const nNorm = normalize(record.nombre);
-            let match = null;
-            if(eNorm && oldByEmail.has(eNorm)) match = oldByEmail.get(eNorm);
-            else if(nNorm && oldByName.has(nNorm)) match = oldByName.get(nNorm);
-            if(match){
-              matched++;
-              record.addOnExtra = match.plataformaExtra || {};
-              record.addOnEstado = match.estado || "Falta registrar";
-              if(typeof match.progreso === "number") record.addOnProgreso = match.progreso;
-              record.addOnUltimaActualizacion = match.ultimaActualizacionPlataforma || today;
-            }
-          });
-
-          const saveResult = await saveMasterBatched(nuevo, newDetail.master);
-          if(!saveResult.ok){
-            reportes.push(old + " → " + nuevo + ": " + matched + " coincidencias encontradas, pero el guardado falló parcialmente (" +
-              saveResult.failedRecords + " de " + saveResult.totalRecords + " no se guardaron) — vuelve a correr la migración.");
-          } else {
-            reportes.push(old + " → " + nuevo + ": " + matched + " de " + oldDetail.master.length + " registros migrados como Add on.");
-          }
+          await deleteCourseRemote(slug);
+          reportes.push(slug + ": borrado.");
         }catch(err){
-          console.error("Error migrando " + old + ":", err);
-          reportes.push(old + " → " + nuevo + ": error — " + (err && err.message ? err.message : err));
+          console.error("Error borrando " + slug + ":", err);
+          reportes.push(slug + ": error — " + (err && err.message ? err.message : err));
         }
       }
-      alert("Migración de Add on terminada:\n\n" + reportes.join("\n"));
-      if(app.slug && pairs.some(p => p.nuevo === app.slug)) loadCourse(app.slug);
+      alert("Listo:\n\n" + reportes.join("\n"));
+      app.coursesIndex = app.coursesIndex.filter(c => !slugs.includes(c.slug));
+      renderCourseSelect();
+      renderCourseTabs();
     }finally{
       btn.disabled = false;
       btn.textContent = originalText;
