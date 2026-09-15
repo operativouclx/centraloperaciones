@@ -423,6 +423,7 @@
       <div id="course-head" class="course-head hidden">
         <div>
           <h2 id="course-name-display" style="display:inline"></h2>
+          <span id="course-edition-display" style="display:inline;font-size:13px;color:var(--ink-soft);font-weight:600;margin-left:6px;"></span>
           <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎</button>
           <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷</button>
           <div class="course-meta-list">
@@ -936,7 +937,7 @@ const db = firebase.firestore();
     try{
       await courseDoc(app.slug).set({displayName: nuevo}, {merge:true});
       app.meta.displayName = nuevo;
-      document.getElementById("course-name-display").textContent = nuevo;
+      renderCourseNameDisplay();
       const idx = app.coursesIndex.find(c => c.slug === app.slug);
       if(idx) idx.displayName = nuevo;
       renderCourseSelect();
@@ -1494,11 +1495,30 @@ const db = firebase.firestore();
       renderClienteTabs();
       renderCourseTabs();
       renderMetaConvocatoriaLabel();
+      renderCourseNameDisplay();
     }catch(err){
       console.error("No se pudo guardar cliente/año:", err);
       alert("No se pudo guardar: " + (err && err.message ? err.message : err));
     }
   });
+
+  // El encabezado muestra el nombre del GRUPO (familia) como título
+  // principal, porque la meta de convocatoria y la vista de pestañas son
+  // por grupo — la edición específica (p. ej. "III") se ve más chica al
+  // lado, ya que sigue siendo la que se está editando en el resto de la
+  // página (tabla madre, cargas, etc.).
+  function renderCourseNameDisplay(){
+    const familia = app.meta.familia || inferFamiliaLegacy(app.slug);
+    const nameEl = document.getElementById("course-name-display");
+    const editionEl = document.getElementById("course-edition-display");
+    if(familia && familia !== app.meta.displayName){
+      nameEl.textContent = familia;
+      editionEl.textContent = "· " + app.meta.displayName;
+    } else {
+      nameEl.textContent = app.meta.displayName;
+      editionEl.textContent = "";
+    }
+  }
 
   // Los cursos que comparten familia + cliente (p. ej. las 3 ediciones de
   // No+Violencia) son un solo grupo: la meta de convocatoria es una sola
@@ -1768,7 +1788,7 @@ const db = firebase.firestore();
     const esAlianza = (app.meta.cliente || inferClienteLegacy(app.meta.displayName)) === "alianza";
 
     document.getElementById("course-head").classList.remove("hidden");
-    document.getElementById("course-name-display").textContent = app.meta.displayName;
+    renderCourseNameDisplay();
     document.getElementById("cm-item-meta-convocatoria").classList.toggle("hidden", esAlianza);
     renderMetaConvocatoriaLabel();
     renderCourseHeadStatusBadges();
