@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://api.fontshare.com/v2/css?f[]=clash-display@600,500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 
 <!-- Firebase (compat SDK: se puede usar con etiquetas script normales, sin bundler) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -403,6 +404,7 @@
     <div class="panel panel-compact">
       <div class="course-tabs-row">
         <div class="course-tabs" id="course-tabs"></div>
+        <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -674,6 +676,179 @@ const db = firebase.firestore();
     const s = document.getElementById("save-status");
     if(s) s.textContent = text;
   }
+
+  // ---------- exportar base completa (Excel con portada + logo + colores) ----------
+  function sanitizeSheetName(name){
+    const cleaned = String(name).replace(/[\\\/\*\?\[\]:]/g, " ").trim();
+    return (cleaned || "Curso").slice(0, 31);
+  }
+
+  function uniqueSheetName(base, used){
+    let name = base, i = 2;
+    while(used.has(name)){
+      const suffix = " " + i;
+      name = base.slice(0, 31 - suffix.length) + suffix;
+      i++;
+    }
+    used.add(name);
+    return name;
+  }
+
+  async function svgToPngDataUrl(url, width, height){
+    const resp = await fetch(url);
+    const svgText = await resp.text();
+    const svgBlob = new Blob([svgText], {type:"image/svg+xml"});
+    const svgUrl = URL.createObjectURL(svgBlob);
+    try{
+      const img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = svgUrl;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      return canvas.toDataURL("image/png");
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
+  }
+
+  document.getElementById("btn-export-full-db").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-export-full-db");
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    try{
+      let courses = app.coursesIndex;
+      if(!courses || !courses.length){
+        courses = await fetchCoursesIndex();
+        app.coursesIndex = courses;
+      }
+      const visibles = courses.filter(c => !c.archived).slice().sort((a,b) => a.displayName.localeCompare(b.displayName));
+      if(!visibles.length){ alert("No hay cursos para exportar."); return; }
+
+      const TEAL = "FF4069BC", TEAL_DARK = "FF2E4F91", PLUM = "FF9987FF", INK = "FF14213B", INK_SOFT = "FF5C5C7A";
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Central operativa UCLX";
+      workbook.created = new Date();
+
+      // ---- Portada ----
+      const cover = workbook.addWorksheet("Portada", {views:[{showGridLines:false}]});
+      cover.getColumn(1).width = 4;
+      cover.getColumn(2).width = 100;
+
+      let r = 2;
+      try{
+        const logoDataUrl = await svgToPngDataUrl("./assets/uclx-logo.svg", 480, 108);
+        const imgId = workbook.addImage({base64: logoDataUrl, extension: "png"});
+        cover.addImage(imgId, {tl:{col:1, row:1}, ext:{width:240, height:54}});
+        r = 6;
+      }catch(err){
+        console.error("No se pudo insertar el logo en la portada:", err);
+      }
+
+      const title = cover.getCell("B" + r);
+      title.value = "Base completa de cursos — Central operativa UCLX";
+      title.font = {bold:true, size:18, color:{argb:TEAL_DARK}};
+      r += 2;
+
+      const metaCell = cover.getCell("B" + r);
+      const fecha = new Date().toLocaleDateString("es-MX", {year:"numeric", month:"long", day:"numeric"});
+      metaCell.value = "Generado el " + fecha + (auth.currentUser && auth.currentUser.email ? " por " + auth.currentUser.email : "") + ".";
+      metaCell.font = {italic:true, size:11, color:{argb:INK_SOFT}};
+      r += 3;
+
+      const howToTitle = cover.getCell("B" + r);
+      howToTitle.value = "Cómo usar este archivo";
+      howToTitle.font = {bold:true, size:13, color:{argb:PLUM}};
+      r += 1;
+
+      const instrucciones = [
+        "Cada curso tiene su propia hoja (pestaña abajo), con el nombre del curso.",
+        "Cada fila es una persona; las columnas Estado y Progreso vienen de la tabla madre del curso.",
+        "Las demás columnas son las que se subieron desde Santander o Plataforma para ese curso (varían según el curso).",
+        "Esta es una fotografía del momento en que se generó el archivo — no se actualiza sola; para datos al día, vuelve a exportar desde el panel.",
+        "Los cursos archivados no se incluyeron en este archivo."
+      ];
+      instrucciones.forEach(line => {
+        const cell = cover.getCell("B" + r);
+        cell.value = "•  " + line;
+        cell.font = {size:11, color:{argb:INK}};
+        cell.alignment = {wrapText:true};
+        r += 1;
+      });
+      r += 2;
+
+      const indexTitle = cover.getCell("B" + r);
+      indexTitle.value = "Cursos incluidos (" + visibles.length + ")";
+      indexTitle.font = {bold:true, size:13, color:{argb:PLUM}};
+      r += 1;
+
+      // ---- Una hoja por curso ----
+      const usedNames = new Set(["Portada"]);
+      let procesados = 0;
+      for(const c of visibles){
+        procesados++;
+        btn.textContent = "Exportando " + procesados + "/" + visibles.length + "...";
+        const sheetName = uniqueSheetName(sanitizeSheetName(c.displayName), usedNames);
+
+        const indexRow = cover.getCell("B" + r);
+        indexRow.value = {text: c.displayName, hyperlink: "#'" + sheetName + "'!A1"};
+        indexRow.font = {size:11, color:{argb:TEAL_DARK}, underline:true};
+        r += 1;
+
+        let master = [];
+        try{
+          const detail = await loadCourseDetailRemote(c.slug);
+          master = detail.master || [];
+        }catch(err){
+          console.error("No se pudo leer " + c.slug + ":", err);
+        }
+
+        const ws = workbook.addWorksheet(sheetName, {views:[{state:"frozen", ySplit:1}]});
+        if(!master.length){
+          ws.getCell("A1").value = "Sin registros en la tabla madre.";
+          continue;
+        }
+        const flat = master.map(rec => flattenMasterRow(rec));
+        const columns = [];
+        const seen = new Set();
+        flat.forEach(row => Object.keys(row).forEach(k => { if(!seen.has(k)){ seen.add(k); columns.push(k); } }));
+        ws.columns = columns.map(k => ({header:k, key:k, width: Math.min(38, Math.max(12, k.length + 4))}));
+        flat.forEach(row => ws.addRow(row));
+
+        const headerRow = ws.getRow(1);
+        headerRow.eachCell(cell => {
+          cell.fill = {type:"pattern", pattern:"solid", fgColor:{argb:TEAL}};
+          cell.font = {bold:true, color:{argb:"FFFFFFFF"}};
+          cell.alignment = {vertical:"middle"};
+        });
+        headerRow.height = 20;
+        ws.autoFilter = {from:{row:1, column:1}, to:{row:1, column:columns.length}};
+      }
+
+      btn.textContent = "Generando archivo...";
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Base completa UCLX - " + todayISO() + ".xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }catch(err){
+      console.error("No se pudo exportar la base completa:", err);
+      alert("No se pudo exportar: " + (err && err.message ? err.message : err));
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
 
   // ---------- modales ----------
   function openModal(id){ document.getElementById(id).classList.remove("hidden"); }
