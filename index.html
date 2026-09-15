@@ -2200,7 +2200,6 @@ const storage = firebase.storage();
     const metricsRow = el("div", {class:"fi-metrics-row"});
     const snap = opts.santanderSnapshot;
     let metricsRow2 = null;
-    let metricsRow3 = null;
     if(esHistorico){
       const inscritos = (typeof opts.santanderInscritos === "number") ? opts.santanderInscritos : null;
       const asignados = (typeof opts.santanderAsignados === "number") ? opts.santanderAsignados : null;
@@ -2249,19 +2248,9 @@ const storage = firebase.storage();
       const badgeText = diff > 0 ? "Faltan " + Math.abs(faltaPct) + "%" : diff < 0 ? "Sobran " + Math.abs(faltaPct) + "%" : "Coincide";
       diffWrap.appendChild(el("div", {class:"fi-diff-badge"}, [document.createTextNode(badgeText)]));
       metricsRow2.appendChild(diffWrap);
-
-      const activos = (stats.p1||0) + (stats.p2||0) + (stats.p3||0) + (stats.p4||0);
-      const inactivos = stats.p0 || 0;
-      const actBase = registrados || 1;
-      const pctActivos = Math.round((activos/actBase)*1000)/10;
-      const pctInactivos = Math.round((inactivos/actBase)*1000)/10;
-      metricsRow3 = el("div", {class:"fi-metrics-row fi-metrics-row-2"});
-      metricsRow3.appendChild(fiStatBlock("Activos", pctActivos, activos));
-      metricsRow3.appendChild(fiStatBlock("Inactivos", pctInactivos, inactivos));
     }
     zoneIns.appendChild(metricsRow);
     if(metricsRow2) zoneIns.appendChild(metricsRow2);
-    if(metricsRow3) zoneIns.appendChild(metricsRow3);
     if(!esHistorico && snap) zoneIns.appendChild(fiStatusBreakdown(snap.statusCounts));
     strip.appendChild(zoneIns);
 
