@@ -1037,12 +1037,42 @@ const db = firebase.firestore();
     return (displayName || "").trim().toLowerCase() === "salud financiera" ? "santander" : "soa";
   }
 
+  // Año de cada curso de Santander Open Academy que ya existía antes de
+  // agregar este campo: Crianza responsable II y No+Violencia II son de
+  // 2025, el resto de 2026 (según lo indicado).
+  const ANIO_LEGACY = {
+    "crianza-responsable-ii": 2025,
+    "no-violencia-ii": 2025,
+    "crianza-responsable-iii": 2026,
+    "matematicamente": 2026,
+    "mi-prepa": 2026,
+    "no-violencia-iiia": 2026,
+    "no-violencia-iiib": 2026,
+    "voca-accion": 2026,
+    "vocaaccion": 2026
+  };
+  function inferAnioLegacy(slug){
+    return ANIO_LEGACY[slug] || null;
+  }
+
+  // Las 3 ediciones de No+Violencia se muestran agrupadas juntas en las
+  // pestañas, en vez de separadas por año.
+  const FAMILIA_LEGACY = {
+    "no-violencia-ii": "No+Violencia",
+    "no-violencia-iiia": "No+Violencia",
+    "no-violencia-iiib": "No+Violencia"
+  };
+  function inferFamiliaLegacy(slug){
+    return FAMILIA_LEGACY[slug] || null;
+  }
+
   function emptyMeta(displayName, slug, tipo, cliente, anio){
     return {
       displayName, slug,
       tipo: tipo === "historico" ? "historico" : "activo",
       cliente: cliente || "soa",
       anio: anio || null,
+      familia: null,
       createdAt: nowISO(), updatedAt: nowISO(),
       santanderMapping: null,
       plataformaMapping: null,
@@ -1185,7 +1215,8 @@ const db = firebase.firestore();
         stats: data.stats || emptyStats(),
         tipo: data.tipo === "historico" ? "historico" : "activo",
         cliente: data.cliente || inferClienteLegacy(data.displayName || d.id),
-        anio: data.anio || null,
+        anio: data.anio || inferAnioLegacy(d.id),
+        familia: data.familia || inferFamiliaLegacy(d.id),
         lastSantanderUpload: data.lastSantanderUpload || null,
         lastPlataformaUpload: data.lastPlataformaUpload || null,
         lastListaFinalUpload: data.lastListaFinalUpload || null,
@@ -1418,8 +1449,10 @@ const db = firebase.firestore();
   function renderClienteAnioLabel(){
     const cliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
     const clienteLabel = (CLIENTES.find(c => c.id === cliente) || {}).label || cliente;
+    const anio = app.meta.anio || inferAnioLegacy(app.slug);
+    const familia = app.meta.familia || inferFamiliaLegacy(app.slug);
     document.getElementById("cm-cliente-anio").textContent =
-      clienteLabel + (app.meta.anio ? " · " + app.meta.anio : " · sin año — clic para asignar");
+      clienteLabel + (anio ? " · " + anio : " · sin año — clic para asignar") + (familia ? " · " + familia : "");
   }
 
   document.getElementById("cm-item-cliente-anio").addEventListener("click", async () => {
@@ -1430,16 +1463,23 @@ const db = firebase.firestore();
     if(clienteInput === null) return;
     const clienteId = CLIENTES.some(c => c.id === clienteInput.trim()) ? clienteInput.trim() : clienteActual;
 
-    const anioInput = prompt("Año de este curso (ej. 2025), vacío para quitarlo:", app.meta.anio || "");
+    const anioInput = prompt("Año de este curso (ej. 2025), vacío para quitarlo:",
+      app.meta.anio || inferAnioLegacy(app.slug) || "");
     if(anioInput === null) return;
     const anio = anioInput.trim() ? parseInt(anioInput.trim(), 10) : null;
 
+    const familiaInput = prompt("Grupo/familia de este curso (p. ej. 'No+Violencia' para agrupar sus ediciones juntas), vacío para quitarlo:",
+      app.meta.familia || inferFamiliaLegacy(app.slug) || "");
+    if(familiaInput === null) return;
+    const familia = familiaInput.trim() || null;
+
     try{
-      await courseDoc(app.slug).set({cliente: clienteId, anio}, {merge:true});
+      await courseDoc(app.slug).set({cliente: clienteId, anio, familia}, {merge:true});
       app.meta.cliente = clienteId;
       app.meta.anio = anio;
+      app.meta.familia = familia;
       const idx = app.coursesIndex.find(c => c.slug === app.slug);
-      if(idx){ idx.cliente = clienteId; idx.anio = anio; }
+      if(idx){ idx.cliente = clienteId; idx.anio = anio; idx.familia = familia; }
       renderClienteAnioLabel();
       app.selectedCliente = clienteId;
       try{ localStorage.setItem("uclx-cliente", clienteId); }catch(e){}
@@ -1528,15 +1568,30 @@ const db = firebase.firestore();
     const visible = app.coursesIndex.filter(c =>
       !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
     );
-    const anios = Array.from(new Set(visible.map(c => c.anio).filter(Boolean))).sort();
+
+    // Los cursos con "familia" (p. ej. las 3 ediciones de No+Violencia) se
+    // agrupan juntos bajo ese nombre en vez de separarse por año.
+    const conFamilia = visible.filter(c => c.familia);
+    const sinFamilia = visible.filter(c => !c.familia);
     let colorStart = 0;
+
+    const familias = Array.from(new Set(conFamilia.map(c => c.familia))).sort();
+    familias.forEach(familia => {
+      const list = conFamilia.filter(c => c.familia === familia)
+        .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
+      addGroup(familia, list, colorStart);
+      colorStart += list.length;
+      wrap.appendChild(el("div", {class:"course-tabs-break"}));
+    });
+
+    const anios = Array.from(new Set(sinFamilia.map(c => c.anio).filter(Boolean))).sort();
     anios.forEach(anio => {
-      const list = visible.filter(c => c.anio === anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+      const list = sinFamilia.filter(c => c.anio === anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
       addGroup(String(anio), list, colorStart);
       colorStart += list.length;
       wrap.appendChild(el("div", {class:"course-tabs-break"}));
     });
-    const sinAnio = visible.filter(c => !c.anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    const sinAnio = sinFamilia.filter(c => !c.anio).sort((a,b)=>a.displayName.localeCompare(b.displayName));
     addGroup(anios.length ? "Sin año" : "Cursos", sinAnio, colorStart);
   }
 
@@ -3131,7 +3186,8 @@ const db = firebase.firestore();
     convRow.appendChild(dashBoxMetric("Total Beca asignada", becasAsignadas, pctBecas, "#5c57d8"));
     if(typeof meta.metaConvocatoria === "number" && meta.metaConvocatoria > 0){
       const pctMeta = Math.round((becasAsignadas/meta.metaConvocatoria)*100);
-      convRow.appendChild(dashBoxMetric("Meta anual (" + (meta.anio || "s/año") + ")", meta.metaConvocatoria, pctMeta, "#5c57d8"));
+      const anioMeta = meta.anio || inferAnioLegacy(app.slug);
+      convRow.appendChild(dashBoxMetric("Meta anual (" + (anioMeta || "s/año") + ")", meta.metaConvocatoria, pctMeta, "#5c57d8"));
     }
     convCard.appendChild(convRow);
     grid.appendChild(convCard);
