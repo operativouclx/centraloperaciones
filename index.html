@@ -212,10 +212,8 @@
   .fi-hr{height:1px;background:#DED4FF;}
 
   .fi-bottom-row{display:flex;gap:24px;flex-wrap:wrap;align-items:center;}
-  .fi-tasa{display:flex;flex-direction:column;gap:3px;min-width:170px;}
-  .fi-tasa-label{font-size:11px;color:var(--ink-soft);}
-  .fi-tasa-value-row{display:flex;align-items:baseline;gap:8px;}
-  .fi-tasa-value{font-size:20px;font-weight:700;color:var(--ink);}
+  .fi-tasa{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-width:150px;}
+  .fi-tasa-label{font-size:12px;font-weight:600;color:var(--ink);}
   .fi-tasa-delta{font-size:11px;font-weight:600;white-space:nowrap;}
   .fi-tasa-delta.up{color:var(--teal-dark);}
   .fi-tasa-delta.down{color:var(--rust);}
@@ -2081,14 +2079,12 @@ const storage = firebase.storage();
     };
   }
 
-  function fiTasaBlock(label, value, delta, sublabel){
+  function fiTasaBlock(label, value, delta, sublabel, ringColor){
     const wrap = el("div", {class:"fi-tasa"});
+    wrap.appendChild(dashDonutWithCenter(value, ringColor, "#E4E1FF", value + "%", null, 84));
     wrap.appendChild(el("div", {class:"fi-tasa-label"}, [document.createTextNode(label)]));
     const d = fiDeltaParts(delta);
-    const row = el("div", {class:"fi-tasa-value-row"});
-    row.appendChild(el("div", {class:"fi-tasa-value"}, [document.createTextNode(value + "%")]));
-    row.appendChild(el("div", {class:"fi-tasa-delta " + d.cls}, [document.createTextNode(d.arrow + " " + d.label)]));
-    wrap.appendChild(row);
+    wrap.appendChild(el("div", {class:"fi-tasa-delta " + d.cls}, [document.createTextNode(d.arrow + " " + d.label)]));
     if(sublabel) wrap.appendChild(el("div", {class:"fi-tasa-sublabel"}, [document.createTextNode(sublabel)]));
     return wrap;
   }
@@ -2278,6 +2274,23 @@ const storage = firebase.storage();
     const seg1 = stats.p1, seg2 = stats.p2, seg3 = stats.p3;
     const iniciaron = seg1 + seg2 + seg3;
 
+    // Activos/Inactivos, igual que en INSCRIPCIÓN, arriba de la barra.
+    const activosAv = seg1 + seg2 + seg3 + (stats.p4 || 0);
+    const inactivosAv = stats.p0 || 0;
+    const avBase = registrados || 1;
+    const pctActivosAv = Math.round((activosAv/avBase)*1000)/10;
+    const pctInactivosAv = Math.round((inactivosAv/avBase)*1000)/10;
+    const avDonutRow = el("div", {style:"display:flex;align-items:center;gap:22px;flex-wrap:wrap"});
+    avDonutRow.appendChild(dashDonutMulti(
+      [{pct:pctActivosAv, color:"#2E4F91"}, {pct:pctInactivosAv, color:"#C7CEE3"}],
+      120, activosAv, "activos", "#2E4F91"
+    ));
+    const avLegend = el("div", {style:"display:flex;flex-direction:column;gap:10px"});
+    avLegend.appendChild(fiLegendItem("#2E4F91", "Activos", activosAv, pctActivosAv));
+    avLegend.appendChild(fiLegendItem("#C7CEE3", "Inactivos", inactivosAv, pctInactivosAv));
+    avDonutRow.appendChild(avLegend);
+    zoneAv.appendChild(avDonutRow);
+
     // Barra segmentada: los 3 grupos de avance DENTRO de quienes iniciaron
     // (1-25% / 26-50% / 51-79%), como porcentaje de quienes iniciaron.
     const segTotal = iniciaron || 1;
@@ -2314,9 +2327,9 @@ const storage = firebase.storage();
 
     const bottomRow = el("div", {class:"fi-bottom-row"});
     bottomRow.appendChild(fiTasaBlock("Tasa término Santander", deltas.tasas.tasaSantander, deltas.deltaSantander,
-      (santanderDenom !== null) ? (terminaron + " de " + santanderDenom) : null));
+      (santanderDenom !== null) ? (terminaron + " de " + santanderDenom) : null, "#2E4F91"));
     bottomRow.appendChild(fiTasaBlock("Tasa de término Operativa", deltas.tasas.tasaIniciados, deltas.deltaIniciados,
-      terminaron + " de " + operativaDenom));
+      terminaron + " de " + operativaDenom, "#9987FF"));
     bottomRow.appendChild(el("div", {class:"fi-compare-date"}, [
       document.createTextNode(opts.baselineDate ? "vs. semana del " + fmtDate(opts.baselineDate) : "sin comparación previa")
     ]));
@@ -2412,15 +2425,15 @@ const storage = firebase.storage();
   }
 
   function dashBoxMetric(label, value, pct, color){
-    const box = el("div", {style:"border:1px solid " + color + "33;background:" + color + "0d;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:9px;flex:1;min-width:0"});
-    box.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode(label)]));
+    const box = el("div", {style:"border:1px solid " + color + "33;background:" + color + "0d;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;flex:1;min-width:0"});
     box.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:28px;color:" + color}, [document.createTextNode(String(value))]));
+    box.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode(label)]));
     if(typeof pct === "number"){
-      const track = el("div", {style:"width:100%;height:9px;border-radius:5px;background:#ffffff;overflow:hidden"});
-      const fill = el("div", {style:"height:100%;border-radius:5px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
+      const track = el("div", {style:"width:100%;height:16px;border-radius:8px;background:#ffffff;overflow:hidden"});
+      const fill = el("div", {style:"height:100%;border-radius:8px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
       track.appendChild(fill);
       box.appendChild(track);
-      box.appendChild(el("div", {style:"font-size:10.5px;color:#8a8aab"}, [document.createTextNode(Math.round(pct) + "%")]));
+      box.appendChild(el("div", {style:"font-size:11px;font-weight:600;color:" + color}, [document.createTextNode(Math.round(pct) + "%")]));
     }
     return box;
   }
@@ -2435,12 +2448,28 @@ const storage = firebase.storage();
     return row;
   }
 
-  function dashRateBar(label, count, pct, color){
+  // Degradado fijo (morado -> azul) para las barras de bloques del
+  // close-up: cada bloque toma su color según su posición, no según el
+  // valor, así todas las filas comparten la misma paleta.
+  function dashBlockColor(t){
+    const c1 = [156, 71, 216], c2 = [104, 132, 253];
+    const r = Math.round(c1[0] + (c2[0]-c1[0])*t);
+    const g = Math.round(c1[1] + (c2[1]-c1[1])*t);
+    const b = Math.round(c1[2] + (c2[2]-c1[2])*t);
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+
+  function dashBlockBar(label, count, pct, totalBlocks){
+    totalBlocks = totalBlocks || 20;
+    const filled = Math.round((Math.max(0, Math.min(100, pct))/100) * totalBlocks);
     const row = el("div", {style:"display:flex;align-items:center;gap:12px"});
-    row.appendChild(el("div", {style:"width:160px;flex-shrink:0;font-size:13px;color:#0e0e55"}, [document.createTextNode(label)]));
-    const track = el("div", {style:"flex:1;height:12px;border-radius:6px;background:#eef0fb;overflow:hidden"});
-    track.appendChild(el("div", {style:"height:100%;border-radius:6px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"}));
-    row.appendChild(track);
+    row.appendChild(el("div", {style:"width:170px;flex-shrink:0;font-size:11px;letter-spacing:0.03em;text-transform:uppercase;color:#8a8aab"}, [document.createTextNode(label)]));
+    const blocksWrap = el("div", {style:"display:flex;gap:4px;flex:1"});
+    for(let i=0; i<totalBlocks; i++){
+      const color = i < filled ? dashBlockColor(i/(totalBlocks-1)) : "#e5e7f5";
+      blocksWrap.appendChild(el("div", {style:"flex:1;height:16px;border-radius:4px;background:" + color}));
+    }
+    row.appendChild(blocksWrap);
     row.appendChild(el("div", {style:"width:90px;flex-shrink:0;text-align:right;font-size:13px;font-weight:600;color:#0e0e55"}, [document.createTextNode(count + " · " + pct + "%")]));
     return row;
   }
@@ -2467,10 +2496,6 @@ const storage = firebase.storage();
     return svg;
   }
 
-  function dashRing(pct){
-    return dashDonut(pct, "#ffffff", "rgba(255,255,255,0.25)", 56, 6);
-  }
-
   function dashDonutWithCenter(pct, fgColor, bgColor, centerBig, centerSmall, size){
     size = size || 110;
     const wrap = el("div", {style:"position:relative;width:" + size + "px;height:" + size + "px;flex-shrink:0"});
@@ -2482,17 +2507,60 @@ const storage = firebase.storage();
     return wrap;
   }
 
-  function dashTasaCard(titleLines, value, sublabel, bg, bgImage){
-    const card = el("div", {style:
-      "border-radius:16px;padding:26px;color:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:16px;" +
-      "background:" + (bgImage || bg)
+  // Anillo multi-segmento (varios valores en un mismo donut, cada uno con
+  // su % impreso sobre el arco) — usado para Activos/Inactivos.
+  function dashDonutMulti(segments, size, centerBig, centerSmall, centerColor){
+    size = size || 140;
+    const stroke = Math.round(size*0.2);
+    const r = (size-stroke)/2, c = 2*Math.PI*r;
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", size); svg.setAttribute("height", size);
+    svg.style.flexShrink = "0";
+    let cum = 0;
+    segments.forEach(seg => {
+      const dash = (seg.pct/100)*c;
+      const circle = document.createElementNS(svgNS, "circle");
+      circle.setAttribute("cx", size/2); circle.setAttribute("cy", size/2); circle.setAttribute("r", r);
+      circle.setAttribute("fill", "none"); circle.setAttribute("stroke", seg.color); circle.setAttribute("stroke-width", stroke);
+      circle.setAttribute("stroke-dasharray", dash + " " + (c-dash));
+      circle.setAttribute("stroke-dashoffset", String(-(cum/100)*c));
+      circle.setAttribute("transform", "rotate(-90 " + (size/2) + " " + (size/2) + ")");
+      svg.appendChild(circle);
+      if(seg.pct >= 6){
+        const mid = cum + seg.pct/2;
+        const angle = (mid/100)*2*Math.PI - Math.PI/2;
+        const lx = size/2 + r*Math.cos(angle);
+        const ly = size/2 + r*Math.sin(angle);
+        const text = document.createElementNS(svgNS, "text");
+        text.setAttribute("x", lx); text.setAttribute("y", ly);
+        text.setAttribute("fill", "#ffffff"); text.setAttribute("font-size", Math.round(size*0.1));
+        text.setAttribute("font-weight", "700");
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("dominant-baseline", "middle");
+        text.textContent = Math.round(seg.pct) + "%";
+        svg.appendChild(text);
+      }
+      cum += seg.pct;
     });
-    const left = el("div", {style:"display:flex;flex-direction:column;gap:8px;min-width:0"});
-    titleLines.forEach(line => left.appendChild(el("div", {style:"font-size:13px;color:#e2e5ff;line-height:1.3"}, [document.createTextNode(line)])));
-    left.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:40px"}, [document.createTextNode(value + "%")]));
-    left.appendChild(el("div", {style:"font-size:12.5px;color:#dfe2ff"}, [document.createTextNode(sublabel)]));
-    card.appendChild(left);
-    card.appendChild(dashRing(value));
+    const wrap = el("div", {style:"position:relative;width:" + size + "px;height:" + size + "px;flex-shrink:0"});
+    wrap.appendChild(svg);
+    if(centerBig !== undefined){
+      const center = el("div", {style:"position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center"});
+      center.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:700;font-size:" + Math.round(size*0.16) + "px;color:" + centerColor}, [document.createTextNode(String(centerBig))]));
+      if(centerSmall) center.appendChild(el("div", {style:"font-size:" + Math.round(size*0.065) + "px;color:" + centerColor + ";opacity:0.7"}, [document.createTextNode(centerSmall)]));
+      wrap.appendChild(center);
+    }
+    return wrap;
+  }
+
+  function dashTasaCard(titleLines, value, sublabel, ringColor){
+    const card = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
+    card.appendChild(dashDonutWithCenter(value, ringColor, "#eef0fb", value + "%", null, 96));
+    const titleWrap = el("div", {style:"display:flex;flex-direction:column;gap:2px"});
+    titleLines.forEach(line => titleWrap.appendChild(el("div", {style:"font-size:13px;font-weight:600;color:#0e0e55;line-height:1.3"}, [document.createTextNode(line)])));
+    card.appendChild(titleWrap);
+    card.appendChild(el("div", {style:"font-size:12px;color:#8a8aab"}, [document.createTextNode(sublabel)]));
     return card;
   }
 
@@ -2611,9 +2679,9 @@ const storage = firebase.storage();
     activosBox.appendChild(el("div", {style:"font-size:12px;color:#5c5c7a"}, [document.createTextNode("activos")]));
     closeupRow.appendChild(activosBox);
     const barsCol = el("div", {style:"display:flex;flex-direction:column;gap:14px;flex:1;min-width:280px"});
-    barsCol.appendChild(dashRateBar("Iniciando (1–25%)", p1, pctP1Act, "#d6cfff"));
-    barsCol.appendChild(dashRateBar("A medio camino (26–50%)", p2, pctP2Act, "#b3a3ff"));
-    barsCol.appendChild(dashRateBar("Avanzando (51–79%)", p3, pctP3Act, "#5c57d8"));
+    barsCol.appendChild(dashBlockBar("Iniciando (1–25%)", p1, pctP1Act));
+    barsCol.appendChild(dashBlockBar("A medio camino (26–50%)", p2, pctP2Act));
+    barsCol.appendChild(dashBlockBar("Avanzando (51–79%)", p3, pctP3Act));
     closeupRow.appendChild(barsCol);
     closeup.appendChild(closeupRow);
 
@@ -2621,8 +2689,8 @@ const storage = firebase.storage();
 
     // ---- tasas de terminación ----
     const bottomGrid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px"});
-    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Santander", "vs. Becas asignadas"], tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#0e0e55"));
-    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Operativa", "vs. Activos plataforma"], tasaVsIniciaron, terminaron + " de " + activos + " activos", null, "linear-gradient(135deg,#5c57d8,#6884fd)"));
+    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Santander", "vs. Becas asignadas"], tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#5c57d8"));
+    bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Operativa", "vs. Activos plataforma"], tasaVsIniciaron, terminaron + " de " + activos + " activos", "#6884fd"));
     wrap.appendChild(bottomGrid);
 
     root.appendChild(wrap);
