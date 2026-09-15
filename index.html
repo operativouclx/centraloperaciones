@@ -2405,19 +2405,20 @@ const storage = firebase.storage();
       const fill = el("div", {style:"height:100%;border-radius:4px;background:" + color + ";width:" + Math.max(0, Math.min(100, pct)) + "%"});
       track.appendChild(fill);
       m.appendChild(track);
+      m.appendChild(el("div", {style:"font-size:10.5px;color:#8a8aab"}, [document.createTextNode(Math.round(pct) + "%")]));
     }
     return m;
   }
 
-  function dashCard(title, meta, statusField, items, metricColor){
+  function dashCard(title, meta, statusField, items, metricColor, pctBase){
     const card = el("div", {style:"background:#ffffff;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     const head = el("div", {style:"display:flex;align-items:center;justify-content:space-between"});
     head.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px"}, [document.createTextNode(title)]));
     head.appendChild(dashStatusBadge(statusField, meta[statusField] || "En progreso"));
     card.appendChild(head);
-    const maxVal = Math.max(1, ...items.map(([,value]) => value));
+    const base = pctBase || Math.max(1, ...items.map(([,value]) => value));
     const grid = el("div", {style:"display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px"});
-    items.forEach(([label, value]) => grid.appendChild(dashMetric(value, label, metricColor, (value / maxVal) * 100)));
+    items.forEach(([label, value]) => grid.appendChild(dashMetric(value, label, metricColor, (value / base) * 100)));
     card.appendChild(grid);
     return card;
   }
@@ -2461,18 +2462,33 @@ const storage = firebase.storage();
     const enPlataforma = esHistorico ? stats.total : Math.max(stats.total - stats.alta, 0);
 
     const avance0 = stats.p0 || 0;
-    const iniciaron = (stats.p1||0) + (stats.p2||0) + (stats.p3||0);
+    const p1 = stats.p1 || 0, p2 = stats.p2 || 0, p3 = stats.p3 || 0;
     const terminaron = stats.p4 || 0;
+    // enProgreso: avanzaron pero no llegaron a 80% (bucket exclusivo, para el
+    // donut). iniciaron: TODOS los que pasaron de 0%, incluyendo a quienes ya
+    // terminaron — es el que se usa como KPI y como base de la tasa, si no
+    // "vs. Iniciaron" da más de 100% cuando hay más terminados que en curso.
+    const enProgreso = p1 + p2 + p3;
+    const iniciaron = enProgreso + terminaron;
 
-    const base = becasAsignadas || 1;
+    // El donut reparte a TODOS los que están en plataforma (0% + en progreso +
+    // terminaron = enPlataforma), no las becas asignadas — por eso la base
+    // de estos porcentajes y el centro del donut usan enPlataforma.
+    const base = enPlataforma || 1;
     const pctAvance0 = Math.round((avance0/base)*100);
-    const pctIniciaron = Math.round((iniciaron/base)*100);
+    const pctEnProgreso = Math.round((enProgreso/base)*100);
     const pctTerminaron = Math.round((terminaron/base)*100);
+
+    // Desglose de "en progreso" en sus 3 grupos, como % de ese subtotal
+    const enProgresoBase = enProgreso || 1;
+    const pctP1 = Math.round((p1/enProgresoBase)*100);
+    const pctP2 = Math.round((p2/enProgresoBase)*100);
+    const pctP3 = Math.round((p3/enProgresoBase)*100);
 
     const tasaVsBecas = becasAsignadas ? Math.round((terminaron/becasAsignadas)*100) : 0;
     const tasaVsIniciaron = iniciaron ? Math.round((terminaron/iniciaron)*100) : 0;
 
-    const donutGradient = "conic-gradient(#0e0e55 0% " + pctTerminaron + "%, #6884fd " + pctTerminaron + "% " + (pctTerminaron+pctIniciaron) + "%, #c7cdfb " + (pctTerminaron+pctIniciaron) + "% 100%)";
+    const donutGradient = "conic-gradient(#0e0e55 0% " + pctTerminaron + "%, #6884fd " + pctTerminaron + "% " + (pctTerminaron+pctEnProgreso) + "%, #c7cdfb " + (pctTerminaron+pctEnProgreso) + "% 100%)";
 
     const wrap = el("div", {id:"dash-export-root", style:
       "max-width:1180px;margin:0 auto;padding:24px 0 40px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;" +
@@ -2514,26 +2530,41 @@ const storage = firebase.storage();
       ["0% de avance", avance0],
       ["Iniciaron", iniciaron],
       ["Terminaron", terminaron]
-    ], "#6884fd"));
+    ], "#6884fd", enPlataforma));
     wrap.appendChild(grid);
 
     // ---- close-up de avance (donut) ----
     const closeup = el("div", {style:"background:#ffffff;border-radius:16px;padding:28px;box-shadow:0 1px 2px rgba(14,14,85,0.06)"});
     closeup.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:16px;margin-bottom:20px"}, [document.createTextNode("Close-up de avance")]));
-    const closeupRow = el("div", {style:"display:flex;align-items:center;gap:40px;flex-wrap:wrap"});
+    const closeupRow = el("div", {style:"display:flex;align-items:center;gap:24px;flex-wrap:wrap"});
     const donutWrap = el("div", {style:"position:relative;width:180px;height:180px;flex-shrink:0"});
     donutWrap.appendChild(el("div", {style:"width:100%;height:100%;border-radius:50%;background:" + donutGradient}));
     const donutCenter = el("div", {style:"position:absolute;inset:22px;border-radius:50%;background:#ffffff;display:flex;flex-direction:column;align-items:center;justify-content:center"});
-    donutCenter.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:26px"}, [document.createTextNode(String(becasAsignadas))]));
-    donutCenter.appendChild(el("div", {style:"font-size:11px;color:#8a8aab;text-transform:uppercase;letter-spacing:0.05em"}, [document.createTextNode("becas base")]));
+    donutCenter.appendChild(el("div", {style:"font-family:'Clash Display',sans-serif;font-weight:600;font-size:26px"}, [document.createTextNode(String(enPlataforma))]));
+    donutCenter.appendChild(el("div", {style:"font-size:11px;color:#8a8aab;text-transform:uppercase;letter-spacing:0.05em;text-align:center"}, [document.createTextNode("en plataforma")]));
     donutWrap.appendChild(donutCenter);
     closeupRow.appendChild(donutWrap);
-    const legendCol = el("div", {style:"display:flex;flex-direction:column;gap:16px;flex:1;min-width:220px"});
+    const legendCol = el("div", {style:"display:flex;flex-direction:column;gap:16px;max-width:280px"});
     legendCol.appendChild(dashLegendRow("#c7cdfb", "0% de avance", avance0, pctAvance0));
-    legendCol.appendChild(dashLegendRow("#6884fd", "Iniciaron", iniciaron, pctIniciaron));
+    legendCol.appendChild(dashLegendRow("#6884fd", "En progreso", enProgreso, pctEnProgreso));
     legendCol.appendChild(dashLegendRow("#0e0e55", "Terminaron", terminaron, pctTerminaron));
     closeupRow.appendChild(legendCol);
     closeup.appendChild(closeupRow);
+
+    // Desglose de quienes iniciaron (no llegaron a 80%) en sus 3 grupos
+    closeup.appendChild(el("div", {style:"height:1px;background:#eef0fb;margin:22px 0 18px"}));
+    closeup.appendChild(el("div", {style:"font-size:12.5px;color:#5c5c7a;margin-bottom:10px"}, [document.createTextNode("Avance de quienes iniciaron")]));
+    const subBar = el("div", {style:"display:flex;width:100%;height:10px;border-radius:5px;overflow:hidden;background:#eef0fb;margin-bottom:12px"});
+    [[pctP1,"#d6cfff"],[pctP2,"#b3a3ff"],[pctP3,"#5c57d8"]].forEach(([pct,color]) => {
+      if(pct > 0) subBar.appendChild(el("div", {style:"height:100%;width:" + pct + "%;background:" + color}));
+    });
+    closeup.appendChild(subBar);
+    const subLegend = el("div", {style:"display:flex;gap:24px;flex-wrap:wrap"});
+    subLegend.appendChild(dashLegendRow("#d6cfff", "Iniciando (1–25%)", p1, pctP1));
+    subLegend.appendChild(dashLegendRow("#b3a3ff", "A medio camino (26–50%)", p2, pctP2));
+    subLegend.appendChild(dashLegendRow("#5c57d8", "Avanzando (51–79%)", p3, pctP3));
+    closeup.appendChild(subLegend);
+
     wrap.appendChild(closeup);
 
     // ---- tasas de terminación ----
