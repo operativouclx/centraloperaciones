@@ -410,6 +410,7 @@
   <section id="section-course">
     <div class="panel panel-compact">
       <div class="course-tabs" id="cliente-tabs" style="margin-bottom:10px;"></div>
+      <div class="course-tabs" id="anio-tabs" style="margin-bottom:10px;"></div>
       <div class="course-tabs-row">
         <div class="course-tabs course-tabs-grouped" id="course-tabs"></div>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
@@ -422,11 +423,9 @@
         <div>
           <h2 id="course-name-display" style="display:inline"></h2>
           <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎</button>
+          <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷</button>
           <div class="course-meta-list">
-            <div class="course-meta-item" id="cm-item-cliente-anio" style="cursor:pointer" title="Cambiar cliente / año"><b id="cm-cliente-anio">—</b></div>
-            <div class="course-meta-item" id="cm-item-meta-convocatoria" style="cursor:pointer" title="Cambiar meta de convocatoria"><b id="cm-meta-convocatoria">—</b></div>
-            <div class="course-meta-item" id="cm-item-convocatoria-status"></div>
-            <div class="course-meta-item" id="cm-item-operacion-status"></div>
+            <div class="course-meta-item" id="cm-item-meta-convocatoria" style="cursor:pointer"><b id="cm-meta-convocatoria">—</b></div>
             <div class="course-meta-item"><b id="cm-last-santander">—</b><span id="cm-label-santander">última carga Santander</span></div>
             <div class="course-meta-item" id="cm-item-plataforma"><b id="cm-last-plataforma">—</b>última actualización plataforma</div>
           </div>
@@ -449,6 +448,10 @@
         <div class="step-body">
           <div class="step-title">Tabla madre y resultados</div>
           <div class="step-sub" id="results-sub">Aquí vive todo el histórico del curso.</div>
+          <div class="course-meta-list" style="margin-top:8px;">
+            <div class="course-meta-item" id="cm-item-convocatoria-status"></div>
+            <div class="course-meta-item" id="cm-item-operacion-status"></div>
+          </div>
         </div>
       </div>
 
@@ -1028,7 +1031,8 @@ const db = firebase.firestore();
     lastRun: { alta:[], revisar:[] },
     selectedCliente: (function(){
       try{ return localStorage.getItem("uclx-cliente") || "soa"; }catch(e){ return "soa"; }
-    })()
+    })(),
+    selectedAnio: null
   };
 
   // Los 3 clientes de la plataforma. Los cursos que ya existían antes de
@@ -1064,20 +1068,21 @@ const db = firebase.firestore();
 
   // Cada curso tiene su propia "familia" (el nombre base sin el número de
   // edición) y todas sus ediciones se agrupan juntas en las pestañas, en
-  // vez de separarse por año — igual que No+Violencia.
-  const FAMILIA_LEGACY = {
-    "crianza-responsable-ii": "Crianza responsable",
-    "crianza-responsable-iii": "Crianza responsable",
-    "no-violencia-ii": "No+Violencia",
-    "no-violencia-iiia": "No+Violencia",
-    "no-violencia-iiib": "No+Violencia",
-    "matematicamente": "Matemáticamente",
-    "mi-prepa": "Mi Prepa",
-    "voca-accion": "Voca Acción",
-    "vocaaccion": "Voca Acción"
-  };
+  // vez de separarse por año — igual que No+Violencia. Se compara por
+  // prefijo de slug para que cualquier edición futura (p. ej.
+  // "No+Violencia V") caiga sola en su familia sin tener que listarla.
+  const FAMILIA_LEGACY_PREFIX = [
+    {prefix:"crianza-responsable", familia:"Crianza responsable"},
+    {prefix:"no-violencia", familia:"No+Violencia"},
+    {prefix:"matematicamente", familia:"Matemáticamente"},
+    {prefix:"mi-prepa", familia:"Mi Prepa"},
+    {prefix:"voca-accion", familia:"Voca Acción"},
+    {prefix:"vocaaccion", familia:"Voca Acción"}
+  ];
   function inferFamiliaLegacy(slug){
-    return FAMILIA_LEGACY[slug] || null;
+    const s = slug || "";
+    const hit = FAMILIA_LEGACY_PREFIX.find(f => s.indexOf(f.prefix) === 0);
+    return hit ? hit.familia : null;
   }
 
   function emptyMeta(displayName, slug, tipo, cliente, anio){
@@ -1460,16 +1465,7 @@ const db = firebase.firestore();
     });
   }
 
-  function renderClienteAnioLabel(){
-    const cliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
-    const clienteLabel = (CLIENTES.find(c => c.id === cliente) || {}).label || cliente;
-    const anio = app.meta.anio || inferAnioLegacy(app.slug);
-    const familia = app.meta.familia || inferFamiliaLegacy(app.slug);
-    document.getElementById("cm-cliente-anio").textContent =
-      clienteLabel + (anio ? " · " + anio : " · sin año — clic para asignar") + (familia ? " · " + familia : "");
-  }
-
-  document.getElementById("cm-item-cliente-anio").addEventListener("click", async () => {
+  document.getElementById("btn-edit-cliente-anio").addEventListener("click", async () => {
     if(!app.slug) return;
     const clienteActual = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
     const opciones = CLIENTES.map(c => c.id + " = " + c.label).join("\n");
@@ -1494,21 +1490,45 @@ const db = firebase.firestore();
       app.meta.familia = familia;
       const idx = app.coursesIndex.find(c => c.slug === app.slug);
       if(idx){ idx.cliente = clienteId; idx.anio = anio; idx.familia = familia; }
-      renderClienteAnioLabel();
       app.selectedCliente = clienteId;
+      app.selectedAnio = anio;
       try{ localStorage.setItem("uclx-cliente", clienteId); }catch(e){}
       renderClienteTabs();
       renderCourseTabs();
+      renderMetaConvocatoriaLabel();
     }catch(err){
       console.error("No se pudo guardar cliente/año:", err);
       alert("No se pudo guardar: " + (err && err.message ? err.message : err));
     }
   });
 
+  // Suma el "Total Inscritos" de todas las ediciones de la misma familia
+  // (p. ej. las 3 de No+Violencia), para que la meta de convocatoria se
+  // pueda comparar contra el avance de todo el grupo, no solo esta edición.
+  function familiaInscritosTotal(familia, cliente){
+    if(!familia) return (app.meta.stats && app.meta.stats.total) || 0;
+    return app.coursesIndex
+      .filter(c => !c.archived &&
+        (c.cliente || inferClienteLegacy(c.displayName)) === cliente &&
+        (c.familia || inferFamiliaLegacy(c.slug)) === familia)
+      .reduce((sum, c) => sum + ((c.stats && c.stats.total) || 0), 0);
+  }
+
   function renderMetaConvocatoriaLabel(){
-    const meta = app.meta.metaConvocatoria;
-    document.getElementById("cm-meta-convocatoria").textContent =
-      typeof meta === "number" ? "Meta convocatoria: " + meta : "Sin meta de convocatoria — clic para asignar";
+    const box = document.getElementById("cm-item-meta-convocatoria");
+    const metaVal = app.meta.metaConvocatoria;
+    box.innerHTML = "";
+    if(typeof metaVal !== "number"){
+      box.title = "Asignar meta de convocatoria";
+      box.appendChild(el("b", {}, [document.createTextNode("+ Meta de convocatoria")]));
+      return;
+    }
+    const cliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
+    const familia = app.meta.familia || inferFamiliaLegacy(app.slug);
+    const inscritos = familiaInscritosTotal(familia, cliente);
+    const pct = metaVal ? Math.round((inscritos/metaVal)*100) : 0;
+    box.title = "Cambiar meta de convocatoria";
+    box.appendChild(el("b", {}, [document.createTextNode("Meta convocatoria: " + inscritos + " / " + metaVal + " (" + pct + "%)")]));
   }
 
   document.getElementById("cm-item-meta-convocatoria").addEventListener("click", async () => {
@@ -1554,6 +1574,7 @@ const db = firebase.firestore();
       btn.addEventListener("click", () => {
         if(app.selectedCliente === cli.id) return;
         app.selectedCliente = cli.id;
+        app.selectedAnio = null; // se recalcula en renderCourseTabs para el nuevo cliente
         try{ localStorage.setItem("uclx-cliente", cli.id); }catch(e){}
         renderClienteTabs();
         renderCourseTabs();
@@ -1562,12 +1583,45 @@ const db = firebase.firestore();
     });
   }
 
-  function renderCourseTabs(){
+  // Marcador para el año de los cursos que no tienen año asignado, para
+  // que también tengan su propia pestaña en vez de desaparecer.
+  const SIN_ANIO = "sin-anio";
+
+  // Pestaña horizontal de año: solo se muestran los cursos del año
+  // seleccionado, para no ocupar tanto espacio con todos los cursos del
+  // cliente a la vez.
+  function renderAnioTabs(anios){
+    const wrap = document.getElementById("anio-tabs");
+    wrap.innerHTML = "";
+    if(anios.length < 2){
+      wrap.classList.add("hidden");
+      return;
+    }
+    wrap.classList.remove("hidden");
+    anios.forEach((anio, i) => {
+      const btn = el("button", {
+        type:"button",
+        class:"course-tab c" + (i % 4) + (app.selectedAnio === anio ? " active" : "")
+      }, [document.createTextNode(anio === SIN_ANIO ? "Sin año" : String(anio))]);
+      btn.addEventListener("click", () => {
+        if(app.selectedAnio === anio) return;
+        app.selectedAnio = anio;
+        renderAnioTabs(anios);
+        renderCourseGroups();
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  // Renderiza solo los grupos (por familia) del año actualmente
+  // seleccionado — separado de renderCourseTabs para poder refrescar
+  // solo esta parte al cambiar de año, sin repintar las pestañas de año.
+  function renderCourseGroups(){
     const wrap = document.getElementById("course-tabs");
     wrap.innerHTML = "";
 
-    // Cada grupo (año o familia) es su propio renglón: la etiqueta arriba
-    // y los cursos de ese grupo en una fila debajo.
+    // Cada grupo (familia) es su propio renglón: la etiqueta arriba y los
+    // cursos de ese grupo en una fila debajo.
     function addGroup(label, list, colorStart){
       if(!list.length) return;
       const groupWrap = el("div", {class:"course-tabs-yeargroup"});
@@ -1585,15 +1639,17 @@ const db = firebase.firestore();
       wrap.appendChild(groupWrap);
     }
 
-    const visible = app.coursesIndex.filter(c =>
-      !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
-    );
+    const visible = app.coursesIndex.filter(c => {
+      if(c.archived || (c.cliente || inferClienteLegacy(c.displayName)) !== app.selectedCliente) return false;
+      if(app.selectedAnio == null) return true;
+      const anio = c.anio || inferAnioLegacy(c.slug);
+      return app.selectedAnio === SIN_ANIO ? !anio : anio === app.selectedAnio;
+    });
 
-    // Cada curso se agrupa por familia (todas sus ediciones juntas, sin
-    // separarse por año) — igual que No+Violencia. Si no tiene familia
-    // asignada, su propio nombre es su familia (grupo de un solo curso),
-    // así todos los grupos se ven y se comportan igual.
-    const withFamilia = visible.map(c => Object.assign({}, c, {_familia: c.familia || c.displayName}));
+    // Dentro del año, cada curso se agrupa por familia (todas sus
+    // ediciones juntas) — igual que No+Violencia. Si no tiene familia
+    // asignada, su propio nombre es su familia (grupo de un solo curso).
+    const withFamilia = visible.map(c => Object.assign({}, c, {_familia: c.familia || inferFamiliaLegacy(c.slug) || c.displayName}));
     const familias = Array.from(new Set(withFamilia.map(c => c._familia))).sort();
     let colorStart = 0;
     familias.forEach(familia => {
@@ -1602,6 +1658,21 @@ const db = firebase.firestore();
       addGroup(familia, list, colorStart);
       colorStart += list.length;
     });
+  }
+
+  function renderCourseTabs(){
+    const visibleCliente = app.coursesIndex.filter(c =>
+      !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
+    );
+    const anios = Array.from(new Set(
+      visibleCliente.map(c => c.anio || inferAnioLegacy(c.slug) || null)
+    ).values()).filter(a => a !== null).sort();
+    if(visibleCliente.some(c => !(c.anio || inferAnioLegacy(c.slug)))) anios.push(SIN_ANIO);
+    if(app.selectedAnio == null || !anios.includes(app.selectedAnio)){
+      app.selectedAnio = anios.length ? anios[0] : null;
+    }
+    renderAnioTabs(anios);
+    renderCourseGroups();
   }
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
@@ -1672,6 +1743,7 @@ const db = firebase.firestore();
       try{ localStorage.setItem("uclx-cliente", metaCliente); }catch(e){}
       renderClienteTabs();
     }
+    app.selectedAnio = app.meta.anio || inferAnioLegacy(app.slug) || SIN_ANIO;
     renderCourseTabs();
     resetTableFilter("madre");
 
@@ -1679,7 +1751,6 @@ const db = firebase.firestore();
 
     document.getElementById("course-head").classList.remove("hidden");
     document.getElementById("course-name-display").textContent = app.meta.displayName;
-    renderClienteAnioLabel();
     renderMetaConvocatoriaLabel();
     renderCourseHeadStatusBadges();
     if(esHistorico){
