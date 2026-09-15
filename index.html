@@ -1041,21 +1041,26 @@ const db = firebase.firestore();
 
   // Cada curso tiene su propia "familia" (el nombre base sin el número de
   // edición) y todas sus ediciones se agrupan juntas en las pestañas, en
-  // vez de separarse por año — igual que No+Violencia. Se compara por
-  // prefijo de slug para que cualquier edición futura (p. ej.
-  // "No+Violencia V") caiga sola en su familia sin tener que listarla.
-  const FAMILIA_LEGACY_PREFIX = [
-    {prefix:"crianza-responsable", familia:"Crianza responsable"},
-    {prefix:"no-violencia", familia:"No+Violencia"},
-    {prefix:"matematicamente", familia:"Matemáticamente"},
-    {prefix:"mi-prepa", familia:"Mi Prepa"},
-    {prefix:"voca-accion", familia:"Vocaaccion"},
-    {prefix:"vocaaccion", familia:"Vocaaccion"},
-    {prefix:"vocaccion", familia:"Vocaaccion"}
+  // vez de separarse por año — igual que No+Violencia. Se compara contra
+  // el slug Y el nombre visible, sin guiones/espacios/acentos, buscando
+  // la cadena en cualquier parte (no solo al inicio) — así cualquier
+  // variante de ortografía ("Vocaaccion", "VocAcción", "Voca Acción",
+  // etc.) y cualquier edición futura ("No+Violencia V") caen en su
+  // familia sin tener que listarlas todas a mano.
+  function squash(s){
+    return normalize(s).replace(/[^a-z0-9]/g, "");
+  }
+  const FAMILIA_LEGACY_MATCH = [
+    {test:"crianzaresponsable", familia:"Crianza responsable"},
+    {test:"noviolencia", familia:"No+Violencia"},
+    {test:"matematicamente", familia:"Matemáticamente"},
+    {test:"miprepa", familia:"Mi Prepa"},
+    {test:"vocaaccion", familia:"Vocaaccion"},
+    {test:"vocaccion", familia:"Vocaaccion"}
   ];
-  function inferFamiliaLegacy(slug){
-    const s = slug || "";
-    const hit = FAMILIA_LEGACY_PREFIX.find(f => s.indexOf(f.prefix) === 0);
+  function inferFamiliaLegacy(slug, displayName){
+    const hay = squash(slug || "") + " " + squash(displayName || "");
+    const hit = FAMILIA_LEGACY_MATCH.find(f => hay.indexOf(f.test) !== -1);
     return hit ? hit.familia : null;
   }
 
@@ -1064,10 +1069,10 @@ const db = firebase.firestore();
   // 2025; cualquier otra edición conocida (incluidas ediciones futuras
   // como No+Violencia V) es 2026 por defecto, sin tener que listarla.
   const ANIO_2025_SLUGS = ["crianza-responsable-ii", "no-violencia-ii"];
-  function inferAnioLegacy(slug){
+  function inferAnioLegacy(slug, displayName){
     if(!slug) return null;
     if(ANIO_2025_SLUGS.includes(slug)) return 2025;
-    return inferFamiliaLegacy(slug) ? 2026 : null;
+    return inferFamiliaLegacy(slug, displayName) ? 2026 : null;
   }
 
   function emptyMeta(displayName, slug, tipo, cliente, anio){
@@ -1219,8 +1224,8 @@ const db = firebase.firestore();
         stats: data.stats || emptyStats(),
         tipo: data.tipo === "historico" ? "historico" : "activo",
         cliente: data.cliente || inferClienteLegacy(data.displayName || d.id),
-        anio: data.anio || inferAnioLegacy(d.id),
-        familia: data.familia || inferFamiliaLegacy(d.id),
+        anio: data.anio || inferAnioLegacy(d.id, data.displayName),
+        familia: data.familia || inferFamiliaLegacy(d.id, data.displayName),
         lastSantanderUpload: data.lastSantanderUpload || null,
         lastPlataformaUpload: data.lastPlataformaUpload || null,
         lastListaFinalUpload: data.lastListaFinalUpload || null,
@@ -1459,12 +1464,12 @@ const db = firebase.firestore();
     const clienteId = CLIENTES.some(c => c.id === clienteInput.trim()) ? clienteInput.trim() : clienteActual;
 
     const anioInput = prompt("Año de este curso (ej. 2025), vacío para quitarlo:",
-      app.meta.anio || inferAnioLegacy(app.slug) || "");
+      app.meta.anio || inferAnioLegacy(app.slug, app.meta.displayName) || "");
     if(anioInput === null) return;
     const anio = anioInput.trim() ? parseInt(anioInput.trim(), 10) : null;
 
     const familiaInput = prompt("Grupo/familia de este curso (p. ej. 'No+Violencia' para agrupar sus ediciones juntas), vacío para quitarlo:",
-      app.meta.familia || inferFamiliaLegacy(app.slug) || "");
+      app.meta.familia || inferFamiliaLegacy(app.slug, app.meta.displayName) || "");
     if(familiaInput === null) return;
     const familia = familiaInput.trim() || null;
 
@@ -1493,7 +1498,7 @@ const db = firebase.firestore();
   // lado, ya que sigue siendo la que se está editando en el resto de la
   // página (tabla madre, cargas, etc.).
   function renderCourseNameDisplay(){
-    const familia = app.meta.familia || inferFamiliaLegacy(app.slug);
+    const familia = app.meta.familia || inferFamiliaLegacy(app.slug, app.meta.displayName);
     const nameEl = document.getElementById("course-name-display");
     const editionEl = document.getElementById("course-edition-display");
     if(familia && familia !== app.meta.displayName){
@@ -1513,8 +1518,8 @@ const db = firebase.firestore();
     return app.coursesIndex.filter(c => {
       if(c.archived) return false;
       if((c.cliente || inferClienteLegacy(c.displayName)) !== cliente) return false;
-      if((c.familia || inferFamiliaLegacy(c.slug)) !== familia) return false;
-      const cAnio = c.anio || inferAnioLegacy(c.slug);
+      if((c.familia || inferFamiliaLegacy(c.slug, c.displayName)) !== familia) return false;
+      const cAnio = c.anio || inferAnioLegacy(c.slug, c.displayName);
       return anio === SIN_ANIO ? !cAnio : cAnio === anio;
     });
   }
@@ -1534,9 +1539,9 @@ const db = firebase.firestore();
     const grupo = cursosDelGrupo(familia, cliente, anio);
     await Promise.all(grupo.map(c => courseDoc(c.slug).set({metaConvocatoria}, {merge:true})));
     grupo.forEach(c => { c.metaConvocatoria = metaConvocatoria; });
-    if(app.meta && (app.meta.familia || inferFamiliaLegacy(app.slug)) === familia &&
+    if(app.meta && (app.meta.familia || inferFamiliaLegacy(app.slug, app.meta.displayName)) === familia &&
        (app.meta.cliente || inferClienteLegacy(app.meta.displayName)) === cliente &&
-       (app.meta.anio || inferAnioLegacy(app.slug)) === anio){
+       (app.meta.anio || inferAnioLegacy(app.slug, app.meta.displayName)) === anio){
       app.meta.metaConvocatoria = metaConvocatoria;
       renderDashboard(app.meta.stats);
     }
@@ -1654,6 +1659,18 @@ const db = firebase.firestore();
     });
   }
 
+  // Cierra el curso abierto (oculta encabezado y panel de resultados) —
+  // se usa al cambiar de cliente/año a un grupo donde el curso que
+  // estaba abierto ya no aparece, para que el panel nunca muestre datos
+  // de un curso que no es el seleccionado en el menú.
+  function closeOpenCourse(){
+    app.slug = null;
+    app.meta = null;
+    app.courseLoadToken++;
+    document.getElementById("course-head").classList.add("hidden");
+    document.getElementById("course-dependent").classList.add("hidden");
+  }
+
   // Renderiza, para el año actualmente seleccionado: (1) un resumen por
   // familia (etiqueta + meta de convocatoria + inscritos/meta) y (2) un
   // desplegable único para elegir qué curso abrir — separado de
@@ -1667,9 +1684,11 @@ const db = firebase.firestore();
     const visible = app.coursesIndex.filter(c => {
       if(c.archived || (c.cliente || inferClienteLegacy(c.displayName)) !== app.selectedCliente) return false;
       if(app.selectedAnio == null) return true;
-      const anio = c.anio || inferAnioLegacy(c.slug);
+      const anio = c.anio || inferAnioLegacy(c.slug, c.displayName);
       return app.selectedAnio === SIN_ANIO ? !anio : anio === app.selectedAnio;
     });
+
+    if(app.slug && !visible.some(c => c.slug === app.slug)) closeOpenCourse();
 
     if(!visible.length){
       sel.appendChild(el("option", {value:""}, [document.createTextNode("No hay cursos en este año")]));
@@ -1679,7 +1698,7 @@ const db = firebase.firestore();
     // Dentro del año, cada curso se agrupa por familia (todas sus
     // ediciones juntas) — igual que No+Violencia. Si no tiene familia
     // asignada, su propio nombre es su familia (grupo de un solo curso).
-    const withFamilia = visible.map(c => Object.assign({}, c, {_familia: c.familia || inferFamiliaLegacy(c.slug) || c.displayName}));
+    const withFamilia = visible.map(c => Object.assign({}, c, {_familia: c.familia || inferFamiliaLegacy(c.slug, c.displayName) || c.displayName}));
     const familias = Array.from(new Set(withFamilia.map(c => c._familia))).sort();
 
     sel.appendChild(el("option", {value:""}, [document.createTextNode("Elige un curso...")]));
@@ -1687,10 +1706,11 @@ const db = firebase.firestore();
       const list = withFamilia.filter(c => c._familia === familia)
         .sort((a,b)=> (a.anio||0) - (b.anio||0) || a.displayName.localeCompare(b.displayName));
 
-      const row = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"});
-      row.appendChild(el("span", {class:"course-tabs-group-label"}, [document.createTextNode(familia)]));
-      if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)) row.appendChild(buildGroupMetaControl(familia, app.selectedCliente, app.selectedAnio));
-      summary.appendChild(row);
+      if(grupoTieneMeta(app.selectedCliente, app.selectedAnio)){
+        const row = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"});
+        row.appendChild(buildGroupMetaControl(familia, app.selectedCliente, app.selectedAnio));
+        summary.appendChild(row);
+      }
 
       const group = el("optgroup", {label: familia});
       list.forEach(c => {
@@ -1706,9 +1726,9 @@ const db = firebase.firestore();
       !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
     );
     const anios = Array.from(new Set(
-      visibleCliente.map(c => c.anio || inferAnioLegacy(c.slug) || null)
+      visibleCliente.map(c => c.anio || inferAnioLegacy(c.slug, c.displayName) || null)
     ).values()).filter(a => a !== null).sort();
-    if(visibleCliente.some(c => !(c.anio || inferAnioLegacy(c.slug)))) anios.push(SIN_ANIO);
+    if(visibleCliente.some(c => !(c.anio || inferAnioLegacy(c.slug, c.displayName)))) anios.push(SIN_ANIO);
     if(app.selectedAnio == null || !anios.includes(app.selectedAnio)){
       app.selectedAnio = anios.length ? anios[0] : null;
     }
@@ -1787,7 +1807,7 @@ const db = firebase.firestore();
       try{ localStorage.setItem("uclx-cliente", metaCliente); }catch(e){}
       renderClienteTabs();
     }
-    app.selectedAnio = app.meta.anio || inferAnioLegacy(app.slug) || SIN_ANIO;
+    app.selectedAnio = app.meta.anio || inferAnioLegacy(app.slug, app.meta.displayName) || SIN_ANIO;
     renderCourseTabs();
     resetTableFilter("madre");
 
@@ -3318,8 +3338,8 @@ const db = firebase.firestore();
     convRow.appendChild(dashBoxMetric("Total Beca asignada", becasAsignadas, pctBecas, "#5c57d8"));
     if(typeof meta.metaConvocatoria === "number" && meta.metaConvocatoria > 0){
       const clienteMeta = meta.cliente || inferClienteLegacy(meta.displayName);
-      const familiaMeta = meta.familia || inferFamiliaLegacy(app.slug);
-      const anioMeta = meta.anio || inferAnioLegacy(app.slug);
+      const familiaMeta = meta.familia || inferFamiliaLegacy(app.slug, meta.displayName);
+      const anioMeta = meta.anio || inferAnioLegacy(app.slug, meta.displayName);
       const inscritosGrupo = familiaInscritosTotal(familiaMeta, clienteMeta, anioMeta);
       const pctMeta = Math.round((inscritosGrupo/meta.metaConvocatoria)*100);
       convRow.appendChild(dashBoxMetric("Meta " + (anioMeta || "") + (familiaMeta ? " (" + familiaMeta + ")" : ""), meta.metaConvocatoria, pctMeta, "#5c57d8"));
