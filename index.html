@@ -14,7 +14,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 
 <style>
   :root{
@@ -611,7 +610,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-const storage = firebase.storage();
 
 (function(){
 
@@ -790,7 +788,6 @@ const storage = firebase.storage();
       cohort: "",
       convocatoriaStatus: "En progreso",
       operacionStatus: "En progreso",
-      logoUrl: null,
       lastRun: { revisar: [] }
     };
   }
@@ -2375,39 +2372,21 @@ const storage = firebase.storage();
     return line;
   }
 
+  // Los logos de curso son archivos estáticos del repo (assets/course-logos/
+  // <slug>.png), no algo que se suba desde el panel — así no dependen de
+  // Firebase Storage. Si el archivo no existe para este curso, se muestra
+  // un recuadro vacío en su lugar.
   function dashLogoSlot(meta){
     const box = el("div", {style:
       "width:120px;height:64px;border-radius:10px;border:1px dashed #d8d8ea;background:#f6f6fb;" +
-      "display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;flex-shrink:0"
+      "display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"
     });
-    if(meta.logoUrl){
-      box.appendChild(el("img", {src:meta.logoUrl, style:"width:100%;height:100%;object-fit:contain"}));
-    } else {
-      box.appendChild(el("div", {style:"font-size:11px;color:#8a8aab;text-align:center;padding:0 8px"}, [
-        document.createTextNode("+ Subir logo")
-      ]));
-    }
-    const input = el("input", {type:"file", accept:"image/*", style:"display:none"});
-    box.addEventListener("click", () => input.click());
-    input.addEventListener("change", async () => {
-      const file = input.files && input.files[0];
-      if(!file) return;
-      box.style.opacity = "0.5";
-      try{
-        const ext = (file.name.split(".").pop() || "png").toLowerCase();
-        const ref = storage.ref().child("course-logos/" + app.slug + "." + ext);
-        await ref.put(file);
-        const url = await ref.getDownloadURL();
-        await courseDoc(app.slug).set({logoUrl: url}, {merge:true});
-        app.meta.logoUrl = url;
-        renderDashboard(app.meta.stats);
-      }catch(err){
-        console.error("No se pudo subir el logo:", err);
-        alert("No se pudo subir el logo: " + (err && err.message ? err.message : err));
-        box.style.opacity = "1";
-      }
-    });
-    box.appendChild(input);
+    const img = el("img", {src:"./assets/course-logos/" + app.slug + ".png", style:"width:100%;height:100%;object-fit:contain;display:none"});
+    const placeholder = el("div", {style:"font-size:10.5px;color:#c3c3d0;text-align:center;padding:0 8px"}, [document.createTextNode("Sin logo")]);
+    img.addEventListener("load", () => { img.style.display = "block"; placeholder.style.display = "none"; });
+    img.addEventListener("error", () => { img.style.display = "none"; placeholder.style.display = "block"; });
+    box.appendChild(img);
+    box.appendChild(placeholder);
     return box;
   }
 
