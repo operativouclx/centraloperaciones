@@ -1594,6 +1594,22 @@ const db = firebase.firestore();
     return cliente !== "alianza" && anio !== 2025 && anio !== SIN_ANIO;
   }
 
+  // Metas de convocatoria 2026 de Santander Open Academy, fijas en el
+  // código para que no se tengan que volver a escribir — si alguien
+  // guarda un valor manualmente desde el campo, ese guardado manda sobre
+  // este default.
+  const META_LEGACY_SOA_2026 = {
+    "No+Violencia": 3000,
+    "Mi Prepa": 3000,
+    "Crianza responsable": 2800,
+    "Matemáticamente": 2800,
+    "Vocaaccion": 2800
+  };
+  function inferMetaLegacy(familia, cliente, anio){
+    if(cliente === "soa" && anio === 2026) return META_LEGACY_SOA_2026[familia] || null;
+    return null;
+  }
+
   // Panel de meta de convocatoria del grupo — es lo primero que se ve al
   // abrir un curso. Muestra la meta (editable) y, si ya está asignada,
   // cuánto aporta cada edición de la familia en número y porcentaje.
@@ -1609,7 +1625,7 @@ const db = firebase.firestore();
 
     const grupo = cursosDelGrupo(familia, cliente, anio);
     const anyMeta = grupo.find(c => typeof c.metaConvocatoria === "number");
-    const metaVal = anyMeta ? anyMeta.metaConvocatoria : null;
+    const metaVal = anyMeta ? anyMeta.metaConvocatoria : inferMetaLegacy(familia, cliente, anio);
 
     const box = el("div", {style:"background:var(--teal-bg);border-radius:8px;padding:10px 14px;min-width:220px;max-width:300px;"});
     const head = el("div", {style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"});
@@ -3370,13 +3386,17 @@ const db = firebase.firestore();
     convRow.appendChild(dashBoxMetric("Total Inscritos", inscritos, 100, "#5c57d8"));
     const pctBecas = inscritos ? Math.round((becasAsignadas/inscritos)*100) : 0;
     convRow.appendChild(dashBoxMetric("Total Beca asignada", becasAsignadas, pctBecas, "#5c57d8"));
-    if(typeof meta.metaConvocatoria === "number" && meta.metaConvocatoria > 0){
+    {
       const clienteMeta = meta.cliente || inferClienteLegacy(meta.displayName);
       const familiaMeta = meta.familia || inferFamiliaLegacy(app.slug, meta.displayName);
       const anioMeta = meta.anio || inferAnioLegacy(app.slug, meta.displayName);
-      const inscritosGrupo = familiaInscritosTotal(familiaMeta, clienteMeta, anioMeta);
-      const pctMeta = Math.round((inscritosGrupo/meta.metaConvocatoria)*100);
-      convRow.appendChild(dashBoxMetric("Meta " + (anioMeta || "") + (familiaMeta ? " (" + familiaMeta + ")" : ""), meta.metaConvocatoria, pctMeta, "#5c57d8"));
+      const metaVal = typeof meta.metaConvocatoria === "number" && meta.metaConvocatoria > 0
+        ? meta.metaConvocatoria : inferMetaLegacy(familiaMeta, clienteMeta, anioMeta);
+      if(metaVal){
+        const inscritosGrupo = familiaInscritosTotal(familiaMeta, clienteMeta, anioMeta);
+        const pctMeta = Math.round((inscritosGrupo/metaVal)*100);
+        convRow.appendChild(dashBoxMetric("Meta " + (anioMeta || "") + (familiaMeta ? " (" + familiaMeta + ")" : ""), metaVal, pctMeta, "#5c57d8"));
+      }
     }
     convCard.appendChild(convRow);
     grid.appendChild(convCard);
