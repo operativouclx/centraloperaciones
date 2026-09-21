@@ -681,6 +681,39 @@ const db = firebase.firestore();
   function slugify(s){
     return normalize(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "curso";
   }
+  // Separa un nombre completo en nombres y apellidos (se asume el orden
+  // "nombre(s) apellido paterno apellido materno"; partículas como "de",
+  // "de la", "del" se pegan al apellido). Es solo un respaldo: cuando el
+  // archivo de origen trae nombre y apellido en columnas separadas se
+  // guardan tal cual vienen (record.nombres / record.apellidos).
+  const NAME_PARTICLES = new Set(["de","del","la","las","los","le","san","santa","da","das","do","dos","van","von","y"]);
+  function splitFullName(full){
+    const tokens = String(full || "").trim().split(/\s+/).filter(Boolean);
+    if(tokens.length <= 1) return {nombres: tokens.join(" "), apellidos: ""};
+    if(tokens.length === 2) return {nombres: tokens[0], apellidos: tokens[1]};
+    let i = tokens.length, apellidos = 0;
+    while(i > 1 && apellidos < 2){
+      i--; apellidos++;
+      while(i > 1 && NAME_PARTICLES.has(tokens[i - 1].toLowerCase())) i--;
+    }
+    return {nombres: tokens.slice(0, i).join(" "), apellidos: tokens.slice(i).join(" ")};
+  }
+  function nameParts(record){
+    if(record.nombres || record.apellidos) return {nombres: record.nombres || "", apellidos: record.apellidos || ""};
+    return splitFullName(record.nombre);
+  }
+  // Para filas ya armadas (p. ej. "en plataforma, no en Santander"): cambia
+  // la columna "Nombre" por "Nombres" y "Apellidos", en la misma posición.
+  function splitNombreColumn(row){
+    if(!row || !Object.prototype.hasOwnProperty.call(row, "Nombre") || "Nombres" in row) return row;
+    const parts = splitFullName(row["Nombre"]);
+    const out = {};
+    Object.keys(row).forEach(k => {
+      if(k === "Nombre"){ out["Nombres"] = parts.nombres; out["Apellidos"] = parts.apellidos; }
+      else out[k] = row[k];
+    });
+    return out;
+  }
   function sanitizeDocId(s){
     return String(s).replace(/\//g, "_").slice(0, 400) || "sin-clave";
   }
@@ -2298,6 +2331,20 @@ const db = firebase.firestore();
     }
   }
 
+  // Si el archivo de Santander trae nombre y apellido en columnas
+  // separadas, se guardan tal cual; con "nombre completo" se separan al
+  // exportar (splitFullName).
+  function getSantanderNameParts(row){
+    const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
+    if(mode !== "split") return null;
+    const f = document.getElementById("map-santander-first").value;
+    const l = document.getElementById("map-santander-last").value;
+    return {
+      nombres: f && row[f] ? String(row[f]).trim() : "",
+      apellidos: l && row[l] ? String(row[l]).trim() : ""
+    };
+  }
+
   // ---------- procesar actualización de Santander (diff incremental) ----------
   document.getElementById("btn-process-santander").addEventListener("click", async () => {
     const btn = document.getElementById("btn-process-santander");
@@ -2323,6 +2370,7 @@ const db = firebase.firestore();
     app.pending.santander.rows.forEach(row => {
       const email = row[emailCol];
       const name = getSantanderName(row);
+      const nameSplit = getSantanderNameParts(row);
       const key = recordKey(email, name);
       touched.add(key);
 
@@ -2333,6 +2381,7 @@ const db = firebase.firestore();
       if(!record){
         record = {
           _key:key, nombre:name, email:email || "",
+          nombres: nameSplit ? nameSplit.nombres : "", apellidos: nameSplit ? nameSplit.apellidos : "",
           santanderExtra:{}, plataformaExtra:{},
           estado:"Falta registrar", progreso:0,
           primeraVez:today, ultimaCargaSantander:today, presenteUltimaCarga:true,
@@ -2350,6 +2399,10 @@ const db = firebase.firestore();
           if(normalize(oldV) !== normalize(newV)) changedFields.push({col:c, from:oldV, to:newV});
         });
         record.nombre = name || record.nombre;
+        if(nameSplit && (nameSplit.nombres || nameSplit.apellidos)){
+          record.nombres = nameSplit.nombres;
+          record.apellidos = nameSplit.apellidos;
+        }
         record.email = email || record.email;
         record.santanderExtra = Object.assign({}, record.santanderExtra, newVals);
         record.ultimaCargaSantander = today;
@@ -2393,7 +2446,8 @@ const db = firebase.firestore();
   });
 
   function flattenForDiff(record){
-    const row = {Nombre: record.nombre, Email: record.email};
+    const np = nameParts(record);
+    const row = {Nombres: np.nombres, Apellidos: np.apellidos, Email: record.email};
     Object.keys(record.santanderExtra || {}).forEach(c => row[c] = record.santanderExtra[c]);
     return row;
   }
@@ -2667,9 +2721,11 @@ const db = firebase.firestore();
     const row = {};
     row["Estado"] = record.estado;
     row["Progreso"] = (typeof record.progreso === "number") ? record.progreso + "%" : "—";
-    row["Nombre"] = record.nombre;
+    const np = nameParts(record);
+    row["Nombres"] = np.nombres;
+    row["Apellidos"] = np.apellidos;
     row["Email"] = record.email;
-    const usedKeys = new Set(["Estado","Progreso","Nombre","Email"]);
+    const usedKeys = new Set(["Estado","Progreso","Nombres","Apellidos","Nombre","Email"]);
     Object.keys(record.santanderExtra || {}).forEach(c => {
       const label = usedKeys.has(c) ? c + " (Santander)" : c;
       row[label] = record.santanderExtra[c];
@@ -2693,9 +2749,11 @@ const db = firebase.firestore();
     const row = {};
     row["Estado Add on"] = record.addOnEstado || "Falta registrar";
     row["Progreso Add on"] = (typeof record.addOnProgreso === "number") ? record.addOnProgreso + "%" : "—";
-    row["Nombre"] = record.nombre;
+    const np = nameParts(record);
+    row["Nombres"] = np.nombres;
+    row["Apellidos"] = np.apellidos;
     row["Email"] = record.email;
-    const usedKeys = new Set(["Estado Add on","Progreso Add on","Nombre","Email"]);
+    const usedKeys = new Set(["Estado Add on","Progreso Add on","Nombres","Apellidos","Nombre","Email"]);
     Object.keys(record.addOnExtra || {}).forEach(c => {
       const label = usedKeys.has(c) ? c + " (Add on)" : c;
       row[label] = record.addOnExtra[c];
@@ -2737,7 +2795,7 @@ const db = firebase.firestore();
   }
 
   function renderSideTable(key, rows){
-    renderTableInto(key, rows);
+    renderTableInto(key, rows.map(splitNombreColumn));
   }
 
   function renderTableHead(key, rows){
@@ -3474,7 +3532,7 @@ const db = firebase.firestore();
     if(key === "madre") return app.master.map(flattenMasterRow);
     if(key === "alta") return app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow);
     if(key === "addon") return app.master.map(flattenAddOnRow);
-    return app.lastRun[key] || [];
+    return (app.lastRun[key] || []).map(splitNombreColumn);
   }
 
   const tableFilterState = {};
