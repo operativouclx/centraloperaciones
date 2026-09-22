@@ -2267,6 +2267,46 @@ const db = firebase.firestore();
       container.appendChild(progRow);
       progSel.addEventListener("change", checkReady);
 
+      const genRowLF = el("div", {class:"field-row"});
+      genRowLF.appendChild(el("label", {}, [document.createTextNode("Columna de generación (opcional — úsala si el archivo trae varias ediciones juntas)")]));
+      const genColDefaultLF = (savedMap && savedMap.generacionCol && headers.includes(savedMap.generacionCol)) ? savedMap.generacionCol : "";
+      const genColSelLF = el("select");
+      genColSelLF.id = "map-listafinal-gencol";
+      genColSelLF.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
+      headers.forEach(h => {
+        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
+        if(h === genColDefaultLF) opt.selected = true;
+        genColSelLF.appendChild(opt);
+      });
+      genRowLF.appendChild(genColSelLF);
+      container.appendChild(genRowLF);
+
+      const genValRowLF = el("div", {class:"field-row" + (genColDefaultLF ? "" : " hidden"), id:"listafinal-genval-wrap"});
+      genValRowLF.appendChild(el("label", {}, [document.createTextNode("Valor de esta generación")]));
+      const genValSelLF = el("select");
+      genValSelLF.id = "map-listafinal-genval";
+      genValRowLF.appendChild(genValSelLF);
+      container.appendChild(genValRowLF);
+
+      function populateGenValuesLF(col, selectedVal){
+        genValSelLF.innerHTML = "";
+        if(!col) return;
+        const values = Array.from(new Set(
+          app.pending.listafinal.rows.map(r => r[col]).filter(v => v !== undefined && v !== null && v !== "")
+        )).sort((a,b) => String(a).localeCompare(String(b)));
+        values.forEach(v => {
+          const opt = el("option", {value:v}, [document.createTextNode(String(v))]);
+          if(String(v) === String(selectedVal)) opt.selected = true;
+          genValSelLF.appendChild(opt);
+        });
+      }
+      const genValDefaultLF = (savedMap && savedMap.generacionCol === genColDefaultLF) ? savedMap.generacionValor : "";
+      populateGenValuesLF(genColDefaultLF, genValDefaultLF);
+      genColSelLF.addEventListener("change", () => {
+        genValRowLF.classList.toggle("hidden", !genColSelLF.value);
+        populateGenValuesLF(genColSelLF.value, "");
+      });
+
     } else if(kind === "addon"){
       const nameRow = el("div", {class:"field-row"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
@@ -2701,14 +2741,20 @@ const db = firebase.firestore();
     const emailCol = document.getElementById("map-listafinal-email").value;
     const nameCol = document.getElementById("map-listafinal-fullname").value;
     const progresoCol = document.getElementById("map-listafinal-progreso").value;
-    const extraCols = otherCols(app.pending.listafinal.headers, [emailCol, nameCol, progresoCol]);
+    const generacionCol = document.getElementById("map-listafinal-gencol").value;
+    const generacionValor = generacionCol ? document.getElementById("map-listafinal-genval").value : "";
+    const extraCols = otherCols(app.pending.listafinal.headers, [emailCol, nameCol, progresoCol, generacionCol]);
     const today = todayISO();
     let lockedCount = 0;
     let nuevosCount = 0;
 
     const masterByKey = new Map(app.master.map(r => [r._key, r]));
 
-    app.pending.listafinal.rows.forEach(row => {
+    const sourceRowsLF = generacionCol
+      ? app.pending.listafinal.rows.filter(r => String(r[generacionCol]) === String(generacionValor))
+      : app.pending.listafinal.rows;
+
+    sourceRowsLF.forEach(row => {
       const email = row[emailCol];
       const name = row[nameCol];
       const key = recordKey(email, name);
@@ -2748,7 +2794,7 @@ const db = firebase.firestore();
       }
     });
 
-    app.meta.listaFinalMapping = {emailCol, nameCol, progresoCol, extraCols};
+    app.meta.listaFinalMapping = {emailCol, nameCol, progresoCol, generacionCol, generacionValor, extraCols};
     app.meta.lastListaFinalUpload = today;
     app.meta.lastListaFinalFile = app.pending.listafinal.fileName;
     app.meta.updatedAt = nowISO();
