@@ -426,6 +426,7 @@
           <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎ renombrar</button>
           <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷 cliente / año</button>
           <button type="button" id="btn-delete-course" class="btn-rename-course" title="Eliminar este curso por completo" style="color:var(--rust);">🗑 eliminar curso</button>
+          <button type="button" id="btn-undo-today" class="btn-rename-course" title="Quita los registros nuevos que se agregaron hoy" style="color:var(--rust);">↩ quitar carga de hoy</button>
           <div class="course-head-actions" style="margin-top:10px;">
             <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
             <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
@@ -1001,6 +1002,63 @@ const db = firebase.firestore();
     }catch(err){
       console.error("No se pudo eliminar el curso:", err);
       alert("No se pudo eliminar: " + (err && err.message ? err.message : err));
+      setSaveStatus("");
+    }
+  });
+
+  // Quita solo los registros que se agregaron HOY (no existían antes de
+  // la carga de hoy) — conserva todo lo de antes. Los registros que ya
+  // existían y se actualizaron hoy no se pueden revertir campo por campo
+  // porque no se guarda el valor anterior; se avisa cuáles son antes de
+  // continuar.
+  document.getElementById("btn-undo-today").addEventListener("click", async () => {
+    if(!app.slug || !app.meta) return;
+    const today = todayISO();
+    const nuevosHoy = app.master.filter(r => r.primeraVez === today);
+    const tocadosHoy = app.master.filter(r => r.primeraVez !== today &&
+      (r.ultimaCargaSantander === today || r.ultimaActualizacionPlataforma === today));
+
+    if(!nuevosHoy.length && !tocadosHoy.length){
+      alert("No hay cargas de hoy registradas en este curso.");
+      return;
+    }
+
+    let msg = "Esto va a borrar " + nuevosHoy.length + " registro(s) nuevo(s) agregados hoy.";
+    if(tocadosHoy.length){
+      msg += "\n\nOjo: " + tocadosHoy.length + " registro(s) que ya existían de antes también se actualizaron hoy — " +
+        "esos NO se pueden revertir (no se guardó el dato anterior), se van a quedar con la información de hoy.";
+    }
+    msg += "\n\n¿Continuar?";
+    if(!confirm(msg)) return;
+
+    setSaveStatus("Quitando la carga de hoy...");
+    try{
+      const chunks = chunkArray(nuevosHoy, 400);
+      for(const chunk of chunks){
+        const batch = db.batch();
+        chunk.forEach(r => batch.delete(masterColl(app.slug).doc(sanitizeDocId(r._key))));
+        await batch.commit();
+      }
+      const removedKeys = new Set(nuevosHoy.map(r => r._key));
+      app.master = app.master.filter(r => !removedKeys.has(r._key));
+      app.meta.stats = computeMasterStats(app.master);
+
+      const logEntry = {
+        date: nowISO(), tipo:"Ajuste", archivo:"",
+        resumen: "Se quitaron " + nuevosHoy.length + " registro(s) agregados hoy" +
+          (tocadosHoy.length ? " (" + tocadosHoy.length + " actualizado(s) hoy no se pudieron revertir)" : ""),
+        por: (auth.currentUser && auth.currentUser.email) || ""
+      };
+      app.log.unshift(logEntry);
+      await persistUpdate(logEntry);
+
+      renderStats();
+      renderMasterTable();
+      renderHistorial();
+      setSaveStatus("Carga de hoy eliminada.");
+    }catch(err){
+      console.error("No se pudo quitar la carga de hoy:", err);
+      alert("No se pudo quitar: " + (err && err.message ? err.message : err));
       setSaveStatus("");
     }
   });
