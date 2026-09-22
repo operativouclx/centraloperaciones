@@ -2146,7 +2146,33 @@ const db = firebase.firestore();
       container.appendChild(statusRow);
 
     } else if(kind === "plataforma"){
-      const nameRow = el("div", {class:"field-row"});
+      const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode : "single";
+      const modeRow = el("div", {class:"radio-row"});
+      const opt1 = el("label", {class:"radio-opt"});
+      const r1 = el("input", {type:"radio", name:"name-mode-plataforma", value:"split"});
+      r1.checked = mode === "split";
+      opt1.appendChild(r1); opt1.appendChild(document.createTextNode("Nombre y apellido en columnas separadas"));
+      const opt2 = el("label", {class:"radio-opt"});
+      const r2 = el("input", {type:"radio", name:"name-mode-plataforma", value:"single"});
+      r2.checked = mode === "single";
+      opt2.appendChild(r2); opt2.appendChild(document.createTextNode("Un nombre completo"));
+      modeRow.appendChild(opt1); modeRow.appendChild(opt2);
+      container.appendChild(modeRow);
+
+      const splitWrap = el("div", {class:"two-col" + (mode==="split" ? "" : " hidden"), id:"plataforma-split-wrap"});
+      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : guessColumn(headers, ["nombre","name"]);
+      const firstSel = makeHeaderSelect(headers, firstDefault);
+      firstSel.id = "map-plataforma-first";
+      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : guessColumn(headers, ["apellido","lastname"]);
+      const lastSel = makeHeaderSelect(headers, lastDefault);
+      lastSel.id = "map-plataforma-last";
+      splitWrap.appendChild(labeled("Nombre", firstSel));
+      splitWrap.appendChild(labeled("Apellido", lastSel));
+      container.appendChild(splitWrap);
+      firstSel.addEventListener("change", checkReady);
+      lastSel.addEventListener("change", checkReady);
+
+      const nameRow = el("div", {class:"field-row" + (mode==="single" ? "" : " hidden"), id:"plataforma-single-wrap"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
       const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
       const nameSel = makeHeaderSelect(headers, nameDefault);
@@ -2154,6 +2180,9 @@ const db = firebase.firestore();
       nameRow.appendChild(nameSel);
       container.appendChild(nameRow);
       nameSel.addEventListener("change", checkReady);
+
+      r1.addEventListener("change", () => { splitWrap.classList.remove("hidden"); nameRow.classList.add("hidden"); checkReady(); });
+      r2.addEventListener("change", () => { splitWrap.classList.add("hidden"); nameRow.classList.remove("hidden"); checkReady(); });
 
       const progRow = el("div", {class:"field-row"});
       progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
@@ -2290,6 +2319,17 @@ const db = firebase.firestore();
         return !!(f && f.value) || !!(l && l.value);
       } else {
         const s = document.getElementById("map-santander-fullname");
+        return !!(s && s.value);
+      }
+    } else if(kind === "plataforma"){
+      const mode = document.querySelector('input[name="name-mode-plataforma"]:checked');
+      if(!mode) return false;
+      if(mode.value === "split"){
+        const f = document.getElementById("map-plataforma-first");
+        const l = document.getElementById("map-plataforma-last");
+        return !!(f && f.value) || !!(l && l.value);
+      } else {
+        const s = document.getElementById("map-plataforma-fullname");
         return !!(s && s.value);
       }
     } else {
@@ -2453,17 +2493,37 @@ const db = firebase.firestore();
   }
 
   // ---------- procesar actualización de plataforma (refresco completo) ----------
+  // Si el archivo de plataforma trae nombre y apellido en columnas
+  // separadas (como el de Salud Financiera), se usan ambas para el
+  // nombre completo con el que se cruza contra la tabla madre.
+  function getPlataformaName(row){
+    const modeInput = document.querySelector('input[name="name-mode-plataforma"]:checked');
+    const mode = modeInput ? modeInput.value : "single";
+    if(mode === "split"){
+      const f = document.getElementById("map-plataforma-first").value;
+      const l = document.getElementById("map-plataforma-last").value;
+      return [f ? row[f] : "", l ? row[l] : ""].filter(Boolean).join(" ").trim();
+    } else {
+      const s = document.getElementById("map-plataforma-fullname").value;
+      return (row[s] || "").toString().trim();
+    }
+  }
+
   document.getElementById("btn-process-plataforma").addEventListener("click", async () => {
     const btn = document.getElementById("btn-process-plataforma");
     btn.disabled = true; btn.textContent = "Procesando...";
     setSaveStatus("Cruzando con la tabla madre...");
 
     const emailCol = document.getElementById("map-plataforma-email").value;
-    const nameCol = document.getElementById("map-plataforma-fullname").value;
+    const nameModeInput = document.querySelector('input[name="name-mode-plataforma"]:checked');
+    const nameMode = nameModeInput ? nameModeInput.value : "single";
+    const nameCol = nameMode === "single" ? document.getElementById("map-plataforma-fullname").value : null;
+    const firstCol = nameMode === "split" ? document.getElementById("map-plataforma-first").value : null;
+    const lastCol = nameMode === "split" ? document.getElementById("map-plataforma-last").value : null;
     const progresoCol = document.getElementById("map-plataforma-progreso").value;
     const generacionCol = document.getElementById("map-plataforma-gencol").value;
     const generacionValor = generacionCol ? document.getElementById("map-plataforma-genval").value : "";
-    const extraCols = otherCols(app.pending.plataforma.headers, [emailCol, nameCol, progresoCol, generacionCol]);
+    const extraCols = otherCols(app.pending.plataforma.headers, [emailCol, nameCol, firstCol, lastCol, progresoCol, generacionCol]);
     const today = todayISO();
     let lockedCount = 0;
 
@@ -2475,7 +2535,7 @@ const db = firebase.firestore();
     const platByName = new Map();
     sourceRows.forEach(row => {
       const e = normalize(row[emailCol]);
-      const n = normalize(row[nameCol]);
+      const n = normalize(getPlataformaName(row));
       if(e && !platByEmail.has(e)) platByEmail.set(e, row);
       if(n && !platByName.has(n)) platByName.set(n, row);
     });
@@ -2513,12 +2573,12 @@ const db = firebase.firestore();
     sourceRows.forEach(row => {
       const e = normalize(row[emailCol]);
       if(e && usedPlatEmails.has(e)) return;
-      const r = {Nombre: row[nameCol], Email: row[emailCol]};
-      extraCols.forEach(c => { if(c !== nameCol) r[c] = row[c]; });
+      const r = {Nombre: getPlataformaName(row), Email: row[emailCol]};
+      extraCols.forEach(c => { r[c] = row[c]; });
       revisar.push(r);
     });
 
-    app.meta.plataformaMapping = {emailCol, nameCol, progresoCol, generacionCol, generacionValor, extraCols};
+    app.meta.plataformaMapping = {emailCol, nameMode, nameCol, firstCol, lastCol, progresoCol, generacionCol, generacionValor, extraCols};
     app.meta.lastPlataformaUpload = today;
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
@@ -2816,10 +2876,19 @@ const db = firebase.firestore();
     renderRows(panel.querySelector("tbody"), rows, cols);
   }
 
+  // Cursos con decenas de miles de registros (p. ej. Salud Financiera)
+  // podían tumbar la pestaña del navegador si se intentaban pintar todas
+  // las filas de golpe. En pantalla solo se muestran las primeras
+  // TABLE_DISPLAY_LIMIT — la búsqueda/filtro siguen operando sobre todos
+  // los datos, y el Excel descargado siempre trae el total completo.
+  const TABLE_DISPLAY_LIMIT = 500;
+
   function renderRows(tbody, rows, cols){
     // Se arma en un DocumentFragment y se inserta una sola vez: con miles
     // de filas, insertar de una en una al tbody en vivo es mucho más lento.
     const fragment = document.createDocumentFragment();
+    const truncated = rows.length > TABLE_DISPLAY_LIMIT;
+    const visibleRows = truncated ? rows.slice(0, TABLE_DISPLAY_LIMIT) : rows;
 
     if(!rows.length){
       const tr = el("tr");
@@ -2828,7 +2897,7 @@ const db = firebase.firestore();
       tr.appendChild(td);
       fragment.appendChild(tr);
     } else {
-      rows.forEach(r => {
+      visibleRows.forEach(r => {
         const tr = el("tr");
         cols.forEach(c => {
           const val = r[c];
@@ -2851,6 +2920,16 @@ const db = firebase.firestore();
         });
         fragment.appendChild(tr);
       });
+      if(truncated){
+        const tr = el("tr");
+        const td = el("td", {colspan:String(Math.max(cols.length, 1))}, [document.createTextNode(
+          "Mostrando " + TABLE_DISPLAY_LIMIT.toLocaleString("es-MX") + " de " + rows.length.toLocaleString("es-MX") +
+          " registros. Usa el buscador para acotar, o descarga el Excel para ver todos."
+        )]);
+        td.style.textAlign = "center"; td.style.color = "var(--ink-soft)"; td.style.padding = "12px"; td.style.fontStyle = "italic";
+        tr.appendChild(td);
+        fragment.appendChild(tr);
+      }
     }
 
     tbody.innerHTML = "";
