@@ -1413,10 +1413,10 @@ const db = firebase.firestore();
     const p4 = master.filter(r => (r.progreso||0) >= 80).length;
     return {total, alta, p0, p1, p2, p3, p4};
   }
-  // tasaSantander se calcula sobre el Total Santander oficial (Accepted+Granted,
-  // sin fusionar filas — ver computeStatusSnapshotFromRows). Si el curso no
-  // tiene columna de estatus mapeada, se usa el total de la tabla madre como
-  // antes. tasaIniciados siempre es sobre quienes iniciaron (progreso >= 1%).
+  // tasaSantander (se muestra como "Tasa de término sobre inscritos") se
+  // calcula sobre el total de inscritos del curso — ver getInscritosTotalFor.
+  // Si no hay ese dato, se usa el total de la tabla madre. tasaIniciados
+  // siempre es sobre quienes iniciaron (progreso >= 1%).
   function computeTasas(stats, santanderTotal){
     stats = stats || {};
     const total = stats.total || 0;
@@ -1431,17 +1431,19 @@ const db = firebase.firestore();
       tasaIniciados: Math.round(tasaIniciados * 10) / 10
     };
   }
-  // El denominador oficial de Santander depende del tipo de curso: en
-  // "activo" es el snapshot de estatus (Accepted+Granted); en "historico"
-  // es el Asignados capturado a mano. Antes de este fix, históricos caía
-  // siempre al total de la tabla madre porque no tiene snapshot de estatus.
-  function getSantanderTotalFor(meta){
+  // Denominador de la "Tasa de término sobre inscritos" — el total de
+  // INSCRITOS (no asignados), para que signifique lo mismo en todos los
+  // cursos: activo = todas las filas del archivo de Santander; histórico =
+  // Inscritos capturado a mano; Salud Financiera = Total Santander;
+  // Alianza = total en plataforma (null → se usa el total de la tabla madre).
+  function getInscritosTotalFor(meta){
     if(!meta) return null;
+    if(esAlianzaMeta(meta)) return null;
     if(meta.tipo === "historico"){
-      return (typeof meta.santanderAsignados === "number") ? meta.santanderAsignados : null;
+      return (typeof meta.santanderInscritos === "number" && meta.santanderInscritos > 0) ? meta.santanderInscritos : null;
     }
     const snap = santanderSnapshotFor(meta);
-    return (snap && snap.santanderCount) || null;
+    return (snap && snap.totalFilas) || null;
   }
   function isoWeekLabel(d){
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -2206,7 +2208,7 @@ const db = firebase.firestore();
     document.getElementById("badge-nuevos").textContent = courseVisualOpts().nuevos;
     document.getElementById("badge-historial").textContent = "…";
     document.getElementById("badge-addon").textContent = "…";
-    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), courseVisualOpts());
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getInscritosTotalFor(app.meta)), courseVisualOpts());
     renderDashboard(stats);
   }
 
@@ -2878,7 +2880,7 @@ const db = firebase.firestore();
       app.meta.lastCargaId = cargaId;
       app.meta.updatedAt = nowISO();
 
-      await ensureWeeklySnapshot(app.slug, app.meta.stats, getSantanderTotalFor(app.meta));
+      await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
       app.meta.stats = computeMasterStats(app.master);
       app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount});
 
@@ -2954,7 +2956,7 @@ const db = firebase.firestore();
     app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
     app.meta.updatedAt = nowISO();
 
-    await ensureWeeklySnapshot(app.slug, app.meta.stats, getSantanderTotalFor(app.meta));
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
     app.meta.stats = computeMasterStats(app.master);
 
     // Se guarda "revisar" (gente en plataforma que no está en Santander)
@@ -3133,7 +3135,7 @@ const db = firebase.firestore();
     app.meta.lastRun = Object.assign({}, app.meta.lastRun, {nuevosCount});
     app.meta.updatedAt = nowISO();
 
-    await ensureWeeklySnapshot(app.slug, app.meta.stats, getSantanderTotalFor(app.meta));
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
     app.meta.stats = computeMasterStats(app.master);
 
     let resumen = app.pending.listafinal.rows.length + " registros procesados, " + nuevosCount + " nuevos";
@@ -3633,7 +3635,7 @@ const db = firebase.firestore();
       setSaveStatus("Guardando captura...");
       try{
         const prevStats = statsFromManual(app.meta);
-        await ensureWeeklySnapshot(app.slug, prevStats, getSantanderTotalFor(app.meta));
+        await ensureWeeklySnapshot(app.slug, prevStats, getInscritosTotalFor(app.meta));
         const por = (auth.currentUser && auth.currentUser.email) || "";
         const manual = Object.assign({}, v, {updatedAt: nowISO(), por});
         app.meta.manual = manual;
@@ -3722,7 +3724,7 @@ const db = firebase.firestore();
     document.getElementById("badge-historial").textContent = app.log.length;
     document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
 
-    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getSantanderTotalFor(app.meta)), courseVisualOpts());
+    renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getInscritosTotalFor(app.meta)), courseVisualOpts());
     renderDashboard(stats);
   }
 
@@ -4107,14 +4109,14 @@ const db = firebase.firestore();
     zoneAv.appendChild(el("div", {class:"fi-hr"}));
 
     const terminaron = stats.p4 || 0;
-    const santanderDenom = esHistorico
-      ? ((typeof opts.santanderAsignados === "number") ? opts.santanderAsignados : null)
-      : (snap ? snap.santanderCount : stats.total);
+    const inscritosDenom = esHistorico
+      ? ((typeof opts.santanderInscritos === "number" && opts.santanderInscritos > 0) ? opts.santanderInscritos : stats.total)
+      : (opts.esAlianza ? stats.total : (snap && snap.totalFilas ? snap.totalFilas : stats.total));
     const operativaDenom = Math.max(stats.total - stats.p0, 0);
 
     const bottomRow = el("div", {class:"fi-bottom-row"});
-    bottomRow.appendChild(fiTasaBlock(opts.esAlianza ? "Tasa de término general" : "Tasa término Santander", deltas.tasas.tasaSantander, deltas.deltaSantander,
-      (santanderDenom !== null) ? (terminaron + " de " + santanderDenom) : null));
+    bottomRow.appendChild(fiTasaBlock("Tasa de término sobre inscritos", deltas.tasas.tasaSantander, deltas.deltaSantander,
+      terminaron + " de " + inscritosDenom + " inscritos"));
     bottomRow.appendChild(fiTasaBlock("Tasa de término Operativa", deltas.tasas.tasaIniciados, deltas.deltaIniciados,
       terminaron + " de " + operativaDenom));
     bottomRow.appendChild(el("div", {class:"fi-compare-date"}, [
@@ -4390,7 +4392,8 @@ const db = firebase.firestore();
     const pctP2Act = Math.round((p2/activosBase)*100);
     const pctP3Act = Math.round((p3/activosBase)*100);
 
-    const tasaVsBecas = becasAsignadas ? Math.round((terminaron/becasAsignadas)*100) : 0;
+    const inscritosDenom = esAlianza ? enPlataforma : (inscritos || stats.total);
+    const tasaVsInscritos = inscritosDenom ? Math.round((terminaron/inscritosDenom)*100) : 0;
     const tasaVsIniciaron = iniciaron ? Math.round((terminaron/iniciaron)*100) : 0;
 
     const wrap = el("div", {id:"dash-export-root", style:
@@ -4525,9 +4528,7 @@ const db = firebase.firestore();
 
     // ---- tasas de terminación ----
     const bottomGrid = el("div", {style:"display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px"});
-    bottomGrid.appendChild(esAlianza
-      ? dashTasaCard(["Tasa de terminación general", "vs. Total en plataforma"], enPlataforma ? Math.round((terminaron/enPlataforma)*100) : 0, terminaron + " de " + enPlataforma, "#0e0e55")
-      : dashTasaCard(["Tasa de terminación Santander", "vs. Becas asignadas"], tasaVsBecas, terminaron + " de " + becasAsignadas + " becas", "#0e0e55"));
+    bottomGrid.appendChild(dashTasaCard(["Tasa de término sobre inscritos", "vs. Total inscritos"], tasaVsInscritos, terminaron + " de " + inscritosDenom + " inscritos", "#0e0e55"));
     bottomGrid.appendChild(dashTasaCard(["Tasa de terminación Operativa", "vs. Activos plataforma"], tasaVsIniciaron, terminaron + " de " + activos + " activos", null, "linear-gradient(135deg,#5c57d8,#6884fd)"));
     wrap.appendChild(bottomGrid);
 
