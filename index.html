@@ -2568,6 +2568,7 @@ const db = firebase.firestore();
       try{
         if(kind === "santander") name = getSantanderName(row);
         else if(kind === "plataforma") name = getPlataformaName(row);
+        else if(kind === "listafinal") name = getListaFinalName(row);
         else { const sel = document.getElementById("map-" + kind + "-fullname"); name = sel ? String(row[sel.value] ?? "") : ""; }
       }catch(e){}
       const email = emailSel ? row[emailSel.value] : "";
@@ -2777,7 +2778,34 @@ const db = firebase.firestore();
       }
 
     } else if(kind === "listafinal"){
-      const nameRow = el("div", {class:"field-row"});
+      const lfMode = (savedMap && savedMap.nameMode) ? savedMap.nameMode
+        : ((guessFirstNameCol(headers) && guessLastNameCol(headers)) ? "split" : "single");
+      const lfModeRow = el("div", {class:"radio-row"});
+      const lfOpt1 = el("label", {class:"radio-opt"});
+      const lfR1 = el("input", {type:"radio", name:"name-mode-listafinal", value:"split"});
+      lfR1.checked = lfMode === "split";
+      lfOpt1.appendChild(lfR1); lfOpt1.appendChild(document.createTextNode("Nombre y apellido en columnas separadas"));
+      const lfOpt2 = el("label", {class:"radio-opt"});
+      const lfR2 = el("input", {type:"radio", name:"name-mode-listafinal", value:"single"});
+      lfR2.checked = lfMode === "single";
+      lfOpt2.appendChild(lfR2); lfOpt2.appendChild(document.createTextNode("Un nombre completo"));
+      lfModeRow.appendChild(lfOpt1); lfModeRow.appendChild(lfOpt2);
+      container.appendChild(lfModeRow);
+
+      const lfSplitWrap = el("div", {class:"two-col" + (lfMode === "split" ? "" : " hidden")});
+      const lfFirstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : (guessFirstNameCol(headers) || headers[0] || "");
+      const lfFirstSel = makeHeaderSelect(headers, lfFirstDefault);
+      lfFirstSel.id = "map-listafinal-first";
+      const lfLastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : (guessLastNameCol(headers) || headers[0] || "");
+      const lfLastSel = makeHeaderSelect(headers, lfLastDefault);
+      lfLastSel.id = "map-listafinal-last";
+      lfSplitWrap.appendChild(labeled("Nombre", lfFirstSel));
+      lfSplitWrap.appendChild(labeled("Apellido", lfLastSel));
+      container.appendChild(lfSplitWrap);
+      lfFirstSel.addEventListener("change", checkReady);
+      lfLastSel.addEventListener("change", checkReady);
+
+      const nameRow = el("div", {class:"field-row" + (lfMode === "single" ? "" : " hidden")});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
       const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
       const nameSel = makeHeaderSelect(headers, nameDefault);
@@ -2785,6 +2813,9 @@ const db = firebase.firestore();
       nameRow.appendChild(nameSel);
       container.appendChild(nameRow);
       nameSel.addEventListener("change", checkReady);
+
+      lfR1.addEventListener("change", () => { lfSplitWrap.classList.remove("hidden"); nameRow.classList.add("hidden"); checkReady(); });
+      lfR2.addEventListener("change", () => { lfSplitWrap.classList.add("hidden"); nameRow.classList.remove("hidden"); checkReady(); });
 
       const progRow = el("div", {class:"field-row"});
       progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
@@ -2911,6 +2942,17 @@ const db = firebase.firestore();
         return !!(f && f.value) || !!(l && l.value);
       } else {
         const s = document.getElementById("map-plataforma-fullname");
+        return !!(s && s.value);
+      }
+    } else if(kind === "listafinal"){
+      const mode = document.querySelector('input[name="name-mode-listafinal"]:checked');
+      if(!mode) return false;
+      if(mode.value === "split"){
+        const f = document.getElementById("map-listafinal-first");
+        const l = document.getElementById("map-listafinal-last");
+        return !!(f && f.value) || !!(l && l.value);
+      } else {
+        const s = document.getElementById("map-listafinal-fullname");
         return !!(s && s.value);
       }
     } else {
@@ -3417,6 +3459,20 @@ const db = firebase.firestore();
     closeModal("modal-addon");
   });
 
+  // Nombre completo de una fila de la lista final: nombre + apellido si
+  // vienen en columnas separadas, o la columna de nombre completo.
+  function getListaFinalName(row){
+    const modeInput = document.querySelector('input[name="name-mode-listafinal"]:checked');
+    const mode = modeInput ? modeInput.value : "single";
+    if(mode === "split"){
+      const f = document.getElementById("map-listafinal-first").value;
+      const l = document.getElementById("map-listafinal-last").value;
+      return [f ? row[f] : "", l ? row[l] : ""].filter(Boolean).join(" ").trim();
+    }
+    const s = document.getElementById("map-listafinal-fullname").value;
+    return (row[s] || "").toString().trim();
+  }
+
   // ---------- procesar lista final (cursos históricos, sin cruce con Santander) ----------
   document.getElementById("btn-process-listafinal").addEventListener("click", async () => {
     const btn = document.getElementById("btn-process-listafinal");
@@ -3424,11 +3480,15 @@ const db = firebase.firestore();
     setSaveStatus("Actualizando la lista final...");
 
     const emailCol = document.getElementById("map-listafinal-email").value;
-    const nameCol = document.getElementById("map-listafinal-fullname").value;
+    const lfModeInput = document.querySelector('input[name="name-mode-listafinal"]:checked');
+    const nameMode = lfModeInput ? lfModeInput.value : "single";
+    const nameCol = nameMode === "single" ? document.getElementById("map-listafinal-fullname").value : null;
+    const firstCol = nameMode === "split" ? document.getElementById("map-listafinal-first").value : null;
+    const lastCol = nameMode === "split" ? document.getElementById("map-listafinal-last").value : null;
     const progresoCol = document.getElementById("map-listafinal-progreso").value;
     const generacionCol = document.getElementById("map-listafinal-gencol").value;
     const generacionValor = generacionCol ? document.getElementById("map-listafinal-genval").value : "";
-    const extraCols = otherCols(app.pending.listafinal.headers, [emailCol, nameCol, progresoCol, generacionCol]);
+    const extraCols = otherCols(app.pending.listafinal.headers, [emailCol, nameCol, firstCol, lastCol, progresoCol, generacionCol]);
     const today = todayISO();
     let lockedCount = 0;
     let nuevosCount = 0;
@@ -3442,7 +3502,9 @@ const db = firebase.firestore();
 
     sourceRowsLF.forEach(row => {
       const email = row[emailCol];
-      const name = row[nameCol];
+      const name = getListaFinalName(row);
+      const nombresLF = nameMode === "split" && firstCol && row[firstCol] ? String(row[firstCol]).trim() : "";
+      const apellidosLF = nameMode === "split" && lastCol && row[lastCol] ? String(row[lastCol]).trim() : "";
       const key = recordKey(email, name);
 
       const extraVals = {};
@@ -3452,6 +3514,7 @@ const db = firebase.firestore();
       if(!record){
         record = {
           _key:key, nombre:name, email:email || "",
+          nombres: nombresLF, apellidos: apellidosLF,
           santanderExtra:{}, plataformaExtra: extraVals,
           estado:"En plataforma", progreso:0,
           primeraVez:today, cargaId, ultimaCargaSantander:today, presenteUltimaCarga:true,
@@ -3461,7 +3524,10 @@ const db = firebase.firestore();
         masterByKey.set(key, record);
         nuevosCount++;
       } else {
-        if(name){ record.nombre = name; record.nombres = ""; record.apellidos = ""; }
+        if(name){ record.nombre = name; record.nombres = nombresLF; record.apellidos = apellidosLF; }
+        // Las columnas de nombre ya no son "extras": se quitan las que una
+        // carga anterior haya dejado guardadas como columnas sueltas.
+        [nameCol, firstCol, lastCol].forEach(c => { if(c && record.plataformaExtra) delete record.plataformaExtra[c]; });
         record.email = email || record.email;
         record.plataformaExtra = Object.assign({}, record.plataformaExtra, extraVals);
         record.estado = "En plataforma";
@@ -3480,7 +3546,7 @@ const db = firebase.firestore();
       }
     });
 
-    app.meta.listaFinalMapping = {emailCol, nameCol, progresoCol, generacionCol, generacionValor, extraCols};
+    app.meta.listaFinalMapping = {emailCol, nameMode, nameCol, firstCol, lastCol, progresoCol, generacionCol, generacionValor, extraCols};
     app.meta.lastListaFinalUpload = today;
     app.meta.lastListaFinalFile = app.pending.listafinal.fileName;
     app.meta.lastCargaId = cargaId;
