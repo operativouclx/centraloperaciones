@@ -676,7 +676,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-nps">&times;</button>
       <h3 class="modal-title">Cargar NPS</h3>
-      <div class="panel-note teal">Cada carga reemplaza el NPS anterior de este curso — sube siempre la base completa de respuestas.</div>
+      <div class="panel-note teal">El NPS es <strong>por programa</strong> (Moodle no distingue generaciones): al subirlo aquí se aplica a todas las ediciones del programa. <span id="nps-programa-note"></span> Cada carga reemplaza el NPS anterior — sube siempre la base completa de respuestas.</div>
       <div class="panel-head">
         <h3>Archivo de NPS</h3>
         <span class="file-tag hidden" id="tag-nps"></span>
@@ -1524,7 +1524,8 @@ const db = firebase.firestore();
         lastSantanderUpload: data.lastSantanderUpload || null,
         lastPlataformaUpload: data.lastPlataformaUpload || null,
         lastListaFinalUpload: data.lastListaFinalUpload || null,
-        archived: !!data.archived
+        archived: !!data.archived,
+        npsFecha: (data.nps && data.nps.fecha) || null
       };
     });
   }
@@ -2147,6 +2148,23 @@ const db = firebase.firestore();
 
     app.slug = slug;
     app.meta = meta;
+    // Una edición creada después de subir el NPS del programa lo hereda de
+    // otra edición del mismo programa.
+    if(!meta.nps){
+      try{
+        const prog = programaActual();
+        const donor = prog.cursos.find(c => c.slug !== slug && c.npsFecha);
+        if(donor){
+          const donorMeta = await loadCourseMetaRemote(donor.slug);
+          if(loadToken !== app.courseLoadToken) return;
+          if(donorMeta && donorMeta.nps){
+            meta.nps = donorMeta.nps;
+            meta.npsMapping = donorMeta.npsMapping || null;
+            meta.npsHeredado = true;
+          }
+        }
+      }catch(err){ console.error("No se pudo heredar el NPS del programa:", err); }
+    }
     app.baseline = baseline;
     app.master = [];
     app.log = [];
@@ -3421,6 +3439,29 @@ const db = firebase.firestore();
     closeModal("modal-listafinal");
   });
 
+  // El NPS es por PROGRAMA: Moodle no distingue una generación de otra, así
+  // que una misma encuesta sirve a todas las ediciones del mismo programa
+  // (misma familia + cliente + año, igual que la meta de convocatoria).
+  function programaActual(){
+    const meta = app.meta || {};
+    const cliente = clienteDe(meta);
+    const anio = meta.anio || inferAnioLegacy(app.slug, meta.displayName) || SIN_ANIO;
+    const familia = meta.familia || inferFamiliaLegacy(app.slug, meta.displayName) || meta.displayName;
+    const cursos = cursosDelGrupo(familia, cliente, anio).slice();
+    if(!cursos.some(c => c.slug === app.slug)){
+      cursos.push({slug: app.slug, displayName: meta.displayName || app.slug});
+    }
+    cursos.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return {familia, cliente, anio, cursos};
+  }
+  function textoProgramaNps(){
+    const prog = programaActual();
+    const otros = prog.cursos.filter(c => c.slug !== app.slug).map(c => c.displayName);
+    return otros.length
+      ? "Se aplicará también a: " + otros.join(", ") + "."
+      : "Este programa solo tiene esta edición por ahora.";
+  }
+
   // ---------- NPS (todos los cursos) ----------
   // Cada carga reemplaza el NPS anterior del curso. Solo se guarda el
   // resumen + los comentarios (con tope), dentro del documento del curso —
@@ -3606,7 +3647,10 @@ const db = firebase.firestore();
     return n >= 9 ? "Promotor" : n >= 7 ? "Pasivo" : "Detractor";
   }
 
-  document.getElementById("btn-open-nps").addEventListener("click", () => openModal("modal-nps"));
+  document.getElementById("btn-open-nps").addEventListener("click", () => {
+    document.getElementById("nps-programa-note").textContent = textoProgramaNps();
+    openModal("modal-nps");
+  });
 
   document.getElementById("btn-process-nps").addEventListener("click", async () => {
     const btn = document.getElementById("btn-process-nps");
@@ -3672,17 +3716,26 @@ const db = firebase.firestore();
     };
     const npsMapping = {scoreCol, commentCol, nameCol, filterCol, filterVal, starCols};
 
+    const prog = programaActual();
+    nps.programa = prog.familia;
     const logEntry = {
       date: nowISO(), tipo:"NPS", archivo: app.pending.nps.fileName,
-      resumen: "NPS " + score + " — " + total + " respuestas (" + promotores + " promotores, " + pasivos + " pasivos, " + detractores + " detractores)",
+      resumen: "NPS " + score + " — " + total + " respuestas (" + promotores + " promotores, " + pasivos + " pasivos, " + detractores + " detractores)" +
+        (prog.cursos.length > 1 ? " — aplicado a " + prog.cursos.length + " ediciones del programa" : ""),
       por: nps.por
     };
-    setSaveStatus("Guardando NPS...");
+    setSaveStatus("Guardando NPS en " + prog.cursos.length + " edición(es)...");
     try{
-      await courseDoc(app.slug).set({nps, npsMapping}, {merge:true});
-      await addLogRemote(app.slug, logEntry);
+      // Mismo NPS en todas las ediciones del programa.
+      await Promise.all(prog.cursos.map(async c => {
+        await courseDoc(c.slug).set({nps, npsMapping}, {merge:true});
+        await addLogRemote(c.slug, logEntry);
+        const idx = app.coursesIndex.find(x => x.slug === c.slug);
+        if(idx) idx.npsFecha = nps.fecha;
+      }));
       app.meta.nps = nps;
       app.meta.npsMapping = npsMapping;
+      app.meta.npsHeredado = false;
       app.log.unshift(logEntry);
       setSaveStatus("Guardado.");
       renderNps();
@@ -3790,6 +3843,10 @@ const db = firebase.firestore();
       root.appendChild(starsCard);
     }
 
+    const prog = programaActual();
+    root.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:4px;"}, [document.createTextNode(
+      "NPS del programa " + prog.familia + (prog.cursos.length > 1 ? " — aplica a: " + prog.cursos.map(c => c.displayName).join(", ") : "")
+    )]));
     if(nps.pregunta){
       root.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:4px;"}, [document.createTextNode("Pregunta usada: " + nps.pregunta)]));
     }
