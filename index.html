@@ -1183,7 +1183,17 @@ const db = firebase.firestore();
     const ws = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
     if(!rows.length) return {headers:[], rows:[]};
-    const headers = rows[0].map(h => (h===null||h===undefined) ? "" : String(h));
+    // Los encabezados repetidos (p. ej. dos columnas "Nombre": el nombre de
+    // pila y el grupo) se renombran "Nombre (2)", etc. — si no, la segunda
+    // columna pisa a la primera al guardar cada fila por nombre de columna.
+    const seenHeaders = new Map();
+    const headers = rows[0].map((h, i) => {
+      const base = (h===null||h===undefined) ? "" : String(h);
+      const n = (seenHeaders.get(base) || 0) + 1;
+      seenHeaders.set(base, n);
+      if(n === 1) return base;
+      return base ? base + " (" + n + ")" : "Columna " + (i + 1);
+    });
     const dataRows = rows.slice(1).filter(r => r.some(v => v !== null && v !== "" && v !== undefined));
     const objRows = dataRows.map(r => {
       const o = {};
@@ -2526,6 +2536,22 @@ const db = firebase.firestore();
   }
 
   // ---------- mapping UI ----------
+  // Columna de generación que estaba guardada en el mapeo del curso. Si el
+  // archivo tiene encabezados repetidos, el guardado puede apuntar a una
+  // columna que ahora se llama distinto (p. ej. "Nombre" → "Nombre (2)"):
+  // se busca la columna donde SÍ existe el valor de generación guardado.
+  function savedGenCol(headers, rows, savedMap){
+    if(!savedMap || !savedMap.generacionCol) return "";
+    const col = savedMap.generacionCol;
+    const val = savedMap.generacionValor;
+    const tiene = c => headers.includes(c) && rows.some(r => String(r[c]) === String(val));
+    if(val !== undefined && val !== "" && !tiene(col)){
+      const alt = headers.find(h => h.startsWith(col + " (") && tiene(h));
+      if(alt) return alt;
+    }
+    return headers.includes(col) ? col : "";
+  }
+
   // Columnas que llevan "nombre" en su encabezado pero NO son el nombre de
   // la persona (p. ej. "Nombre del grupo", "Nombre de usuario").
   const NOMBRE_EXCLUIR = ["usuario","grupo","cohorte","curso","rol","institucion","departamento","identificador"];
@@ -2734,7 +2760,7 @@ const db = firebase.firestore();
 
       const genRow = el("div", {class:"field-row"});
       genRow.appendChild(el("label", {}, [document.createTextNode("Columna de generación (opcional — úsala si el archivo trae varias ediciones juntas, ej. N+V)")]));
-      const genColDefault = (savedMap && savedMap.generacionCol && headers.includes(savedMap.generacionCol)) ? savedMap.generacionCol : "";
+      const genColDefault = savedGenCol(headers, app.pending.plataforma.rows, savedMap);
       const genColSel = el("select");
       genColSel.id = "map-plataforma-gencol";
       genColSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
@@ -2765,7 +2791,7 @@ const db = firebase.firestore();
           genValSel.appendChild(opt);
         });
       }
-      const genValDefault = (savedMap && savedMap.generacionCol === genColDefault) ? savedMap.generacionValor : "";
+      const genValDefault = (savedMap && genColDefault) ? savedMap.generacionValor : "";
       populateGenValues(genColDefault, genValDefault);
       genColSel.addEventListener("change", () => {
         genValRow.classList.toggle("hidden", !genColSel.value);
@@ -2836,7 +2862,7 @@ const db = firebase.firestore();
 
       const genRowLF = el("div", {class:"field-row"});
       genRowLF.appendChild(el("label", {}, [document.createTextNode("Columna de generación (opcional — úsala si el archivo trae varias ediciones juntas)")]));
-      const genColDefaultLF = (savedMap && savedMap.generacionCol && headers.includes(savedMap.generacionCol)) ? savedMap.generacionCol : "";
+      const genColDefaultLF = savedGenCol(headers, app.pending.listafinal.rows, savedMap);
       const genColSelLF = el("select");
       genColSelLF.id = "map-listafinal-gencol";
       genColSelLF.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
@@ -2867,7 +2893,7 @@ const db = firebase.firestore();
           genValSelLF.appendChild(opt);
         });
       }
-      const genValDefaultLF = (savedMap && savedMap.generacionCol === genColDefaultLF) ? savedMap.generacionValor : "";
+      const genValDefaultLF = (savedMap && genColDefaultLF) ? savedMap.generacionValor : "";
       populateGenValuesLF(genColDefaultLF, genValDefaultLF);
       genColSelLF.addEventListener("change", () => {
         genValRowLF.classList.toggle("hidden", !genColSelLF.value);
