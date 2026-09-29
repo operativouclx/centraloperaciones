@@ -567,7 +567,7 @@
         <select id="course-new-cliente" class="input-text">
           <option value="soa">Santander Open Academy</option>
           <option value="santander">Santander</option>
-          <option value="alianza">Alianza</option>
+          <option value="alianza">Ceneval</option>
         </select>
       </div>
       <div class="field-row">
@@ -1224,7 +1224,7 @@ const db = firebase.firestore();
   const CLIENTES = [
     {id:"soa", label:"Santander Open Academy"},
     {id:"santander", label:"Santander"},
-    {id:"alianza", label:"Alianza"}
+    {id:"alianza", label:"Ceneval"}
   ];
   function inferClienteLegacy(displayName){
     return (displayName || "").trim().toLowerCase() === "salud financiera" ? "santander" : "soa";
