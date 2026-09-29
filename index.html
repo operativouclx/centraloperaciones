@@ -2526,6 +2526,56 @@ const db = firebase.firestore();
   }
 
   // ---------- mapping UI ----------
+  // Columnas que llevan "nombre" en su encabezado pero NO son el nombre de
+  // la persona (p. ej. "Nombre del grupo", "Nombre de usuario").
+  const NOMBRE_EXCLUIR = ["usuario","grupo","cohorte","curso","rol","institucion","departamento","identificador"];
+  function esColNombrePersona(n){
+    return !NOMBRE_EXCLUIR.some(w => n.includes(w));
+  }
+  function guessFirstNameCol(headers){
+    const norm = headers.map(h => normalize(h));
+    for(const c of ["nombre","nombres","nombre(s)","name","first name","firstname","given name"]){
+      const i = norm.indexOf(c); if(i !== -1) return headers[i];
+    }
+    const i = norm.findIndex(n => (n.startsWith("nombre") || n.startsWith("name")) && !n.includes("completo") && esColNombrePersona(n));
+    return i !== -1 ? headers[i] : "";
+  }
+  function guessLastNameCol(headers){
+    const norm = headers.map(h => normalize(h));
+    const i = norm.findIndex(n => n.includes("apellido") || n.includes("lastname") || n.includes("last name") || n.includes("surname"));
+    return i !== -1 ? headers[i] : "";
+  }
+  function guessFullNameCol(headers){
+    const norm = headers.map(h => normalize(h));
+    for(const c of ["nombre completo","nombre completo del usuario","full name","fullname"]){
+      const i = norm.indexOf(c); if(i !== -1) return headers[i];
+    }
+    let i = norm.findIndex(n => n.includes("nombre completo"));
+    if(i === -1) i = norm.findIndex(n => (n.includes("nombre") || n.includes("name")) && esColNombrePersona(n));
+    return i !== -1 ? headers[i] : (headers[0] || "");
+  }
+
+  // Muestra cómo se van a leer nombre y correo en las primeras filas, para
+  // notar a tiempo si se eligió una columna equivocada.
+  function updateNamePreview(kind){
+    const box = document.getElementById("name-preview-" + kind);
+    if(!box || !app.pending[kind]) return;
+    box.innerHTML = "";
+    box.appendChild(el("div", {style:"font-weight:700;margin-bottom:4px;"}, [document.createTextNode("Vista previa — así se leerán las primeras filas")]));
+    const emailSel = document.getElementById("map-" + kind + "-email");
+    app.pending[kind].rows.slice(0, 3).forEach(row => {
+      let name = "";
+      try{
+        if(kind === "santander") name = getSantanderName(row);
+        else if(kind === "plataforma") name = getPlataformaName(row);
+        else { const sel = document.getElementById("map-" + kind + "-fullname"); name = sel ? String(row[sel.value] ?? "") : ""; }
+      }catch(e){}
+      const email = emailSel ? row[emailSel.value] : "";
+      box.appendChild(el("div", {}, [document.createTextNode("Nombre: «" + (name || "(vacío)") + "» · Correo: «" + (email || "(vacío)") + "»")]));
+    });
+    box.appendChild(el("div", {class:"muted", style:"margin-top:4px;"}, [document.createTextNode("Si el nombre o el correo no se ven bien, cambia las columnas de abajo.")]));
+  }
+
   function renderMapping(kind, sheetNames){
     const container = document.getElementById("mapping-" + kind);
     container.innerHTML = "";
@@ -2567,6 +2617,12 @@ const db = firebase.firestore();
     container.appendChild(emailRow);
     emailSel.addEventListener("change", checkReady);
 
+    const namePreview = el("div", {id:"name-preview-" + kind, style:"margin:0 0 12px;font-size:12.5px;padding:10px 12px;border-radius:8px;background:var(--paper);border:1px solid var(--line-soft);"});
+    container.appendChild(namePreview);
+    // onchange (no addEventListener) para no acumular oyentes cuando se
+    // vuelve a dibujar el mapeo, p. ej. al cambiar de hoja.
+    container.onchange = () => updateNamePreview(kind);
+
     if(kind === "santander"){
       const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode : "split";
       const modeRow = el("div", {class:"radio-row"});
@@ -2582,10 +2638,10 @@ const db = firebase.firestore();
       container.appendChild(modeRow);
 
       const splitWrap = el("div", {class:"two-col" + (mode==="split" ? "" : " hidden"), id:"santander-split-wrap"});
-      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : guessColumn(headers, ["name","nombre"]);
+      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : (guessFirstNameCol(headers) || headers[0] || "");
       const firstSel = makeHeaderSelect(headers, firstDefault);
       firstSel.id = "map-santander-first";
-      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : guessColumn(headers, ["lastname","apellido"]);
+      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : (guessLastNameCol(headers) || headers[0] || "");
       const lastSel = makeHeaderSelect(headers, lastDefault);
       lastSel.id = "map-santander-last";
       splitWrap.appendChild(labeled("Nombre", firstSel));
@@ -2593,7 +2649,7 @@ const db = firebase.firestore();
       container.appendChild(splitWrap);
 
       const singleWrap = el("div", {class:"field-row" + (mode==="single" ? "" : " hidden"), id:"santander-single-wrap"});
-      const singleDefault = (savedMap && headers.includes(savedMap.fullNameCol)) ? savedMap.fullNameCol : guessColumn(headers, ["nombre completo","full name"]);
+      const singleDefault = (savedMap && headers.includes(savedMap.fullNameCol)) ? savedMap.fullNameCol : guessFullNameCol(headers);
       const singleSel = makeHeaderSelect(headers, singleDefault);
       singleSel.id = "map-santander-fullname";
       singleWrap.appendChild(el("label",{},[document.createTextNode("Columna de nombre completo")]));
@@ -2620,7 +2676,8 @@ const db = firebase.firestore();
       container.appendChild(statusRow);
 
     } else if(kind === "plataforma"){
-      const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode : "single";
+      const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode
+        : ((guessFirstNameCol(headers) && guessLastNameCol(headers)) ? "split" : "single");
       const modeRow = el("div", {class:"radio-row"});
       const opt1 = el("label", {class:"radio-opt"});
       const r1 = el("input", {type:"radio", name:"name-mode-plataforma", value:"split"});
@@ -2634,10 +2691,10 @@ const db = firebase.firestore();
       container.appendChild(modeRow);
 
       const splitWrap = el("div", {class:"two-col" + (mode==="split" ? "" : " hidden"), id:"plataforma-split-wrap"});
-      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : guessColumn(headers, ["nombre","name"]);
+      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : (guessFirstNameCol(headers) || headers[0] || "");
       const firstSel = makeHeaderSelect(headers, firstDefault);
       firstSel.id = "map-plataforma-first";
-      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : guessColumn(headers, ["apellido","lastname"]);
+      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : (guessLastNameCol(headers) || headers[0] || "");
       const lastSel = makeHeaderSelect(headers, lastDefault);
       lastSel.id = "map-plataforma-last";
       splitWrap.appendChild(labeled("Nombre", firstSel));
@@ -2648,7 +2705,7 @@ const db = firebase.firestore();
 
       const nameRow = el("div", {class:"field-row" + (mode==="single" ? "" : " hidden"), id:"plataforma-single-wrap"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
-      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
+      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
       const nameSel = makeHeaderSelect(headers, nameDefault);
       nameSel.id = "map-plataforma-fullname";
       nameRow.appendChild(nameSel);
@@ -2722,7 +2779,7 @@ const db = firebase.firestore();
     } else if(kind === "listafinal"){
       const nameRow = el("div", {class:"field-row"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
-      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
+      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
       const nameSel = makeHeaderSelect(headers, nameDefault);
       nameSel.id = "map-listafinal-fullname";
       nameRow.appendChild(nameSel);
@@ -2789,7 +2846,7 @@ const db = firebase.firestore();
     } else if(kind === "addon"){
       const nameRow = el("div", {class:"field-row"});
       nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
-      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessColumn(headers, ["nombre completo","nombre","name"]);
+      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
       const nameSel = makeHeaderSelect(headers, nameDefault);
       nameSel.id = "map-addon-fullname";
       nameRow.appendChild(nameSel);
@@ -2814,6 +2871,7 @@ const db = firebase.firestore();
       progSel.addEventListener("change", checkReady);
     }
 
+    updateNamePreview(kind);
     checkReady();
   }
 
@@ -2967,6 +3025,10 @@ const db = firebase.firestore();
         if(nameSplit && (nameSplit.nombres || nameSplit.apellidos)){
           record.nombres = nameSplit.nombres;
           record.apellidos = nameSplit.apellidos;
+        } else if(name && !nameSplit){
+          // Nombre completo en una sola columna: se limpian las partes
+          // guardadas antes para que no queden datos viejos o equivocados.
+          record.nombres = ""; record.apellidos = "";
         }
         record.email = email || record.email;
         record.santanderExtra = Object.assign({}, record.santanderExtra, newVals);
@@ -3111,7 +3173,15 @@ const db = firebase.firestore();
           if(nNorm) byName.set(nNorm, record);
           nuevosCount++;
         } else {
-          record.nombre = name || record.nombre;
+          if(name){
+            record.nombre = name;
+            if(nameMode === "split"){
+              record.nombres = firstCol && row[firstCol] ? String(row[firstCol]).trim() : "";
+              record.apellidos = lastCol && row[lastCol] ? String(row[lastCol]).trim() : "";
+            } else {
+              record.nombres = ""; record.apellidos = "";
+            }
+          }
           record.email = email || record.email;
           record.plataformaExtra = Object.assign({}, record.plataformaExtra, vals);
           record.estado = "En plataforma";
@@ -3391,7 +3461,7 @@ const db = firebase.firestore();
         masterByKey.set(key, record);
         nuevosCount++;
       } else {
-        record.nombre = name || record.nombre;
+        if(name){ record.nombre = name; record.nombres = ""; record.apellidos = ""; }
         record.email = email || record.email;
         record.plataformaExtra = Object.assign({}, record.plataformaExtra, extraVals);
         record.estado = "En plataforma";
