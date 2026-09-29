@@ -424,7 +424,7 @@
           <h2 id="course-name-display" style="display:inline"></h2>
           <span id="course-edition-display" style="display:inline;font-size:13px;color:var(--ink-soft);font-weight:600;margin-left:6px;"></span>
           <button type="button" id="btn-rename-course" class="btn-rename-course" title="Renombrar curso">✎ renombrar</button>
-          <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia">🏷 cliente / año</button>
+          <button type="button" id="btn-edit-cliente-anio" class="btn-rename-course" title="Cambiar cliente / año / familia / tipo de curso">🏷 cliente / año / tipo</button>
           <button type="button" id="btn-delete-course" class="btn-rename-course" title="Eliminar este curso por completo" style="color:var(--rust);">🗑 eliminar curso</button>
           <button type="button" id="btn-undo-today" class="btn-rename-course" title="Quita los registros nuevos que se agregaron hoy" style="color:var(--rust);">↩ quitar carga de hoy</button>
           <div class="course-head-actions" style="margin-top:10px;">
@@ -461,7 +461,7 @@
         <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
         <button class="tab" data-tab="revisar">En plataforma, no en Santander <span class="badge" id="badge-revisar">0</span></button>
         <button class="tab hidden" data-tab="nuevos">Nuevos en la última carga <span class="badge" id="badge-nuevos">0</span></button>
-        <button class="tab hidden" data-tab="pruebas">Pruebas <span class="badge" id="badge-pruebas">0</span></button>
+        <button class="tab hidden" data-tab="pruebas">No estudiantes <span class="badge" id="badge-pruebas">0</span></button>
         <button class="tab hidden" data-tab="manual">Captura manual</button>
         <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
         <button class="tab" data-tab="addon">Add on <span class="badge" id="badge-addon">0</span></button>
@@ -511,7 +511,7 @@
       </div>
 
       <div class="tab-panel" data-panel="pruebas">
-        <div class="panel-note amber">Usuarios marcados como de prueba en la última carga de plataforma. No se cuentan en la base, los totales ni el dashboard. Para cambiar quién es de prueba, hazlo en la siguiente carga de plataforma.</div>
+        <div class="panel-note amber">Personas marcadas como "no son estudiantes" (pruebas, staff, etc.) que venían en la última carga de plataforma. Se omiten siempre: no se cuentan en la base, los totales ni el dashboard. Para cambiar quién está aquí, hazlo en la siguiente carga de plataforma.</div>
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="pruebas">
           <button class="btn btn-ghost btn-small" data-download="pruebas">Descargar Excel</button>
@@ -569,6 +569,7 @@
         <label>Tipo de curso</label>
         <div class="radio-row">
           <label class="radio-opt"><input type="radio" name="course-new-tipo" value="activo" checked> Activo (Santander + plataforma)</label>
+          <label class="radio-opt"><input type="radio" name="course-new-tipo" value="plataforma"> Activo (solo plataforma)</label>
           <label class="radio-opt"><input type="radio" name="course-new-tipo" value="historico"> Histórico (una sola lista final)</label>
         </div>
       </div>
@@ -999,6 +1000,12 @@ const db = firebase.firestore();
     document.getElementById("course-new-name").value = "";
     const defaultTipo = document.querySelector('input[name="course-new-tipo"][value="activo"]');
     if(defaultTipo) defaultTipo.checked = true;
+    // Arranca con el cliente y año de la pestaña en la que estás, para que
+    // un curso creado desde Ceneval no caiga en Santander Open Academy.
+    const clienteSel = document.getElementById("course-new-cliente");
+    if(clienteSel && CLIENTES.some(c => c.id === app.selectedCliente)) clienteSel.value = app.selectedCliente;
+    const anioInput = document.getElementById("course-new-anio");
+    if(anioInput) anioInput.value = typeof app.selectedAnio === "number" ? app.selectedAnio : "";
     openModal("modal-course");
     document.getElementById("course-new-name").focus();
   });
@@ -1038,13 +1045,18 @@ const db = firebase.firestore();
   document.getElementById("btn-delete-course").addEventListener("click", async () => {
     if(!app.slug || !app.meta) return;
     const nombre = app.meta.displayName || app.slug;
+    const clienteLabelDel = (CLIENTES.find(c => c.id === clienteDe(app.meta)) || {}).label || "";
+    const registros = app.masterReady ? app.master.length : ((app.meta.stats && app.meta.stats.total) || 0);
     const confirmacion = prompt(
-      "Esto borra el curso \"" + nombre + "\" por completo (todo su histórico, cargas y estatus) y no se puede deshacer.\n\n" +
-      "Escribe el nombre exacto del curso para confirmar:"
+      "Esto borra el curso \"" + nombre + "\"" + (clienteLabelDel ? " de " + clienteLabelDel : "") +
+      " por completo y no se puede deshacer.\n\n" +
+      "Tiene " + registros + " registro(s) en la base y " + app.log.length + " carga(s) en el historial.\n\n" +
+      "Para confirmar, escribe el nombre del curso: " + nombre
     );
     if(confirmacion === null) return;
-    if(confirmacion.trim() !== nombre){
-      alert("El nombre no coincide — no se borró nada.");
+    const squashNombre = v => normalize(v).replace(/\s+/g, " ").trim();
+    if(squashNombre(confirmacion) !== squashNombre(nombre)){
+      alert("El nombre no coincide — no se borró nada.\n\nHay que escribir: " + nombre);
       return;
     }
     const slugToDelete = app.slug;
@@ -1271,6 +1283,19 @@ const db = firebase.firestore();
   function esAlianzaMeta(meta){
     return !!meta && clienteDe(meta) === "alianza";
   }
+  // Tipos de curso: "activo" (Santander + plataforma), "plataforma" (activo,
+  // solo plataforma) e "historico" (una sola lista final).
+  function normalizeTipo(tipo){
+    return tipo === "historico" || tipo === "plataforma" ? tipo : "activo";
+  }
+  // Cursos "solo plataforma": la plataforma ES la base — cada carga detecta
+  // a los nuevos y omite siempre a quienes se marcaron como no estudiantes.
+  // Los cursos de Ceneval que ya existían como "activo" se tratan igual.
+  function esSoloPlataforma(meta){
+    if(!meta) return false;
+    if(meta.tipo === "plataforma") return true;
+    return meta.tipo !== "historico" && esAlianzaMeta(meta);
+  }
 
   // Salud Financiera ya no sube bases (ni Santander ni plataforma): todos
   // sus números se capturan a mano en la pestaña "Captura manual" y se
@@ -1335,7 +1360,7 @@ const db = firebase.firestore();
   function emptyMeta(displayName, slug, tipo, cliente, anio){
     return {
       displayName, slug,
-      tipo: tipo === "historico" ? "historico" : "activo",
+      tipo: normalizeTipo(tipo),
       cliente: cliente || "soa",
       anio: anio || null,
       familia: null,
@@ -1448,7 +1473,7 @@ const db = firebase.firestore();
   // Alianza = total en plataforma (null → se usa el total de la tabla madre).
   function getInscritosTotalFor(meta){
     if(!meta) return null;
-    if(esAlianzaMeta(meta)) return null;
+    if(esSoloPlataforma(meta)) return null;
     if(meta.tipo === "historico"){
       return (typeof meta.santanderInscritos === "number" && meta.santanderInscritos > 0) ? meta.santanderInscritos : null;
     }
@@ -1482,7 +1507,7 @@ const db = firebase.firestore();
         displayName: data.displayName || d.id,
         updatedAt: data.updatedAt,
         stats: data.stats || emptyStats(),
-        tipo: data.tipo === "historico" ? "historico" : "activo",
+        tipo: normalizeTipo(data.tipo),
         cliente: data.cliente || inferClienteLegacy(data.displayName || d.id),
         anio: data.anio || inferAnioLegacy(d.id, data.displayName),
         familia: data.familia || inferFamiliaLegacy(d.id, data.displayName),
@@ -1734,13 +1759,25 @@ const db = firebase.firestore();
     if(familiaInput === null) return;
     const familia = familiaInput.trim() || null;
 
+    const TIPOS = {"1":"activo", "2":"plataforma", "3":"historico"};
+    const tipoActualN = Object.keys(TIPOS).find(k => TIPOS[k] === normalizeTipo(app.meta.tipo)) || "1";
+    const tipoInput = prompt([
+      "Tipo de curso:",
+      "1 = Activo (Santander + plataforma)",
+      "2 = Activo (solo plataforma)",
+      "3 = Histórico (una sola lista final)"
+    ].join("\n"), tipoActualN);
+    if(tipoInput === null) return;
+    const tipo = TIPOS[tipoInput.trim()] || normalizeTipo(app.meta.tipo);
+
     try{
-      await courseDoc(app.slug).set({cliente: clienteId, anio, familia}, {merge:true});
+      await courseDoc(app.slug).set({cliente: clienteId, anio, familia, tipo}, {merge:true});
+      app.meta.tipo = tipo;
       app.meta.cliente = clienteId;
       app.meta.anio = anio;
       app.meta.familia = familia;
       const idx = app.coursesIndex.find(c => c.slug === app.slug);
-      if(idx){ idx.cliente = clienteId; idx.anio = anio; idx.familia = familia; }
+      if(idx){ idx.cliente = clienteId; idx.anio = anio; idx.familia = familia; idx.tipo = tipo; }
       app.selectedCliente = clienteId;
       app.selectedAnio = anio;
       try{ localStorage.setItem("uclx-cliente", clienteId); }catch(e){}
@@ -1748,6 +1785,8 @@ const db = firebase.firestore();
       renderCourseTabs();
       renderCourseNameDisplay();
       renderFamilyMetaPanel();
+      // Recarga el curso para que botones y pestañas correspondan al tipo.
+      await loadCourse(app.slug);
     }catch(err){
       console.error("No se pudo guardar cliente/año:", err);
       alert("No se pudo guardar: " + (err && err.message ? err.message : err));
@@ -2039,15 +2078,30 @@ const db = firebase.firestore();
     const input = document.getElementById("course-new-name");
     const name = input.value.trim();
     if(!name) return;
-    const slug = slugify(name);
-    const existing = app.coursesIndex.find(c => c.slug === slug);
-    if(existing){ document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; closeModal("modal-course"); return; }
-
     const tipoSel = document.querySelector('input[name="course-new-tipo"]:checked');
     const clienteSel = document.getElementById("course-new-cliente");
+    const clienteNuevo = clienteSel ? clienteSel.value : "soa";
+    const clienteLabel = (CLIENTES.find(c => c.id === clienteNuevo) || {}).label || clienteNuevo;
+
+    let slug = slugify(name);
+    const existing = app.coursesIndex.find(c => c.slug === slug);
+    if(existing){
+      const clienteExistente = existing.cliente || inferClienteLegacy(existing.displayName);
+      if(clienteExistente === clienteNuevo){
+        if(!confirm("Ya existe un curso llamado \"" + existing.displayName + "\" en " + clienteLabel + ". ¿Abrirlo?")) return;
+        document.getElementById("course-select").value = slug; await loadCourse(slug); input.value = ""; closeModal("modal-course"); return;
+      }
+      // Mismo nombre que un curso de otro cliente: se crea aparte con un
+      // identificador distinto (p. ej. "mi-prepa-2026-ceneval").
+      const base = slug + "-" + slugify(clienteLabel);
+      slug = base;
+      let n = 2;
+      while(app.coursesIndex.some(c => c.slug === slug)){ slug = base + "-" + n; n++; }
+    }
+
     const anioInput = document.getElementById("course-new-anio");
     const anio = anioInput.value.trim() ? parseInt(anioInput.value.trim(), 10) : null;
-    const meta = emptyMeta(name, slug, tipoSel ? tipoSel.value : "activo", clienteSel ? clienteSel.value : "soa", anio);
+    const meta = emptyMeta(name, slug, tipoSel ? tipoSel.value : "activo", clienteNuevo, anio);
     setSaveStatus("Creando curso...");
     await createCourseRemote(meta);
     app.coursesIndex.push({
@@ -2058,7 +2112,7 @@ const db = firebase.firestore();
     document.getElementById("course-select").value = slug;
     input.value = "";
     await loadCourse(slug);
-    setSaveStatus("Curso creado.");
+    setSaveStatus("Curso creado en " + clienteLabel + ".");
     closeModal("modal-course");
   });
 
@@ -2107,7 +2161,7 @@ const db = firebase.firestore();
     const esHistorico = app.meta.tipo === "historico";
     // Alianza no sube base de Santander ni tiene meta de convocatoria —
     // solo se actualiza con archivos de plataforma.
-    const esAlianza = esAlianzaMeta(app.meta);
+    const esAlianza = esSoloPlataforma(app.meta);
     // Salud Financiera: sin cargas de archivos, todo se captura a mano.
     const esManual = esCapturaManual(app.meta);
 
@@ -2196,14 +2250,14 @@ const db = firebase.firestore();
       santanderInscritos: typeof meta.santanderInscritos === "number" ? meta.santanderInscritos : null,
       santanderAsignados: typeof meta.santanderAsignados === "number" ? meta.santanderAsignados : null,
       santanderSnapshot: santanderSnapshotFor(meta),
-      esAlianza: esAlianzaMeta(meta),
+      esAlianza: esSoloPlataforma(meta),
       esManual: esCapturaManual(meta),
       nuevos: app.masterReady ? nuevosUltimaCarga().length : (meta.lastRun && typeof meta.lastRun.nuevosCount === "number" ? meta.lastRun.nuevosCount : 0),
       lastUpload: meta.lastPlataformaUpload || meta.lastListaFinalUpload || null
     };
   }
 
-  // Ceneval: los usuarios de prueba se identifican por correo (o por
+  // Solo plataforma: los que no son estudiantes se identifican por correo (o por
   // nombre si no traen correo) y se guardan en meta.pruebaKeys, para que la
   // selección se conserve de una carga a otra.
   function pruebaKeyOf(email, name){
@@ -2212,12 +2266,12 @@ const db = firebase.firestore();
   }
 
   // Lista con buscador, dentro del modal de plataforma, para marcar quién
-  // es de prueba en el archivo que se está subiendo.
+  // no es estudiante en el archivo que se está subiendo.
   function renderPruebasPicker(container){
     const box = el("div", {class:"field-row", style:"padding:10px 12px;border:1px solid var(--amber-line);background:var(--amber-bg);border-radius:8px;"});
-    box.appendChild(el("label", {style:"font-weight:700;color:var(--ink);"}, [document.createTextNode("Usuarios de prueba")]));
+    box.appendChild(el("label", {style:"font-weight:700;color:var(--ink);"}, [document.createTextNode("¿Quiénes no son estudiantes?")]));
     box.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:8px;"}, [document.createTextNode(
-      "Marca a quienes son de prueba: no se cuentan y se van a la pestaña Pruebas. La selección se recuerda para las siguientes cargas."
+      "Marca a quienes no son estudiantes (pruebas, staff, etc.): no se cuentan y se van a la pestaña No estudiantes. La selección se recuerda y se omiten en todas las cargas siguientes."
     )]));
     const tools = el("div", {style:"display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"});
     const search = el("input", {type:"text", class:"input-text", placeholder:"Buscar por nombre o correo...", style:"flex:1;min-width:180px;background:#fff;"});
@@ -2254,7 +2308,7 @@ const db = firebase.firestore();
       const inFile = new Set(rows.map(r => r.key));
       const marcadosArchivo = rows.filter(r => app.pruebaSel.has(r.key)).length;
       const fuera = Array.from(app.pruebaSel).filter(k => !inFile.has(k)).length;
-      counter.textContent = marcadosArchivo + " marcado(s) como prueba en este archivo" +
+      counter.textContent = marcadosArchivo + " marcado(s) como no estudiante en este archivo" +
         (fuera ? " · " + fuera + " marcado(s) antes que no vienen en este archivo" : "");
       const q = normalize(search.value);
       let filtered = rows;
@@ -2580,7 +2634,7 @@ const db = firebase.firestore();
         populateGenValues(genColSel.value, "");
       });
 
-      if(esAlianzaMeta(app.meta)){
+      if(esSoloPlataforma(app.meta)){
         app.pruebaSel = new Set(app.meta.pruebaKeys || []);
         renderPruebasPicker(container);
       }
@@ -2925,7 +2979,7 @@ const db = firebase.firestore();
     // Alianza no tiene base de Santander: la plataforma ES la base. Quien
     // no estaba en la tabla madre se agrega y queda marcado como "nuevo"
     // de esta carga; quien ya estaba solo se actualiza (con candado de %).
-    if(esAlianzaMeta(app.meta)){
+    if(esSoloPlataforma(app.meta)){
       const cargaId = nowISO();
       const byEmail = new Map();
       const byName = new Map();
@@ -3017,8 +3071,8 @@ const db = firebase.firestore();
       app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount, pruebas: capForStorage(pruebasRows)});
 
       let resumen = sourceRows.length + " registros en el archivo, " + nuevosCount + " nuevos, " + (touched.size - nuevosCount) + " ya estaban en la base";
-      if(pruebasRows.length) resumen += ", " + pruebasRows.length + " de prueba (no se cuentan)";
-      if(quitadosPrueba.length) resumen += " — se quitaron de la base " + quitadosPrueba.length + " registro(s) marcados como prueba";
+      if(pruebasRows.length) resumen += ", " + pruebasRows.length + " no son estudiantes (omitidos)";
+      if(quitadosPrueba.length) resumen += " — se quitaron de la base " + quitadosPrueba.length + " registro(s) marcados como no estudiantes";
       if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
       const logEntryA = {
         date: nowISO(), tipo:"Plataforma", archivo: app.pending.plataforma.fileName,
@@ -3035,7 +3089,7 @@ const db = firebase.firestore();
           }
         }catch(err){
           console.error("No se pudieron quitar los registros de prueba de la base:", err);
-          alert("Los usuarios de prueba no se pudieron quitar de la base guardada. Vuelve a procesar esta carga para completarlo.");
+          alert("Los marcados como no estudiantes no se pudieron quitar de la base guardada. Vuelve a procesar esta carga para completarlo.");
         }
       }
 
@@ -4509,7 +4563,7 @@ const db = firebase.firestore();
     const meta = app.meta || {};
     stats = stats || emptyStats();
     const esHistorico = meta.tipo === "historico";
-    const esAlianza = esAlianzaMeta(meta);
+    const esAlianza = esSoloPlataforma(meta);
     const snap = santanderSnapshotFor(meta);
 
     let inscritos, becasAsignadas;
@@ -4768,7 +4822,7 @@ const db = firebase.firestore();
       const rows = currentRowsFor(key);
       if(!rows.length) return;
       const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
-      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", pruebas:"usuarios-de-prueba", nps:"nps-comentarios"};
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", pruebas:"no-estudiantes", nps:"nps-comentarios"};
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Datos");
