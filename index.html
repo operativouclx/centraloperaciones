@@ -461,6 +461,7 @@
         <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
         <button class="tab" data-tab="revisar">En plataforma, no en Santander <span class="badge" id="badge-revisar">0</span></button>
         <button class="tab hidden" data-tab="nuevos">Nuevos en la última carga <span class="badge" id="badge-nuevos">0</span></button>
+        <button class="tab hidden" data-tab="pruebas">Pruebas <span class="badge" id="badge-pruebas">0</span></button>
         <button class="tab hidden" data-tab="manual">Captura manual</button>
         <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
         <button class="tab" data-tab="addon">Add on <span class="badge" id="badge-addon">0</span></button>
@@ -505,6 +506,15 @@
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="nuevos">
           <button class="btn btn-ghost btn-small" data-download="nuevos">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="pruebas">
+        <div class="panel-note amber">Usuarios marcados como de prueba en la última carga de plataforma. No se cuentan en la base, los totales ni el dashboard. Para cambiar quién es de prueba, hazlo en la siguiente carga de plataforma.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="pruebas">
+          <button class="btn btn-ghost btn-small" data-download="pruebas">Descargar Excel</button>
         </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
@@ -2080,6 +2090,7 @@ const db = firebase.firestore();
     const savedLastRun = app.meta.lastRun || {};
     app.lastRun = {
       revisar: savedLastRun.revisar || [],
+      pruebas: savedLastRun.pruebas || [],
       alta: []
     };
     setSaveStatus("");
@@ -2113,6 +2124,7 @@ const db = firebase.firestore();
       alta: !esManual && !esAlianza,
       revisar: !esManual && !esAlianza,
       nuevos: !esManual && esAlianza,
+      pruebas: !esManual && esAlianza,
       manual: esManual,
       addon: !esManual
     });
@@ -2191,6 +2203,94 @@ const db = firebase.firestore();
     };
   }
 
+  // Ceneval: los usuarios de prueba se identifican por correo (o por
+  // nombre si no traen correo) y se guardan en meta.pruebaKeys, para que la
+  // selección se conserve de una carga a otra.
+  function pruebaKeyOf(email, name){
+    const e = normalize(email);
+    return e ? "e_" + e : "n_" + normalize(name);
+  }
+
+  // Lista con buscador, dentro del modal de plataforma, para marcar quién
+  // es de prueba en el archivo que se está subiendo.
+  function renderPruebasPicker(container){
+    const box = el("div", {class:"field-row", style:"padding:10px 12px;border:1px solid var(--amber-line);background:var(--amber-bg);border-radius:8px;"});
+    box.appendChild(el("label", {style:"font-weight:700;color:var(--ink);"}, [document.createTextNode("Usuarios de prueba")]));
+    box.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:8px;"}, [document.createTextNode(
+      "Marca a quienes son de prueba: no se cuentan y se van a la pestaña Pruebas. La selección se recuerda para las siguientes cargas."
+    )]));
+    const tools = el("div", {style:"display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"});
+    const search = el("input", {type:"text", class:"input-text", placeholder:"Buscar por nombre o correo...", style:"flex:1;min-width:180px;background:#fff;"});
+    const onlyLbl = el("label", {style:"display:flex;align-items:center;gap:5px;font-size:12.5px;margin:0;color:var(--ink);"});
+    const onlyChk = el("input", {type:"checkbox"});
+    onlyLbl.appendChild(onlyChk); onlyLbl.appendChild(document.createTextNode("Solo marcados"));
+    tools.appendChild(search); tools.appendChild(onlyLbl);
+    box.appendChild(tools);
+    const counter = el("div", {style:"font-size:12.5px;font-weight:600;margin-bottom:6px;"});
+    box.appendChild(counter);
+    const list = el("div", {style:"max-height:220px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:6px;"});
+    box.appendChild(list);
+    container.appendChild(box);
+
+    const LIMIT = 150;
+    function currentRows(){
+      const emailSel = document.getElementById("map-plataforma-email");
+      const emailCol = emailSel ? emailSel.value : "";
+      const seen = new Set();
+      const out = [];
+      app.pending.plataforma.rows.forEach(row => {
+        const email = emailCol ? row[emailCol] : "";
+        const name = getPlataformaName(row);
+        if(!normalize(email) && !normalize(name)) return;
+        const key = pruebaKeyOf(email, name);
+        if(seen.has(key)) return;
+        seen.add(key);
+        out.push({key, name, email: email || ""});
+      });
+      return out;
+    }
+    function draw(){
+      const rows = currentRows();
+      const inFile = new Set(rows.map(r => r.key));
+      const marcadosArchivo = rows.filter(r => app.pruebaSel.has(r.key)).length;
+      const fuera = Array.from(app.pruebaSel).filter(k => !inFile.has(k)).length;
+      counter.textContent = marcadosArchivo + " marcado(s) como prueba en este archivo" +
+        (fuera ? " · " + fuera + " marcado(s) antes que no vienen en este archivo" : "");
+      const q = normalize(search.value);
+      let filtered = rows;
+      if(onlyChk.checked) filtered = filtered.filter(r => app.pruebaSel.has(r.key));
+      if(q) filtered = filtered.filter(r => normalize(r.name).includes(q) || normalize(r.email).includes(q));
+      list.innerHTML = "";
+      filtered.slice(0, LIMIT).forEach(r => {
+        const item = el("label", {style:"display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line-soft);font-size:12.5px;margin:0;color:var(--ink);cursor:pointer;"});
+        const chk = el("input", {type:"checkbox"});
+        chk.checked = app.pruebaSel.has(r.key);
+        chk.addEventListener("change", () => {
+          if(chk.checked) app.pruebaSel.add(r.key); else app.pruebaSel.delete(r.key);
+          draw();
+        });
+        item.appendChild(chk);
+        item.appendChild(el("span", {style:"flex:1;"}, [document.createTextNode(r.name || "(sin nombre)")]));
+        item.appendChild(el("span", {class:"muted"}, [document.createTextNode(r.email)]));
+        list.appendChild(item);
+      });
+      if(!filtered.length){
+        list.appendChild(el("div", {class:"muted", style:"padding:10px;font-size:12.5px;"}, [document.createTextNode("Sin resultados.")]));
+      } else if(filtered.length > LIMIT){
+        list.appendChild(el("div", {class:"muted", style:"padding:8px;font-size:12px;font-style:italic;"}, [document.createTextNode(
+          "Mostrando " + LIMIT + " de " + filtered.length + " — usa el buscador para encontrar a alguien."
+        )]));
+      }
+    }
+    search.addEventListener("input", draw);
+    onlyChk.addEventListener("change", draw);
+    // Si cambian las columnas de nombre/correo, se redibuja la lista.
+    container.addEventListener("change", e => {
+      if(e.target && (e.target.tagName === "SELECT" || e.target.type === "radio")) draw();
+    });
+    draw();
+  }
+
   // Alianza: registros que aparecieron por primera vez en la última carga
   // de plataforma (o lista final) — cada carga marca a sus nuevos con el
   // mismo cargaId.
@@ -2206,6 +2306,8 @@ const db = firebase.firestore();
     document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-nuevos").textContent = courseVisualOpts().nuevos;
+    document.getElementById("badge-pruebas").textContent = app.lastRun.pruebas.length;
+    renderSideTable("pruebas", app.lastRun.pruebas);
     document.getElementById("badge-historial").textContent = "…";
     document.getElementById("badge-addon").textContent = "…";
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getInscritosTotalFor(app.meta)), courseVisualOpts());
@@ -2477,6 +2579,11 @@ const db = firebase.firestore();
         genValRow.classList.toggle("hidden", !genColSel.value);
         populateGenValues(genColSel.value, "");
       });
+
+      if(esAlianzaMeta(app.meta)){
+        app.pruebaSel = new Set(app.meta.pruebaKeys || []);
+        renderPruebasPicker(container);
+      }
 
     } else if(kind === "listafinal"){
       const nameRow = el("div", {class:"field-row"});
@@ -2829,11 +2936,27 @@ const db = firebase.firestore();
       });
       const touched = new Set();
       let nuevosCount = 0;
+      const pruebaSet = app.pruebaSel || new Set(app.meta.pruebaKeys || []);
+      const pruebasRows = [];
+      const pruebasVistas = new Set();
       sourceRows.forEach(row => {
         const email = row[emailCol];
         const name = getPlataformaName(row);
         const eNorm = normalize(email), nNorm = normalize(name);
         if(!eNorm && !nNorm) return;
+        const pk = pruebaKeyOf(email, name);
+        if(pruebaSet.has(pk)){
+          if(pruebasVistas.has(pk)) return;
+          pruebasVistas.add(pk);
+          const pr = {Nombre: name, Email: email || ""};
+          if(progresoCol){
+            const parsedP = parsePct(row[progresoCol]);
+            pr["Progreso"] = parsedP === null ? "—" : parsedP + "%";
+          }
+          extraCols.forEach(c => { if(!(c in pr)) pr[c] = row[c]; });
+          pruebasRows.push(pr);
+          return;
+        }
         const vals = {};
         extraCols.forEach(c => vals[c] = row[c]);
 
@@ -2874,6 +2997,15 @@ const db = firebase.firestore();
       });
       app.master.forEach(r => { if(!touched.has(r._key)) r.presenteUltimaCarga = false; });
 
+      // Quien ya estaba en la base y ahora se marcó como prueba sale de la
+      // tabla madre (y de Firestore, más abajo) para que deje de contarse.
+      const quitadosPrueba = app.master.filter(r => pruebaSet.has(pruebaKeyOf(r.email, r.nombre)));
+      if(quitadosPrueba.length){
+        const quitarKeys = new Set(quitadosPrueba.map(r => r._key));
+        app.master = app.master.filter(r => !quitarKeys.has(r._key));
+      }
+      app.meta.pruebaKeys = Array.from(pruebaSet);
+
       app.meta.plataformaMapping = {emailCol, nameMode, nameCol, firstCol, lastCol, progresoCol, generacionCol, generacionValor, extraCols};
       app.meta.lastPlataformaUpload = today;
       app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
@@ -2882,18 +3014,34 @@ const db = firebase.firestore();
 
       await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
       app.meta.stats = computeMasterStats(app.master);
-      app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount});
+      app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount, pruebas: capForStorage(pruebasRows)});
 
       let resumen = sourceRows.length + " registros en el archivo, " + nuevosCount + " nuevos, " + (touched.size - nuevosCount) + " ya estaban en la base";
+      if(pruebasRows.length) resumen += ", " + pruebasRows.length + " de prueba (no se cuentan)";
+      if(quitadosPrueba.length) resumen += " — se quitaron de la base " + quitadosPrueba.length + " registro(s) marcados como prueba";
       if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
       const logEntryA = {
         date: nowISO(), tipo:"Plataforma", archivo: app.pending.plataforma.fileName,
         resumen, por: (auth.currentUser && auth.currentUser.email) || ""
       };
       app.log.unshift(logEntryA);
-      await persistUpdate(logEntryA);
+      const guardado = await persistUpdate(logEntryA);
+      if(guardado && quitadosPrueba.length){
+        try{
+          for(const chunk of chunkArray(quitadosPrueba, 400)){
+            const batch = db.batch();
+            chunk.forEach(r => batch.delete(masterColl(app.slug).doc(sanitizeDocId(r._key))));
+            await batch.commit();
+          }
+        }catch(err){
+          console.error("No se pudieron quitar los registros de prueba de la base:", err);
+          alert("Los usuarios de prueba no se pudieron quitar de la base guardada. Vuelve a procesar esta carga para completarlo.");
+        }
+      }
 
       app.lastRun.revisar = [];
+      app.lastRun.pruebas = pruebasRows;
+      renderSideTable("pruebas", pruebasRows);
       renderStats();
       renderMasterTable();
       renderHistorial();
@@ -3721,6 +3869,7 @@ const db = firebase.firestore();
     document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-nuevos").textContent = nuevosUltimaCarga().length;
+    document.getElementById("badge-pruebas").textContent = app.lastRun.pruebas.length;
     document.getElementById("badge-historial").textContent = app.log.length;
     document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
 
@@ -4559,6 +4708,7 @@ const db = firebase.firestore();
     if(key === "alta") return app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow);
     if(key === "addon") return app.master.map(flattenAddOnRow);
     if(key === "nuevos") return nuevosUltimaCarga().map(flattenMasterRow);
+    if(key === "pruebas") return app.lastRun.pruebas || [];
     if(key === "nps") return npsRows();
     return (app.lastRun[key] || []).map(splitNombreColumn);
   }
@@ -4618,7 +4768,7 @@ const db = firebase.firestore();
       const rows = currentRowsFor(key);
       if(!rows.length) return;
       const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
-      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", nps:"nps-comentarios"};
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", pruebas:"usuarios-de-prueba", nps:"nps-comentarios"};
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Datos");
