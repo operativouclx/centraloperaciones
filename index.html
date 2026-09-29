@@ -463,6 +463,7 @@
         <button class="tab hidden" data-tab="nuevos">Nuevos en la última carga <span class="badge" id="badge-nuevos">0</span></button>
         <button class="tab hidden" data-tab="pruebas">No estudiantes <span class="badge" id="badge-pruebas">0</span></button>
         <button class="tab hidden" data-tab="manual">Captura manual</button>
+        <button class="tab" data-tab="duplicados">Duplicados <span class="badge" id="badge-duplicados">0</span></button>
         <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
         <button class="tab" data-tab="addon">Add on <span class="badge" id="badge-addon">0</span></button>
         <button class="tab" data-tab="nps">NPS <span class="badge" id="badge-nps">—</span></button>
@@ -529,6 +530,15 @@
           <button class="btn btn-ghost btn-small" data-download="nps">Descargar Excel</button>
         </div>
         <div id="nps-summary"></div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="duplicados">
+        <div class="panel-note amber">Personas que aparecen más de una vez en la base (mismo correo o mismo nombre). Cada grupo trae el mismo número en la columna "Grupo". Estos registros no salen en "Faltan por dar de alta" ni en "Nuevos en la última carga".</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="duplicados">
+          <button class="btn btn-ghost btn-small" data-download="duplicados">Descargar Excel</button>
+        </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
 
@@ -2175,6 +2185,7 @@ const db = firebase.firestore();
     document.getElementById("btn-undo-today").classList.toggle("hidden", esManual);
     applyTabVisibility({
       madre: !esManual,
+      duplicados: !esManual,
       alta: !esManual && !esAlianza,
       revisar: !esManual && !esAlianza,
       nuevos: !esManual && esAlianza,
@@ -2230,7 +2241,9 @@ const db = firebase.firestore();
         .catch(err => console.error("No se pudo actualizar el resumen del curso:", err));
 
       renderMasterTable();
-      renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
+      renderSideTable("alta", altaRecords().map(flattenMasterRow));
+      renderSideTable("nuevos", nuevosUltimaCarga().map(flattenMasterRow));
+      renderSideTable("duplicados", duplicadosRows());
       renderSideTable("revisar", app.lastRun.revisar);
       renderHistorial();
       checkReady();
@@ -2255,6 +2268,54 @@ const db = firebase.firestore();
       nuevos: app.masterReady ? nuevosUltimaCarga().length : (meta.lastRun && typeof meta.lastRun.nuevosCount === "number" ? meta.lastRun.nuevosCount : 0),
       lastUpload: meta.lastPlataformaUpload || meta.lastListaFinalUpload || null
     };
+  }
+
+  // Duplicados: registros de la base que son la misma persona — comparten
+  // correo, o comparten nombre completo (2+ palabras, sin acentos ni
+  // mayúsculas). Se agrupan (si A=B y B=C, los tres van juntos). Es el caso
+  // típico de quien se registra con dos correos, o de alguien que primero
+  // llegó sin correo y luego con él. Se guarda en caché mientras la tabla
+  // madre no cambie.
+  function computeDuplicates(){
+    const master = app.master;
+    if(app.dupCache && app.dupCache.master === master && app.dupCache.len === master.length) return app.dupCache;
+    const parent = master.map((_, i) => i);
+    const find = i => { while(parent[i] !== i){ parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const union = (a, b) => { const ra = find(a), rb = find(b); if(ra !== rb) parent[rb] = ra; };
+    const byName = new Map(), byEmail = new Map();
+    master.forEach((r, i) => {
+      const name = normalize(r.nombre).replace(/\s+/g, " ");
+      if(name.split(" ").filter(Boolean).length >= 2){
+        if(byName.has(name)) union(byName.get(name), i); else byName.set(name, i);
+      }
+      const email = normalize(r.email);
+      if(email){
+        if(byEmail.has(email)) union(byEmail.get(email), i); else byEmail.set(email, i);
+      }
+    });
+    const groupsMap = new Map();
+    master.forEach((r, i) => {
+      const root = find(i);
+      if(!groupsMap.has(root)) groupsMap.set(root, []);
+      groupsMap.get(root).push(r);
+    });
+    const groups = Array.from(groupsMap.values()).filter(g => g.length > 1);
+    const keys = new Set();
+    groups.forEach(g => g.forEach(r => keys.add(r._key)));
+    app.dupCache = {master, len: master.length, keys, groups};
+    return app.dupCache;
+  }
+  function esDuplicado(record){ return computeDuplicates().keys.has(record._key); }
+  // "Faltan por dar de alta" sin los duplicados.
+  function altaRecords(){
+    return app.master.filter(r => r.estado !== "En plataforma" && !esDuplicado(r));
+  }
+  function duplicadosRows(){
+    return computeDuplicates().groups.map((g, i) => {
+      const emails = new Set(g.map(r => normalize(r.email)).filter(Boolean));
+      const motivo = emails.size === 1 && g.every(r => normalize(r.email)) ? "Mismo correo" : "Mismo nombre";
+      return g.map(r => Object.assign({"Grupo": i + 1, "Motivo": motivo}, flattenMasterRow(r)));
+    }).flat();
   }
 
   // Solo plataforma: los que no son estudiantes se identifican por correo (o por
@@ -2351,7 +2412,7 @@ const db = firebase.firestore();
   function nuevosUltimaCarga(){
     const id = app.meta && app.meta.lastCargaId;
     if(!id) return [];
-    return app.master.filter(r => r.cargaId === id);
+    return app.master.filter(r => r.cargaId === id && !esDuplicado(r));
   }
 
   function renderStatsFromMeta(){
@@ -2386,7 +2447,7 @@ const db = firebase.firestore();
     // "revisar" ya se conoce desde meta.lastRun (sin esperar la tabla
     // madre completa); solo "madre" y "alta" necesitan la tabla madre y
     // muestran el aviso de carga mientras tanto.
-    ["madre","alta","nuevos"].forEach(key => {
+    ["madre","alta","nuevos","duplicados"].forEach(key => {
       const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
       panel.querySelector("thead").innerHTML = "";
       const tbody = panel.querySelector("tbody");
@@ -3916,11 +3977,13 @@ const db = firebase.firestore();
   }
 
   function renderStats(){
+    app.dupCache = null;
     const stats = esCapturaManual(app.meta) ? statsFromManual(app.meta) : computeMasterStats(app.master);
     app.meta.stats = stats;
 
     document.getElementById("badge-madre").textContent = stats.total;
-    document.getElementById("badge-alta").textContent = stats.alta;
+    document.getElementById("badge-alta").textContent = esCapturaManual(app.meta) ? stats.alta : altaRecords().length;
+    document.getElementById("badge-duplicados").textContent = esCapturaManual(app.meta) ? 0 : computeDuplicates().groups.reduce((n, g) => n + g.length, 0);
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
     document.getElementById("badge-nuevos").textContent = nuevosUltimaCarga().length;
     document.getElementById("badge-pruebas").textContent = app.lastRun.pruebas.length;
@@ -3938,8 +4001,13 @@ const db = firebase.firestore();
     // pintarlo también sin filtrar aquí duplicaría el costo de armar la
     // tabla completa (crítico con cursos de miles de registros).
     refreshTableView("madre");
-    renderSideTable("alta", app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow));
+    app.dupCache = null;
+    renderSideTable("alta", altaRecords().map(flattenMasterRow));
     renderSideTable("nuevos", nuevosUltimaCarga().map(flattenMasterRow));
+    renderSideTable("duplicados", duplicadosRows());
+    document.getElementById("badge-alta").textContent = altaRecords().length;
+    document.getElementById("badge-nuevos").textContent = nuevosUltimaCarga().length;
+    document.getElementById("badge-duplicados").textContent = computeDuplicates().groups.reduce((n, g) => n + g.length, 0);
     renderSideTable("addon", app.master.map(flattenAddOnRow));
   }
 
@@ -4759,7 +4827,8 @@ const db = firebase.firestore();
 
   function currentRowsFor(key){
     if(key === "madre") return app.master.map(flattenMasterRow);
-    if(key === "alta") return app.master.filter(r => r.estado !== "En plataforma").map(flattenMasterRow);
+    if(key === "alta") return altaRecords().map(flattenMasterRow);
+    if(key === "duplicados") return duplicadosRows();
     if(key === "addon") return app.master.map(flattenAddOnRow);
     if(key === "nuevos") return nuevosUltimaCarga().map(flattenMasterRow);
     if(key === "pruebas") return app.lastRun.pruebas || [];
@@ -4822,7 +4891,7 @@ const db = firebase.firestore();
       const rows = currentRowsFor(key);
       if(!rows.length) return;
       const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
-      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", pruebas:"no-estudiantes", nps:"nps-comentarios"};
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", duplicados:"duplicados", pruebas:"no-estudiantes", nps:"nps-comentarios"};
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Datos");
