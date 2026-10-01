@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi Prepa - Ceneval | UX del participante</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --papel: #F3F4F1;
+    --blanco: #FFFFFF;
+    --tinta: #1C2430;
+    --tenue: #566170;
+    --linea: #D3D8D0;
+    --part: #0E7C86;  --part-t: #E1F0F1;
+    --uclx: #3F4FB5;  --uclx-t: #E5E8F7;
+    --plat: #8A6A00;  --plat-t: #F4EDD3;
+    --cen:  #9B2C6B;  --cen-t:  #F3E3EC;
+    --pag:  #2E6F40;  --pag-t:  #E3F0E5;
+    --riesgo: #C62828;
+    --fecha: #2B5C8A;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --texto: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--papel); color: var(--tinta); font-family: var(--texto); font-size: 16px; line-height: 1.5; }
+  a { color: var(--uclx); }
+  button { font: inherit; }
+  :focus-visible { outline: 3px solid var(--uclx); outline-offset: 2px; }
+
+  .pagina { max-width: 1240px; margin: 0 auto; padding: 24px 20px 64px; }
+  .volver { font-size: 14px; display: inline-block; margin-bottom: 20px; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .sub { font-family: var(--display); font-weight: 500; font-size: clamp(18px, 2.4vw, 24px); color: var(--tenue); margin: 0 0 24px; }
+
+  /* Leyenda */
+  .leyenda { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; color: var(--tenue); margin: 0 0 14px; padding: 0; list-style: none; align-items: center; }
+  .leyenda li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 600; line-height: 1; padding: 4px 8px; border-radius: 3px; color: #fff; white-space: nowrap; }
+  .k-part { background: var(--part); } .k-uclx { background: var(--uclx); } .k-plat { background: var(--plat); } .k-cen { background: var(--cen); } .k-pag { background: var(--pag); }
+  .m-borde { width: 30px; height: 16px; border-radius: 3px; background: #fff; display: inline-block; }
+  .m-borde.s { border: 1.5px solid #4A5361; }
+  .m-borde.d { border: 1.5px dashed #4A5361; }
+
+  /* Insignias */
+  .ins { position: relative; display: inline-grid; place-items: center; border: 0; padding: 0; cursor: help; flex: none; }
+  .ins.riesgo { width: 26px; height: 26px; background: var(--riesgo); color: #fff; font-weight: 700; font-size: 13px; line-height: 1; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+  .ins.pend { width: 22px; height: 22px; border-radius: 50%; background: #fff; color: var(--tenue); border: 1.5px solid #7b8491; font-weight: 700; font-size: 13px; line-height: 1; }
+  .ins.nota { width: 22px; height: 22px; border-radius: 50%; background: #E8EEF7; color: #2B4A72; border: 1.5px solid #4C6A92; font-weight: 700; font-size: 14px; font-style: italic; font-family: Georgia, "Times New Roman", serif; line-height: 1; }
+  .ins.fecha { width: 24px; height: 22px; border-radius: 4px; background: var(--fecha); }
+  .ins.fecha svg { display: block; }
+  .ins.riesgo:hover, .ins.riesgo:focus-visible { background: #a31d1d; }
+  .ins.pend:hover, .ins.pend:focus-visible { background: #EEF0EC; }
+  .ins.nota:hover, .ins.nota:focus-visible { background: #D8E3F3; }
+  .ins.fecha:hover, .ins.fecha:focus-visible { background: #1F4568; }
+
+  /* Lienzo del diagrama */
+  .diagrama { overflow-x: auto; border: 1px solid var(--linea); border-radius: 6px; background: var(--blanco); }
+  .lienzo { position: relative; width: 1810px; height: 640px; }
+  .lienzo svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+  .banda { position: absolute; z-index: 0; border: 1px solid var(--linea); border-radius: 8px; background: #FAFAF7; }
+  .banda > b { position: absolute; left: 14px; top: 10px; font-family: var(--display); font-size: 15px; font-weight: 700; color: var(--tenue); }
+  .banda.der > b { left: auto; right: 14px; }
+
+  .nodo { position: absolute; z-index: 2; border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.32; background: var(--blanco); border: 1.5px solid; }
+  .nodo.d { border-style: dashed; }
+  .nodo .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  .nodo .ins-fila { position: absolute; top: -13px; right: 8px; display: flex; gap: 4px; align-items: center; }
+  .t-part { border-color: var(--part); background: var(--part-t); }
+  .t-uclx { border-color: var(--uclx); background: var(--uclx-t); }
+  .t-plat { border-color: var(--plat); background: var(--plat-t); }
+  .t-cen  { border-color: var(--cen);  background: var(--cen-t); }
+  .t-pag  { border-color: var(--pag);  background: var(--pag-t); }
+  .nodo.barra { clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 50%, calc(100% - 30px) 100%, 0 100%); padding-right: 44px; justify-content: center; }
+  .etiqueta-flujo { position: absolute; z-index: 2; font-size: 13px; color: var(--tenue); background: var(--blanco); padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+  .ayuda { font-size: 13px; color: var(--tenue); margin: 8px 0 0; }
+
+  /* Globo de ayuda */
+  #globo { position: fixed; z-index: 50; max-width: 310px; background: var(--tinta); color: #fff; padding: 10px 12px; border-radius: 4px; font-size: 13.5px; line-height: 1.4; pointer-events: none; border-left: 4px solid #8B94A3; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  #globo[data-k="riesgo"] { border-left-color: #FF6B6B; }
+  #globo[data-k="nota"] { border-left-color: #8CB4E8; }
+  #globo[data-k="fecha"] { border-left-color: #6FA8DC; }
+  #globo strong { display: block; font-weight: 600; margin-bottom: 2px; }
+  #globo span { color: #D9DEE6; white-space: pre-line; display: block; }
+
+  /* Ventana de fechas */
+  .fv { position: fixed; z-index: 60; width: min(800px, calc(100vw - 16px)); background: var(--blanco); border: 1px solid var(--linea); border-radius: 8px; box-shadow: 0 12px 40px rgba(20,28,40,.28); padding: 14px 18px 14px; }
+  .fv.hoja { left: 8px !important; right: 8px; top: auto !important; bottom: 8px; width: auto; max-height: 82vh; overflow: auto; pointer-events: auto; }
+  .fv-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; cursor: grab; user-select: none; touch-action: none; }
+  .fv-cab:active { cursor: grabbing; }
+  .fv-t { display: block; font-family: var(--display); font-weight: 700; font-size: 19px; line-height: 1.2; padding-top: 4px; }
+  .fv-x { flex: none; width: 34px; height: 34px; border: 0; border-radius: 6px; background: transparent; color: var(--tinta); font-size: 26px; line-height: 1; cursor: pointer; }
+  .fv-x:hover { background: #ECEEE9; }
+  .fv-opc { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tenue); margin: 0 0 10px; cursor: pointer; }
+  .fv-s { margin: 2px 0 12px; color: var(--tenue); font-size: 13.5px; max-width: 70ch; }
+  .tl { min-width: 640px; }
+  .tl-eje { position: relative; height: 20px; margin-left: 66px; margin-right: 36px; }
+  .tl-mes { position: absolute; top: 0; font-size: 12px; color: var(--tenue); padding-left: 3px; border-left: 1px solid #C9CEC6; height: 20px; line-height: 20px; }
+  .tl-fila { display: grid; grid-template-columns: 66px 1fr; }
+  .tl-n { font-family: var(--display); font-weight: 700; font-size: 14.5px; padding-top: 6px; }
+  .tl-pista { position: relative; height: 134px; margin-right: 36px; border-top: 1px solid #E4E7E1; }
+  .tl-g { position: absolute; top: 0; bottom: 0; border-left: 1px solid #EEF0EB; }
+  .tl-barra { position: absolute; height: 12px; border-radius: 3px; }
+  .tl-barra.u { top: 6px; background: var(--uclx); }
+  .tl-barra.c { top: 30px; background: var(--cen); }
+  .tl-et { position: absolute; font-size: 12.5px; line-height: 16px; white-space: nowrap; color: var(--tinta); }
+  .tl-m { position: absolute; top: 76px; width: 16px; height: 16px; margin-left: -8px; }
+  .tl-m.cuad { background: #7b8491; border-radius: 3px; }
+  .tl-m.circ { background: var(--tinta); border-radius: 50%; }
+  .tl-m.hueco { background: #fff; border: 3px solid var(--tinta); border-radius: 50%; }
+  .fv.resalta[data-foco]:not([data-foco~="uclx"])   .f-uclx   { opacity: .28; }
+  .fv.resalta[data-foco]:not([data-foco~="reg"])    .f-reg    { opacity: .28; }
+  .fv.resalta[data-foco]:not([data-foco~="pago"])   .f-pago   { opacity: .28; }
+  .fv.resalta[data-foco]:not([data-foco~="examen"]) .f-examen { opacity: .28; }
+  .fv.resalta[data-foco]:not([data-foco~="res"])    .f-res    { opacity: .28; }
+  .fv-ley { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--linea); font-size: 12.5px; color: var(--tenue); }
+  .fv-ley span { display: inline-flex; align-items: center; gap: 6px; }
+  .fv-ley i { display: inline-block; flex: none; }
+  .fv-ley .b-u { width: 22px; height: 10px; background: var(--uclx); border-radius: 2px; }
+  .fv-ley .b-c { width: 22px; height: 10px; background: var(--cen); border-radius: 2px; }
+  .fv-ley .m-c { width: 11px; height: 11px; background: #7b8491; border-radius: 2px; }
+  .fv-ley .m-e { width: 12px; height: 12px; background: var(--tinta); border-radius: 50%; }
+  .fv-ley .m-r { width: 12px; height: 12px; border: 3px solid var(--tinta); border-radius: 50%; background: #fff; }
+  .fv.hoja .tl-wrap { overflow-x: auto; }
+
+  .pie { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--linea); font-size: 13.5px; color: var(--tenue); max-width: 70ch; }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <a class="volver" href="./">Volver a la central operativa</a>
+  <h1>Mi Prepa - Ceneval</h1>
+  <p class="sub">UX del participante</p>
+
+  <ul class="leyenda" aria-label="Cómo leer el diagrama">
+    <li><span class="chip k-part">Participante</span><span class="chip k-uclx">UCLX</span><span class="chip k-plat">Plataforma</span><span class="chip k-pag">Página de registro</span><span class="chip k-cen">Ceneval</span></li>
+    <li><span class="m-borde s"></span> Ya existe o lo define Ceneval</li>
+    <li><span class="m-borde d"></span> Por construir</li>
+  </ul>
+  <ul class="leyenda" aria-label="Qué significan las insignias">
+    <li><span class="ins fecha" style="cursor:default" aria-hidden="true" id="ley-fecha"></span> Fechas 2027</li>
+    <li><span class="ins nota" style="cursor:default" aria-hidden="true">i</span> Decidido, con detalle</li>
+  </ul>
+
+  <div class="diagrama" tabindex="0" role="region" aria-label="Diagrama de flujo de Mi Prepa, con desplazamiento horizontal">
+    <div class="lienzo" id="lienzo">
+      <svg id="flechas" aria-hidden="true" focusable="false">
+        <defs>
+          <marker id="punta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#4A5361"></path>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+  <p class="ayuda">Desliza hacia los lados para ver el recorrido completo. Pasa el cursor sobre las insignias para ver el detalle.</p>
+
+  <p class="pie">Esta página es pública. No incluye nombres de participantes, CURP ni datos de contacto del personal de Ceneval. Solo etapas, fechas y procesos.</p>
+</div>
+
+<div id="globo" role="tooltip" hidden></div>
+<div id="fv" class="fv" role="dialog" aria-label="Fechas 2027" hidden>
+  <div class="fv-cab"><strong class="fv-t" id="fv-t"></strong><button type="button" class="fv-x" id="fv-x" aria-label="Cerrar ventana de fechas">&times;</button></div>
+  <p class="fv-s">Periodos nacionales de 2027. La invitación sale 4 semanas antes de que abra el registro y el plazo para confirmar y subir documentos es 2 semanas antes de que cierre.</p>
+  <label class="fv-opc"><input type="checkbox" id="fv-res"> Resaltar solo el paso desde el que abrí esta ventana</label>
+  <div class="tl-wrap"><div class="tl" id="tl"></div></div>
+  <div class="fv-ley"><span><i class="b-u"></i>UCLX: de la invitación al plazo para confirmar y subir documentos</span><span><i class="b-c"></i>Ventana de registro con Ceneval</span><span><i class="m-c"></i>Pago y CREX, unas 2 semanas antes (aprox.)</span><span><i class="m-e"></i>Examen</span><span><i class="m-r"></i>Resultados</span></div>
+</div>
+
+<script>
+/* ============ CONTENIDO ============ */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const NOMBRE = { part: "Participante", uclx: "UCLX", plat: "Plataforma", cen: "Ceneval", pag: "Página de registro" };
+
+/* Decidido, con detalle */
+const I = {
+  inicio: { k: "nota", t: "Infografía de inicio, en el correo de UCLX", d: "Va en el correo que UCLX envía después del automático de la plataforma. Explica que el curso y el registro al examen corren en paralelo, qué documentos se pedirán, las tres convocatorias nacionales y cómo avisará UCLX. Complementa la de Ceneval con nuestro proceso." },
+  ochenta: { k: "nota", t: "Infografía al 80%, por correo", d: "Se identifica con la banda «Finalizado (80%+)» de la central. Trae la lista de documentos para ir preparando, las reglas de archivo (PDF, un archivo por documento, máximo 3 MB), cómo y cuándo se suben, qué revisa UCLX y la fecha del próximo registro." },
+  activos: { k: "nota", t: "Quiénes son los activos", d: "Las personas con acceso activo en la plataforma. Se excluye a quienes ya presentaron el examen." },
+  campos: { k: "nota", t: "Qué captura la página", d: "Los campos del formato de Ceneval: CURP, apellidos y nombre, fecha de nacimiento, correo, teléfono, sede con su entidad y, si aplica, requerimiento específico. El examen es siempre el Examen Global de ACREDITA-BACH.\nAquí la persona confirma la fecha en que quiere presentar y su sede.\nLos 4 documentos: CURP, identificación vigente, certificado de secundaria por ambos lados y carta de autenticidad. No hay menores de edad, así que no se pide acta ni documentos de tutor." },
+  valida: { k: "nota", t: "Qué valida la página y qué revisa UCLX", d: "La página revisa sola: PDF, un archivo por documento, máximo 3 MB y CURP de 18 caracteres.\nUCLX revisa: legibilidad, firma en tinta azul, vigencia y que el nombre coincida con la identificación.\nSe rechazaría: varios documentos unidos en un solo PDF, certificado escaneado de un solo lado, nombres que no coinciden entre el Excel y la identificación, identificación vencida o en mal estado, y CURP desactualizada o no descargada directo del portal de RENAPO." },
+  excel: { k: "nota", t: "Excel y carpetas automáticos", d: "La página genera el Excel de pre-registro y las carpetas con la estructura y los nombres que pide el manual de Ceneval, para que UCLX no los rehaga a mano." },
+  correc: { k: "nota", t: "Plazo de correcciones", d: "Es de unos 5 días hábiles en el esquema de Ceneval. Si no se atienden, el expediente no avanza." },
+  crex: { k: "nota", t: "Entrega del CREX", d: "Llega pocas semanas antes del examen. Si la persona no confirma la recepción por correo, UCLX le escribe por WhatsApp." }
+};
+
+/* Fechas 2027 (se toman como confirmadas) */
+const F = {
+  invita: { k: "fecha", foco: "uclx", t: "Invitación y plazo para confirmar", d: "Fechas de invitación y de plazo para confirmar y subir documentos en los tres periodos nacionales de 2027." },
+  ventana: { k: "fecha", foco: "reg", t: "Ventana de registro con Ceneval", d: "Fechas de la ventana de registro en los tres periodos nacionales de 2027." },
+  pago: { k: "fecha", foco: "pago examen", t: "Plazo del pago", d: "Ceneval pide gestionar el pago unos 10 días hábiles antes del examen." },
+  examen: { k: "fecha", foco: "examen", t: "Fecha de aplicación", d: "Fechas de aplicación de los tres periodos nacionales de 2027." },
+  resultados: { k: "fecha", foco: "res", t: "Publicación de resultados", d: "Fechas de publicación de resultados de los tres periodos nacionales de 2027." }
+};
+
+/* Nodos: x, y, w, h en píxeles. e: "s" continuo, "d" por construir. a: actores. */
+const FY = 330, FH = 142;
+const NODOS = [
+  { id: "s1", x: 20, y: 60,  w: 150, h: 86,  a: ["part"], e: "s", t: "Compra en la landing page" },
+  { id: "s2", x: 20, y: 170, w: 150, h: 96,  a: ["plat"], e: "s", t: "Recibe su acceso automático por correo" },
+  { id: "s3", x: 20, y: FY,  w: 150, h: FH,  a: ["uclx"], e: "s", t: "Reenvía el acceso con la infografía de inicio a todas las personas", ins: [I.inicio] },
+
+  { id: "curso", x: 230, y: 62, w: 1370, h: 68, a: ["plat"], e: "s", barra: true, t: "Curso autogestivo sin fecha fija: la persona avanza a su ritmo y la plataforma registra su avance, sin pedir documentos." },
+  { id: "seg", x: 760, y: 146, w: 250, h: 80, a: ["uclx"], e: "s", t: "Seguimiento a quienes no han iniciado" },
+  { id: "i80", x: 1060, y: 146, w: 250, h: 80, a: ["uclx"], e: "d", t: "Envía por correo la infografía al llegar al 80% de avance", ins: [I.ochenta] },
+
+  { id: "r0", x: 230,  y: FY, w: 148, h: FH, a: ["uclx"], e: "d", t: "Pregunta a los activos que aún no presentan quién lo hará en este periodo", ins: [I.activos, F.invita] },
+  { id: "r1", x: 406,  y: FY, w: 148, h: FH, a: ["part", "pag"], e: "d", t: "Confirma fecha y sede, y sube sus documentos", ins: [I.campos] },
+  { id: "r2", x: 582,  y: FY, w: 148, h: FH, a: ["pag", "uclx"], e: "d", t: "Valida y revisa; «listo» con fecha y documentos correctos", ins: [I.valida] },
+  { id: "r3", x: 758,  y: FY, w: 148, h: FH, a: ["uclx"], e: "s", t: "Sube al Drive de Ceneval el Excel y las carpetas generadas", ins: [I.excel, F.ventana] },
+  { id: "r4", x: 934,  y: FY, w: 148, h: FH, a: ["cen"], e: "s", t: "Verifica y pide correcciones", ins: [I.correc] },
+  { id: "r5", x: 1110, y: FY, w: 148, h: FH, a: ["cen"], e: "s", t: "Asigna folio y genera el CREX" },
+  { id: "r6", x: 1286, y: FY, w: 148, h: FH, a: ["uclx"], e: "s", t: "Envía el CREX por correo; sin confirmar, escribe por WhatsApp", ins: [I.crex] },
+  { id: "r7", x: 1462, y: FY, w: 148, h: FH, a: ["cen"], e: "s", t: "Ceneval aplica; la persona presenta", ins: [F.examen] },
+  { id: "r8", x: 1638, y: FY, w: 148, h: FH, a: ["cen"], e: "s", t: "Resultados y trámite del certificado", ins: [F.resultados] },
+
+  { id: "nr",  x: 230,  y: 500, w: 200, h: 96, a: ["uclx"], e: "d", t: "Quien no responde recibe la invitación del siguiente periodo" },
+  { id: "pay", x: 1110, y: 500, w: 210, h: 96, a: ["uclx"], e: "s", t: "Gestiona el pago del examen con Ceneval; va incluido en la compra", ins: [F.pago] }
+];
+const N = Object.fromEntries(NODOS.map(n => [n.id, n]));
+const L = n => ({ x: n.x, y: n.y + n.h / 2 });
+const Rt = n => ({ x: n.x + n.w, y: n.y + n.h / 2 });
+const T = (n, dx = 0) => ({ x: n.x + n.w / 2 + dx, y: n.y });
+const B = (n, dx = 0) => ({ x: n.x + n.w / 2 + dx, y: n.y + n.h });
+const BOT = FY + FH;
+const BARRA_ABAJO = N.curso.y + N.curso.h;
+
+const FLECHAS = [
+  { p: [B(N.s1), T(N.s2)] },
+  { p: [B(N.s2), T(N.s3)] },
+  { p: [Rt(N.s3), L(N.r0)] },
+  { p: [Rt(N.s3), { x: 200, y: Rt(N.s3).y }, { x: 200, y: L(N.curso).y }, L(N.curso)] },
+  { p: [Rt(N.r0), L(N.r1)] }, { p: [Rt(N.r1), L(N.r2)] }, { p: [Rt(N.r2), L(N.r3)] }, { p: [Rt(N.r3), L(N.r4)] },
+  { p: [Rt(N.r4), L(N.r5)] }, { p: [Rt(N.r5), L(N.r6)] }, { p: [Rt(N.r6), L(N.r7)] }, { p: [Rt(N.r7), L(N.r8)] },
+  /* documento incorrecto: vuelve a subir */
+  { p: [B(N.r2, -18), { x: B(N.r2, -18).x, y: BOT + 26 }, { x: B(N.r1, 18).x, y: BOT + 26 }, B(N.r1, 18)] },
+  /* correcciones de Ceneval: vuelve a subir */
+  { p: [B(N.r4), { x: B(N.r4).x, y: BOT + 50 }, { x: B(N.r1, -18).x, y: BOT + 50 }, B(N.r1, -18)] },
+  /* quien no responde pasa al siguiente periodo */
+  { p: [{ x: 304, y: BOT }, { x: 304, y: N.nr.y }] },
+  /* el pago alimenta la generación del CREX */
+  { p: [{ x: B(N.r5).x, y: N.pay.y }, B(N.r5)] },
+  /* conexiones con la barra del curso */
+  { sin: true, p: [{ x: N.seg.x + N.seg.w / 2, y: N.seg.y }, { x: N.seg.x + N.seg.w / 2, y: BARRA_ABAJO }] },
+  { sin: true, p: [{ x: N.i80.x + N.i80.w / 2, y: N.i80.y }, { x: N.i80.x + N.i80.w / 2, y: BARRA_ABAJO }] },
+  /* vínculos punteados del curso al registro */
+  { dash: true, p: [{ x: N.r0.x + 36, y: 130 }, { x: N.r0.x + 36, y: FY }] },
+  { dash: true, p: [{ x: N.r1.x + 36, y: 130 }, { x: N.r1.x + 36, y: FY }] }
+];
+
+const BANDAS = [
+  { x: 190, y: 16,  w: 1610, h: 222, t: "Recorrido del curso" },
+  { x: 190, y: 252, w: 1610, h: 362, t: "Recorrido del registro al examen", der: true }
+];
+const ETIQUETAS = [
+  { x: N.r0.x + 46, y: 172, t: "quienes siguen activos" },
+  { x: N.r1.x + 46, y: 172, t: "decide si se siente lista" },
+  { x: (B(N.r1, 18).x + B(N.r2, -18).x) / 2 - 64, y: BOT + 4, t: "documento incorrecto" },
+  { x: (B(N.r1, -18).x + B(N.r4).x) / 2 - 90, y: BOT + 54, t: "correcciones de Ceneval: vuelve a subir" }
+];
+
+/* ============ RENDER ============ */
+const ICONO_FECHA = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M2 7h12M5 2v3M11 2v3" stroke="#fff" stroke-width="1.5" fill="none"/></svg>';
+const GLIFO = { riesgo: "!", pend: "?", nota: "i", fecha: ICONO_FECHA };
+const insHTML = d => `<button type="button" class="ins ${d.k}" data-k="${d.k}" ${d.foco ? `data-foco="${d.foco}"` : ""} data-t="${esc(d.t)}" data-d="${esc(d.d)}" aria-label="${esc(d.t)}. ${esc(d.d)}">${GLIFO[d.k]}</button>`;
+
+(function dibujar() {
+  document.getElementById("ley-fecha").innerHTML = ICONO_FECHA;
+  const lienzo = document.getElementById("lienzo");
+  let h = "";
+  BANDAS.forEach(b => { h += `<div class="banda ${b.der ? "der" : ""}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px"><b>${esc(b.t)}</b></div>`; });
+  NODOS.forEach(n => {
+    const chips = n.a.map(a => `<span class="chip k-${a}">${NOMBRE[a]}</span>`).join("");
+    const ins = n.ins ? `<div class="ins-fila">${n.ins.map(insHTML).join("")}</div>` : "";
+    h += `<div class="nodo t-${n.a[0]} ${n.e === "d" ? "d" : ""} ${n.barra ? "barra" : ""}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px"><div class="chips">${chips}</div><div>${esc(n.t)}</div>${ins}</div>`;
+  });
+  ETIQUETAS.forEach(e => { h += `<span class="etiqueta-flujo" style="left:${e.x}px;top:${e.y}px">${esc(e.t)}</span>`; });
+  lienzo.insertAdjacentHTML("beforeend", h);
+
+  const svg = document.getElementById("flechas");
+  const ns = "http://www.w3.org/2000/svg";
+  FLECHAS.forEach(f => {
+    const p = document.createElementNS(ns, "path");
+    p.setAttribute("d", f.p.map((q, i) => (i ? "L" : "M") + q.x + " " + q.y).join(" "));
+    p.setAttribute("fill", "none");
+    p.setAttribute("stroke", "#4A5361");
+    p.setAttribute("stroke-width", "2");
+    p.setAttribute("stroke-linejoin", "round");
+    if (f.dash) { p.setAttribute("stroke-dasharray", "2 6"); p.setAttribute("stroke-linecap", "round"); }
+    if (!f.sin) p.setAttribute("marker-end", "url(#punta)");
+    svg.appendChild(p);
+  });
+})();
+
+/* ============ LÍNEA DE TIEMPO DE FECHAS (2027) ============ */
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const BASE = Date.UTC(2026, 11, 1), SPAN = 396;
+const ms = iso => Date.parse(iso + "T00:00:00Z");
+const pf = iso => ((ms(iso) - BASE) / 864e5) / SPAN * 100;
+const mas = (iso, n) => new Date(ms(iso) + n * 864e5).toISOString().slice(0, 10);
+const fmt = iso => `${+iso.slice(8)} ${MESES[+iso.slice(5, 7) - 1]}`;
+const PER27 = [
+  { n: "2027-1", reg: ["2027-01-12", "2027-02-16"], exa: "2027-03-22", res: "2027-04-21" },
+  { n: "2027-3", reg: ["2027-04-13", "2027-05-18"], exa: "2027-07-05", res: "2027-07-31" },
+  { n: "2027-5", reg: ["2027-08-24", "2027-09-28"], exa: "2027-11-22", res: "2027-12-18" }
+];
+
+(function lineaDeTiempo() {
+  const meses = [];
+  for (let k = 0; k < 13; k++) {
+    const y = k === 0 ? 2026 : 2027, m = k === 0 ? 11 : k - 1;
+    meses.push({ iso: `${y}-${String(m + 1).padStart(2, "0")}-01`, txt: MESES[m] + (k === 0 ? " 26" : k === 1 ? " 27" : "") });
+  }
+  const rejilla = meses.map(m => `<i class="tl-g" style="left:${pf(m.iso)}%"></i>`).join("");
+  let h = `<div class="tl-fila"><div></div><div class="tl-eje">${meses.map(m => `<span class="tl-mes" style="left:${pf(m.iso)}%">${m.txt}</span>`).join("")}</div></div>`;
+
+  PER27.forEach(p => {
+    const inv = mas(p.reg[0], -28), plazo = mas(p.reg[1], -14), pago = mas(p.exa, -14);
+    const a0 = pf(inv), a1 = pf(plazo), b0 = pf(p.reg[0]), b1 = pf(p.reg[1]), pg = pf(pago), ex = pf(p.exa), rs = pf(p.res);
+    const lado = (ini, fin) => ini > 55 ? `right:${100 - ini + 0.8}%` : `left:${fin + 0.8}%`;
+    h += `<div class="tl-fila"><div class="tl-n">${p.n}</div><div class="tl-pista">${rejilla}
+      <i class="el f-uclx tl-barra u" style="left:${a0}%;width:${a1 - a0}%"></i>
+      <span class="el f-uclx tl-et" style="top:4px;${lado(a0, a1)}">Invitación ${fmt(inv)}, plazo ${fmt(plazo)}</span>
+      <i class="el f-reg tl-barra c" style="left:${b0}%;width:${b1 - b0}%"></i>
+      <span class="el f-reg tl-et" style="top:28px;${lado(b0, b1)}">Registro con Ceneval ${fmt(p.reg[0])} al ${fmt(p.reg[1])}</span>
+      <span class="el f-examen tl-et" style="top:54px;left:${ex}%;transform:translateX(-50%)">Examen ${fmt(p.exa)}</span>
+      <i class="el f-pago tl-m cuad" style="left:${pg}%"></i>
+      <i class="el f-examen tl-m circ" style="left:${ex}%"></i>
+      <i class="el f-res tl-m hueco" style="left:${rs}%"></i>
+      <span class="el f-pago tl-et" style="top:98px;right:${100 - pg}%">Pago y CREX, aprox. ${fmt(pago)}</span>
+      <span class="el f-res tl-et" style="top:114px;${rs > 82 ? `right:${100 - rs}%` : `left:${rs}%`}">Resultados ${fmt(p.res)}</span>
+    </div></div>`;
+  });
+  document.getElementById("tl").innerHTML = h;
+})();
+
+/* ============ GLOBOS Y VENTANA DE FECHAS ============ */
+const globo = document.getElementById("globo");
+const fv = document.getElementById("fv");
+let fijo = null, movida = false;
+
+function ubicar(caja, el) {
+  const r = el.getBoundingClientRect(), tw = caja.offsetWidth, th = caja.offsetHeight;
+  const left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, innerWidth - tw - 8));
+  let top = r.top - th - 10;
+  if (top < 8) top = (r.bottom + 10 + th <= innerHeight - 8) ? r.bottom + 10 : Math.max(8, innerHeight - th - 8);
+  caja.style.left = left + "px";
+  caja.style.top = top + "px";
+}
+function mostrar(el) {
+  if (el.dataset.k === "fecha") {
+    globo.hidden = true;
+    document.getElementById("fv-t").textContent = el.dataset.t;
+    fv.dataset.foco = el.dataset.foco || "";
+    const movil = innerWidth < 760;
+    fv.classList.toggle("hoja", movil);
+    const abierta = !fv.hidden;
+    fv.hidden = false;
+    if (!movil && !(abierta && movida)) ubicar(fv, el);
+  } else {
+    globo.dataset.k = el.dataset.k;
+    globo.innerHTML = `<strong>${esc(el.dataset.t)}</strong><span>${esc(el.dataset.d)}</span>`;
+    globo.hidden = false;
+    ubicar(globo, el);
+  }
+}
+function cerrarFV() { fv.hidden = true; movida = false; }
+function cerrarGlobo() { globo.hidden = true; fijo = null; }
+const objetivo = e => e.target.closest && e.target.closest("[data-t]");
+
+document.addEventListener("mouseover", e => { const b = objetivo(e); if (b) mostrar(b); });
+document.addEventListener("mouseout", e => { const b = objetivo(e); if (b && b !== fijo && b.dataset.k !== "fecha") globo.hidden = true; });
+document.addEventListener("focusin", e => { const b = objetivo(e); if (b) mostrar(b); });
+document.addEventListener("focusout", e => { const b = objetivo(e); if (b && b !== fijo) globo.hidden = true; });
+document.addEventListener("click", e => {
+  const b = objetivo(e);
+  if (b) {
+    if (b.dataset.k === "fecha") mostrar(b);
+    else if (fijo === b) cerrarGlobo();
+    else { fijo = b; mostrar(b); }
+  } else if (fijo) cerrarGlobo();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") { cerrarGlobo(); cerrarFV(); } });
+document.querySelector(".diagrama").addEventListener("scroll", () => { if (!fijo) globo.hidden = true; });
+addEventListener("scroll", () => { if (!fijo) globo.hidden = true; }, { passive: true });
+
+/* La ventana de fechas se queda abierta hasta cerrarla; se puede mover desde su encabezado */
+document.getElementById("fv-x").addEventListener("click", cerrarFV);
+document.getElementById("fv-res").addEventListener("change", e => fv.classList.toggle("resalta", e.target.checked));
+(function arrastrar() {
+  const cab = fv.querySelector(".fv-cab");
+  let arr = null;
+  cab.addEventListener("pointerdown", e => {
+    if (e.target.closest(".fv-x") || fv.classList.contains("hoja")) return;
+    const r = fv.getBoundingClientRect();
+    arr = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    cab.setPointerCapture(e.pointerId);
+  });
+  cab.addEventListener("pointermove", e => {
+    if (!arr) return;
+    fv.style.left = Math.max(0, Math.min(e.clientX - arr.dx, innerWidth - fv.offsetWidth)) + "px";
+    fv.style.top = Math.max(0, Math.min(e.clientY - arr.dy, innerHeight - 60)) + "px";
+    movida = true;
+  });
+  cab.addEventListener("pointerup", () => { arr = null; });
+})();
+</script>
+</body>
+</html>
