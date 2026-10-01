@@ -66,6 +66,16 @@
   .top p{margin:6px 0 0;color:var(--ink-soft);font-size:14px;max-width:56ch;}
 
   .top-actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+  .menu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:8px;}
+  .menu-card{
+    display:block;text-align:left;font-family:inherit;color:var(--ink);text-decoration:none;cursor:pointer;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:26px 24px;
+    box-shadow:0 1px 2px rgba(20,25,50,.06);
+  }
+  .menu-card:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(64,105,188,.15);}
+  .menu-card strong{display:block;font-size:19px;margin-bottom:6px;color:var(--teal-dark);}
+  .menu-card span{display:block;font-size:13.5px;color:var(--ink-soft);line-height:1.45;}
+  @media (max-width:640px){ .menu-grid{grid-template-columns:1fr;} }
   a.btn{text-decoration:none;display:inline-block;}
   .user-badge{
     display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-soft);
@@ -391,9 +401,32 @@
 
 <!-- ======================= SIGN-IN GATE ======================= -->
 <div id="gate" class="wrap">
-  <h1>Central operativa - Base madre</h1>
+  <h1>Central operativa</h1>
   <button class="g-btn" id="btn-signin">Iniciar sesión con Google</button>
   <div id="gate-error"></div>
+</div>
+
+<!-- ======================= MENÚ (después de iniciar sesión) ======================= -->
+<div class="wrap hidden" id="menu">
+  <div class="top">
+    <div>
+      <h1>Central operativa</h1>
+    </div>
+    <div class="user-badge">
+      <span>Sesión: <b id="menu-user-email">—</b></span>
+      <a id="btn-signout-menu">Cerrar sesión</a>
+    </div>
+  </div>
+  <div class="menu-grid">
+    <button type="button" class="menu-card" id="menu-base">
+      <strong>Base datos madre</strong>
+      <span>Cursos, cruce de bases, avance de participantes, NPS y dashboard.</span>
+    </button>
+    <a class="menu-card" id="menu-ux" href="./experiencia-participante.html">
+      <strong>UX participantes</strong>
+      <span>Recorrido del participante de Mi Prepa - Ceneval: etapas, fechas y procesos.</span>
+    </a>
+  </div>
 </div>
 
 <!-- ======================= APP (oculta hasta iniciar sesión) ======================= -->
@@ -404,7 +437,7 @@
       <h1>Central operativa - Base madre</h1>
     </div>
     <div class="top-actions">
-      <a class="btn btn-ghost btn-small" id="link-ux-participante" href="./experiencia-participante.html">UX del participante</a>
+      <button type="button" class="btn btn-ghost btn-small" id="btn-back-menu">&larr; Menú</button>
       <div class="user-badge">
         <span>Sesión: <b id="user-email">—</b></span>
         <a id="btn-signout">Cerrar sesión</a>
@@ -1724,16 +1757,37 @@ const db = firebase.firestore();
         "No se pudo iniciar sesión (" + err.code + "). Si tu correo no es del equipo, pide acceso.";
     });
   });
-  document.getElementById("btn-signout").addEventListener("click", () => auth.signOut());
+  let baseIniciada = false;
+  function cerrarSesion(){ baseIniciada = false; auth.signOut(); }
+  document.getElementById("btn-signout").addEventListener("click", cerrarSesion);
+  document.getElementById("btn-signout-menu").addEventListener("click", cerrarSesion);
+
+  // Después del inicio de sesión se muestra el menú: "Base datos madre"
+  // abre la central (la base y los cursos se cargan la primera vez que se
+  // entra) y "UX participantes" abre la página de experiencia del participante.
+  function mostrarMenu(){
+    document.getElementById("gate").classList.add("hidden");
+    document.getElementById("app-root").classList.add("hidden");
+    document.getElementById("menu").classList.remove("hidden");
+  }
+  function abrirBaseMadre(){
+    document.getElementById("menu").classList.add("hidden");
+    document.getElementById("app-root").classList.remove("hidden");
+    if(!baseIniciada){ baseIniciada = true; init(); }
+  }
+  document.getElementById("menu-base").addEventListener("click", abrirBaseMadre);
+  document.getElementById("btn-back-menu").addEventListener("click", mostrarMenu);
 
   auth.onAuthStateChanged(user => {
     if(user){
-      document.getElementById("gate").classList.add("hidden");
-      document.getElementById("app-root").classList.remove("hidden");
       document.getElementById("user-email").textContent = user.email;
-      init();
+      document.getElementById("menu-user-email").textContent = user.email;
+      const enMenu = !document.getElementById("menu").classList.contains("hidden");
+      const enBase = !document.getElementById("app-root").classList.contains("hidden");
+      if(!enMenu && !enBase) mostrarMenu();
     } else {
       document.getElementById("app-root").classList.add("hidden");
+      document.getElementById("menu").classList.add("hidden");
       document.getElementById("gate").classList.remove("hidden");
     }
   });
