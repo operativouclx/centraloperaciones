@@ -513,6 +513,8 @@
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="madre">
           <div class="quick-filters" id="filters-madre">
             <button type="button" class="filter-chip active" data-filter-key="madre" data-filter-value="all">Todos</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="enplat">En plataforma</button>
+            <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="falta">Falta registrar</button>
             <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p0">No ha iniciado (0%)</button>
             <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p1">Iniciando (1–25%)</button>
             <button type="button" class="filter-chip" data-filter-key="madre" data-filter-value="p2">A medio camino (26–50%)</button>
@@ -3229,11 +3231,14 @@ const db = firebase.firestore();
     const conPlataforma = (rec, s, porNombre) => {
       const ex = extrasPlataforma(std, s);
       if(porNombre) ex["Correo en plataforma"] = s.emailRaw;
-      return Object.assign({}, rec, {plataformaExtra: ex, estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
+      const r = Object.assign({}, rec, {plataformaExtra: ex, estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
+      // Se recuerda el correo que usa en la plataforma para la próxima carga.
+      if(porNombre) r.correoPlataforma = s.emailRaw;
+      return r;
     };
-    // 1) Por correo.
+    // 1) Por correo (el corregido a mano, el de plataforma recordado o el original).
     let master = app.master.map(rec => {
-      const s = porCorreo.get(normalize(rec.email));
+      const s = buscarPorCorreos(porCorreo, rec, encontrados);
       if(!s) return rec;
       encontrados.add(s.email); cruzados.add(rec._key);
       return conPlataforma(rec, s, false);
@@ -3336,7 +3341,7 @@ const db = firebase.firestore();
       const np = nameParts(r);
       const apellidos = (np.apellidos || "").trim();
       if(!apellidos) sinApellido++;
-      const email = String(r.email || "").trim().toLowerCase();
+      const email = String(emailDe(r)).trim().toLowerCase();
       const fila = [email, password, (np.nombres || "").trim() || "-", apellidos || "-", email];
       if(cursoCorto) fila.push(cursoCorto);
       if(cursoCorto && grupo) fila.push(grupo);
@@ -3368,6 +3373,42 @@ const db = firebase.firestore();
     if(sinApellido) alert(sinApellido + " persona(s) no tienen apellido; se puso \"-\" porque Moodle exige ese campo.");
   });
 
+  // ---------- corregir el correo de una persona desde la tabla ----------
+  // Doble clic en el correo. La corrección se guarda aparte (emailManual) para
+  // que una carga posterior de Santander no la pise, y se usa para cruzar con
+  // plataforma y para el archivo de Moodle.
+  document.addEventListener("dblclick", async e => {
+    const td = e.target.closest && e.target.closest("td[data-key]");
+    if(!td || !app.slug || !app.masterReady) return;
+    const rec = app.master.find(r => r._key === td.dataset.key);
+    if(!rec) return;
+    const actual = emailDe(rec);
+    const nuevo = prompt("Correo de " + (rec.nombre || "esta persona") + ":", actual);
+    if(nuevo === null) return;
+    const email = nuevo.trim().toLowerCase();
+    if(email === normalize(actual)) return;
+    if(!/^[^@\s]+@[^@\s]+$/.test(email)){ alert("Ese correo no es válido. No se cambió nada."); return; }
+    const otro = app.master.find(r => r !== rec && emailsDe(r).includes(email));
+    if(otro && !confirm("Ese correo ya lo tiene " + (otro.nombre || "otra persona") + " en esta base. ¿Guardarlo de todos modos?")) return;
+    const previo = {emailManual: rec.emailManual};
+    rec.emailManual = email;
+    try{
+      const {_key, ...data} = rec;
+      await masterColl(app.slug).doc(sanitizeDocId(_key)).set(data);
+      const logEntry = {date: nowISO(), tipo: "Ajuste", archivo: "", resumen: "Correo de " + (rec.nombre || _key) + ": " + actual + " → " + email, por: quien()};
+      await addLogRemote(app.slug, logEntry);
+      app.log.unshift(logEntry);
+      app.dupCache = null;
+      renderMasterTable();
+      renderHistorial();
+      setSaveStatus("Correo actualizado. Vuelve a cargar el reporte de plataforma para que se cruce con el nuevo correo.");
+    }catch(err){
+      console.error("No se pudo guardar el correo:", err);
+      if(previo.emailManual === undefined) delete rec.emailManual; else rec.emailManual = previo.emailManual;
+      alert("No se pudo guardar el correo: " + (err && err.message ? err.message : err));
+    }
+  });
+
   // ---------- Add on: comparte la lista de Santander del curso ----------
   document.getElementById("btn-process-addon").addEventListener("click", () => procesar("addon", "Cruzar con el roster", async () => {
     const pend = app.pending.addon;
@@ -3379,7 +3420,7 @@ const db = firebase.firestore();
     const encontrados = new Set();
     const master = app.master.map(r => {
       const rec = Object.assign({}, r);
-      const s = porCorreo.get(normalize(r.email));
+      const s = buscarPorCorreos(porCorreo, r, encontrados);
       if(s){
         encontrados.add(s.email);
         rec.addOnEstado = "En plataforma";
@@ -4019,23 +4060,40 @@ const db = firebase.firestore();
   }
 
   // ---------- rendering ----------
+  // Correo de la persona: el que se corrigió a mano (si lo hay) manda sobre
+  // el del archivo. Al cruzar con plataforma se prueban todos los que tenga.
+  function emailDe(record){ return record.emailManual || record.email || ""; }
+  function emailsDe(record){
+    return Array.from(new Set([record.emailManual, record.correoPlataforma, record.email].map(normalize).filter(Boolean)));
+  }
+  function buscarPorCorreos(mapa, record, usados){
+    for(const e of emailsDe(record)){
+      const s = mapa.get(e);
+      if(s && !(usados && usados.has(s.email))) return s;
+    }
+    return null;
+  }
+
   function flattenMasterRow(record){
     const row = {};
+    // Para poder editar el correo desde la tabla (no sale en el Excel).
+    Object.defineProperty(row, "_key", {value: record._key, enumerable: false});
     row["Estado"] = record.estado;
     row["Progreso"] = (typeof record.progreso === "number") ? record.progreso + "%" : "—";
     const np = nameParts(record);
     row["Nombres"] = np.nombres;
     row["Apellidos"] = np.apellidos;
-    row["Email"] = record.email;
+    row["Email"] = emailDe(record);
     const usedKeys = new Set(["Estado","Progreso","Nombres","Apellidos","Nombre","Email"]);
-    Object.keys(record.santanderExtra || {}).forEach(c => {
-      const label = usedKeys.has(c) ? c + " (Santander)" : c;
-      row[label] = record.santanderExtra[c];
-      usedKeys.add(label);
-    });
+    // Primero lo de plataforma (lo que se revisa a diario) y luego lo de Santander.
     Object.keys(record.plataformaExtra || {}).forEach(c => {
       const label = usedKeys.has(c) ? c + " (Plataforma)" : c;
       row[label] = record.plataformaExtra[c];
+      usedKeys.add(label);
+    });
+    Object.keys(record.santanderExtra || {}).forEach(c => {
+      const label = usedKeys.has(c) ? c + " (Santander)" : c;
+      row[label] = record.santanderExtra[c];
       usedKeys.add(label);
     });
     row["En última carga Santander"] = record.presenteUltimaCarga ? "Sí" : "No";
@@ -4161,6 +4219,12 @@ const db = firebase.firestore();
             td.appendChild(span);
           } else {
             td.textContent = (val === null || val === undefined) ? "" : val;
+            if(c === "Email" && r._key){
+              td.dataset.key = r._key;
+              td.title = "Doble clic para corregir el correo";
+              td.style.cursor = "pointer";
+              td.style.textDecoration = "underline dotted";
+            }
           }
           tr.appendChild(td);
         });
@@ -4929,6 +4993,8 @@ const db = firebase.firestore();
 
   function matchesFilter(row, filterValue){
     if(!filterValue || filterValue === "all") return true;
+    if(filterValue === "enplat") return row["Estado"] === "En plataforma";
+    if(filterValue === "falta") return row["Estado"] !== "En plataforma";
     if(filterValue === "p0" || filterValue === "p1" || filterValue === "p2" || filterValue === "p3" || filterValue === "p4"){
       const pct = parseFloat(row["Progreso"]);
       if(isNaN(pct)) return false;
