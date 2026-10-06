@@ -452,6 +452,7 @@
       <div class="course-tabs-row">
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
+        <button class="btn btn-ghost btn-small" id="btn-wipe-portal" type="button" style="color:var(--rust);" title="Borra TODOS los cursos y sus datos">Vaciar portal…</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -645,6 +646,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-santander">&times;</button>
       <h3 class="modal-title">Actualizar base de Santander</h3>
+      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance y Generación (aquí son obligatorias Correo, Estatus y Nombres o Apellidos). <strong>Cada carga reemplaza la lista del curso</strong>: quien no venga en el archivo se quita de la base. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de Santander</h3>
         <span class="file-tag hidden" id="tag-santander"></span>
@@ -668,6 +670,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-plataforma">&times;</button>
       <h3 class="modal-title">Actualizar plataforma</h3>
+      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance y Generación (aquí son obligatorias Correo, Avance y Nombres o Apellidos). Se cruza por correo y el avance es el del archivo. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de plataforma</h3>
         <span class="file-tag hidden" id="tag-plataforma"></span>
@@ -691,6 +694,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-addon">&times;</button>
       <h3 class="modal-title">Actualizar plataforma — Add on</h3>
+      <div class="panel-note teal">Mismas columnas de siempre (obligatorias aquí: Correo y Avance). Se cruza por correo con la lista del curso. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de plataforma add on</h3>
         <span class="file-tag hidden" id="tag-addon"></span>
@@ -738,6 +742,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-listafinal">&times;</button>
       <h3 class="modal-title">Actualizar lista final</h3>
+      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance y Generación (aquí son obligatorias Correo, Avance y Nombres o Apellidos). <strong>Cada carga reemplaza la lista del curso.</strong> <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de lista final</h3>
         <span class="file-tag hidden" id="tag-listafinal"></span>
@@ -1126,6 +1131,47 @@ const db = firebase.firestore();
     }
   });
 
+  // Vacía el portal completo (todos los cursos, con sus registros, historial
+  // y semanas). Pide la exportación antes y que se escriba una frase.
+  document.getElementById("btn-wipe-portal").addEventListener("click", async () => {
+    let cursos;
+    try{
+      cursos = await fetchCoursesIndex();
+    }catch(err){
+      alert("No se pudo leer la lista de cursos: " + (err && err.message ? err.message : err));
+      return;
+    }
+    if(!cursos.length){ alert("El portal ya está vacío."); return; }
+    if(!confirm(
+      "Esto va a BORRAR los " + cursos.length + " curso(s) del portal, con todos sus registros, cargas e historial. No se puede deshacer.\n\n" +
+      "¿Ya descargaste la exportación completa (botón \"Exportar base completa\")?\n\n" +
+      "Aceptar = sí, ya la tengo.   Cancelar = no, voy a exportarla primero."
+    )){
+      document.getElementById("btn-export-full-db").click();
+      return;
+    }
+    const frase = prompt("Para confirmar escribe: VACIAR TODO");
+    if(frase === null) return;
+    if(frase.trim() !== "VACIAR TODO"){ alert("No coincide — no se borró nada."); return; }
+    let hechos = 0;
+    try{
+      for(const c of cursos){
+        setSaveStatus("Vaciando el portal... " + hechos + " de " + cursos.length + " (" + c.displayName + ")");
+        await deleteCourseRemote(c.slug);
+        hechos++;
+      }
+      app.coursesIndex = [];
+      closeOpenCourse();
+      renderCourseSelect();
+      renderCourseTabs();
+      setSaveStatus("Portal vacío: " + hechos + " curso(s) borrado(s).");
+    }catch(err){
+      console.error("No se pudo vaciar el portal:", err);
+      alert("Se borraron " + hechos + " de " + cursos.length + " curso(s) y luego falló: " + (err && err.message ? err.message : err) + "\n\nRecarga la página y vuelve a intentarlo.");
+      setSaveStatus("");
+    }
+  });
+
   // Quita solo los registros que se agregaron HOY (no existían antes de
   // la carga de hoy) — conserva todo lo de antes. Los registros que ya
   // existían y se actualizaron hoy no se pueden revertir campo por campo
@@ -1217,9 +1263,12 @@ const db = firebase.firestore();
     };
     reader.readAsArrayBuffer(file);
   }
-  function sheetToRows(wb, sheetName){
+  // raw=true entrega los valores reales de las celdas (un 45% llega como
+  // 0.45, no como el texto redondeado "45%"): se usa en las cargas de
+  // Santander/plataforma para no perder precisión en el avance.
+  function sheetToRows(wb, sheetName, raw){
     const ws = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:!!raw});
     if(!rows.length) return {headers:[], rows:[]};
     // Los encabezados repetidos (p. ej. dos columnas "Nombre": el nombre de
     // pila y el grupo) se renombran "Nombre (2)", etc. — si no, la segunda
@@ -1252,13 +1301,26 @@ const db = firebase.firestore();
     for(let i=0;i<norm.length;i++){ for(const c of candidates){ if(norm[i].includes(c)) return headers[i]; } }
     return "";
   }
-  function parsePct(raw){
+  // La escala se decide por columna, no por celda: si ninguna celda trae "%"
+  // y el máximo es ≤ 1, la columna viene como fracción (0.5 = 50%); si no,
+  // ya viene de 0 a 100. Así un "1" (1%) no se confunde con 100%.
+  function detectPctScale(values){
+    let max = 0, hayNumero = false, haySigno = false;
+    values.forEach(v => {
+      if(v === null || v === undefined || v === "") return;
+      if(/%/.test(String(v))) haySigno = true;
+      const n = parseFloat(String(v).replace("%","").replace(",","."));
+      if(!isNaN(n)){ hayNumero = true; if(n > max) max = n; }
+    });
+    return (!haySigno && hayNumero && max <= 1) ? "fraction" : "percent";
+  }
+  function parsePct(raw, scale){
     if(raw === null || raw === undefined || raw === "") return null;
     const hasPercentSign = /%/.test(String(raw));
     const s = String(raw).trim().replace("%","").replace(",",".");
     let n = parseFloat(s);
     if(isNaN(n)) return null;
-    if(!hasPercentSign && n <= 1) n = n * 100;
+    if(!hasPercentSign && scale === "fraction") n = n * 100;
     if(n < 0) n = 0;
     if(n > 100) n = 100;
     return Math.round(n * 10) / 10;
@@ -1703,7 +1765,7 @@ const db = firebase.firestore();
   // se actualizan meta ni historial (para no marcar la carga como hecha
   // cuando en realidad quedó a medias) y se avisa de forma imposible de
   // pasar por alto, con instrucciones claras de cómo recuperarse.
-  async function persistUpdate(logEntry){
+  async function persistUpdate(logEntry, removedKeys){
     setSaveStatus("Guardando en Firestore...");
     try{
       const saveResult = await saveMasterBatched(app.slug, app.master);
@@ -1714,9 +1776,17 @@ const db = firebase.firestore();
         setSaveStatus(msg + " Vuelve a procesar esta misma carga para completarlo.");
         alert(
           "Guardado incompleto en \"" + app.meta.displayName + "\":\n\n" + msg +
-          "\n\nVuelve a procesar esta misma carga (Santander o plataforma) — es seguro repetirla, no duplica registros."
+          "\n\nSe va a recargar el curso para mostrar lo que realmente quedó guardado. Vuelve a subir el mismo archivo — es seguro repetirlo, no duplica registros."
         );
         return false;
+      }
+      // Quien ya no viene en el archivo se borra de la base guardada.
+      if(removedKeys && removedKeys.length){
+        for(const chunk of chunkArray(removedKeys, 400)){
+          const batch = db.batch();
+          chunk.forEach(k => batch.delete(masterColl(app.slug).doc(sanitizeDocId(k))));
+          await batch.commit();
+        }
       }
       await saveMetaRemote(app.slug, app.meta);
       await addLogRemote(app.slug, logEntry);
@@ -1725,7 +1795,7 @@ const db = firebase.firestore();
     }catch(err){
       console.error(err);
       setSaveStatus("No se pudo guardar en Firestore — revisa la conexión o los permisos.");
-      alert("No se pudo guardar la actualización de \"" + app.meta.displayName + "\" en Firestore. Vuelve a intentarlo.");
+      alert("No se pudo guardar la actualización de \"" + app.meta.displayName + "\" en Firestore. Se va a recargar el curso para mostrar lo que realmente quedó guardado; vuelve a subir el archivo.");
       return false;
     }
   }
@@ -2218,6 +2288,7 @@ const db = firebase.firestore();
 
     app.slug = slug;
     app.meta = meta;
+    app.loadedUpdatedAt = meta.updatedAt || null;
     // Una edición creada después de subir el NPS del programa lo hereda de
     // otra edición del mismo programa.
     if(!meta.nps){
@@ -2437,20 +2508,9 @@ const db = firebase.firestore();
 
     const LIMIT = 150;
     function currentRows(){
-      const emailSel = document.getElementById("map-plataforma-email");
-      const emailCol = emailSel ? emailSel.value : "";
-      const seen = new Set();
-      const out = [];
-      app.pending.plataforma.rows.forEach(row => {
-        const email = emailCol ? row[emailCol] : "";
-        const name = getPlataformaName(row);
-        if(!normalize(email) && !normalize(name)) return;
-        const key = pruebaKeyOf(email, name);
-        if(seen.has(key)) return;
-        seen.add(key);
-        out.push({key, name, email: email || ""});
-      });
-      return out;
+      const std = app.pending.plataforma && app.pending.plataforma.std;
+      if(!std) return [];
+      return std.rows.map(s => ({key: pruebaKeyOf(s.emailRaw, s.nombre), name: s.nombre, email: s.emailRaw}));
     }
     function draw(){
       const rows = currentRows();
@@ -2576,7 +2636,7 @@ const db = firebase.firestore();
     readWorkbook(file, wb => {
       const sheetNames = wb.SheetNames;
       const firstSheet = sheetNames[0];
-      const {headers, rows} = sheetToRows(wb, firstSheet);
+      const {headers, rows} = sheetToRows(wb, firstSheet, kind !== "nps");
       app.pending[kind] = {workbook:wb, sheetName:firstSheet, headers, rows, fileName:file.name};
 
       const tag = document.getElementById("tag-" + kind);
@@ -2588,78 +2648,258 @@ const db = firebase.firestore();
   }
 
   function reloadSheet(kind, sheetName){
-    const {headers, rows} = sheetToRows(app.pending[kind].workbook, sheetName);
+    const {headers, rows} = sheetToRows(app.pending[kind].workbook, sheetName, kind !== "nps");
     app.pending[kind].sheetName = sheetName;
     app.pending[kind].headers = headers;
     app.pending[kind].rows = rows;
   }
 
-  // ---------- mapping UI ----------
-  // Columna de generación que estaba guardada en el mapeo del curso. Si el
-  // archivo tiene encabezados repetidos, el guardado puede apuntar a una
-  // columna que ahora se llama distinto (p. ej. "Nombre" → "Nombre (2)"):
-  // se busca la columna donde SÍ existe el valor de generación guardado.
-  function savedGenCol(headers, rows, savedMap){
-    if(!savedMap || !savedMap.generacionCol) return "";
-    const col = savedMap.generacionCol;
-    const val = savedMap.generacionValor;
-    const tiene = c => headers.includes(c) && rows.some(r => String(r[c]) === String(val));
-    if(val !== undefined && val !== "" && !tiene(col)){
-      const alt = headers.find(h => h.startsWith(col + " (") && tiene(h));
-      if(alt) return alt;
-    }
-    return headers.includes(col) ? col : "";
-  }
+  // ================= ARCHIVO ESTÁNDAR =================
+  // Santander, plataforma, lista final y add on aceptan SIEMPRE las mismas
+  // columnas (las de la plantilla descargable). No hay mapeo manual: si
+  // falta una columna obligatoria el archivo se rechaza con un mensaje
+  // claro, y las demás columnas del archivo se ignoran.
+  const COLUMNAS_ESTANDAR = [
+    {key:"nombres",    label:"Nombres",    alias:["nombres","nombre","nombre(s)","first name","firstname"]},
+    {key:"apellidos",  label:"Apellidos",  alias:["apellidos","apellido","apellido(s)","last name","lastname"]},
+    {key:"correo",     label:"Correo",     alias:["correo","correo electronico","email","e-mail"]},
+    {key:"estatus",    label:"Estatus",    alias:["estatus","status"]},
+    {key:"avance",     label:"Avance",     alias:["avance","progreso","% avance","progress"]},
+    {key:"generacion", label:"Generación", alias:["generacion"]}
+  ];
+  const COLUMNAS_OBLIGATORIAS = {
+    santander:  ["correo","estatus"],
+    plataforma: ["correo","avance"],
+    listafinal: ["correo","avance"],
+    addon:      ["correo","avance"]
+  };
+  const EXIGE_NOMBRE = {santander:true, plataforma:true, listafinal:true, addon:false};
+  function labelColumna(key){ return COLUMNAS_ESTANDAR.find(c => c.key === key).label; }
 
-  // Columnas que llevan "nombre" en su encabezado pero NO son el nombre de
-  // la persona (p. ej. "Nombre del grupo", "Nombre de usuario").
-  const NOMBRE_EXCLUIR = ["usuario","grupo","cohorte","curso","rol","institucion","departamento","identificador"];
-  function esColNombrePersona(n){
-    return !NOMBRE_EXCLUIR.some(w => n.includes(w));
-  }
-  function guessFirstNameCol(headers){
-    const norm = headers.map(h => normalize(h));
-    for(const c of ["nombre","nombres","nombre(s)","name","first name","firstname","given name"]){
-      const i = norm.indexOf(c); if(i !== -1) return headers[i];
-    }
-    const i = norm.findIndex(n => (n.startsWith("nombre") || n.startsWith("name")) && !n.includes("completo") && esColNombrePersona(n));
-    return i !== -1 ? headers[i] : "";
-  }
-  function guessLastNameCol(headers){
-    const norm = headers.map(h => normalize(h));
-    const i = norm.findIndex(n => n.includes("apellido") || n.includes("lastname") || n.includes("last name") || n.includes("surname"));
-    return i !== -1 ? headers[i] : "";
-  }
-  function guessFullNameCol(headers){
-    const norm = headers.map(h => normalize(h));
-    for(const c of ["nombre completo","nombre completo del usuario","full name","fullname"]){
-      const i = norm.indexOf(c); if(i !== -1) return headers[i];
-    }
-    let i = norm.findIndex(n => n.includes("nombre completo"));
-    if(i === -1) i = norm.findIndex(n => (n.includes("nombre") || n.includes("name")) && esColNombrePersona(n));
-    return i !== -1 ? headers[i] : (headers[0] || "");
-  }
-
-  // Muestra cómo se van a leer nombre y correo en las primeras filas, para
-  // notar a tiempo si se eligió una columna equivocada.
-  function updateNamePreview(kind){
-    const box = document.getElementById("name-preview-" + kind);
-    if(!box || !app.pending[kind]) return;
-    box.innerHTML = "";
-    box.appendChild(el("div", {style:"font-weight:700;margin-bottom:4px;"}, [document.createTextNode("Vista previa — así se leerán las primeras filas")]));
-    const emailSel = document.getElementById("map-" + kind + "-email");
-    app.pending[kind].rows.slice(0, 3).forEach(row => {
-      let name = "";
-      try{
-        if(kind === "santander") name = getSantanderName(row);
-        else if(kind === "plataforma") name = getPlataformaName(row);
-        else if(kind === "listafinal") name = getListaFinalName(row);
-        else { const sel = document.getElementById("map-" + kind + "-fullname"); name = sel ? String(row[sel.value] ?? "") : ""; }
-      }catch(e){}
-      const email = emailSel ? row[emailSel.value] : "";
-      box.appendChild(el("div", {}, [document.createTextNode("Nombre: «" + (name || "(vacío)") + "» · Correo: «" + (email || "(vacío)") + "»")]));
+  // Lee el archivo subido con las columnas estándar y devuelve filas ya
+  // limpias: una por correo, con nombre, estatus y avance. Lo que se omite
+  // (sin correo válido, repetidos) queda contado y listado, nunca en silencio.
+  function buildStd(kind, genValor){
+    const p = app.pending[kind];
+    const norm = p.headers.map(normalize);
+    const cols = {};
+    COLUMNAS_ESTANDAR.forEach(c => {
+      const i = norm.findIndex(h => c.alias.includes(h));
+      cols[c.key] = i === -1 ? null : p.headers[i];
     });
-    box.appendChild(el("div", {class:"muted", style:"margin-top:4px;"}, [document.createTextNode("Si el nombre o el correo no se ven bien, cambia las columnas de abajo.")]));
+    const std = {cols, errors:[], warnings:[], rows:[], total:p.rows.length, sinCorreo:[], repetidos:[], genValues:[], genValor:"", scale:"percent"};
+    const faltan = COLUMNAS_OBLIGATORIAS[kind].filter(k => !cols[k]).map(labelColumna);
+    if(EXIGE_NOMBRE[kind] && !cols.nombres && !cols.apellidos) faltan.push("Nombres y/o Apellidos");
+    if(faltan.length){
+      std.errors.push("Faltan columnas obligatorias: " + faltan.join(", ") + ". El archivo debe usar las columnas de la plantilla estándar.");
+      return std;
+    }
+
+    let entries = p.rows.map((r, i) => ({r, fila: i + 2}));
+    if(cols.generacion){
+      const vals = Array.from(new Set(
+        entries.map(e => e.r[cols.generacion]).filter(v => v !== null && v !== undefined && String(v).trim() !== "").map(v => String(v).trim())
+      )).sort((a, b) => a.localeCompare(b));
+      std.genValues = vals;
+      if(vals.length === 1) std.genValor = vals[0];
+      else if(vals.length > 1){
+        if(!genValor || !vals.includes(genValor)){
+          std.errors.push("El archivo trae varias generaciones (" + vals.join(", ") + "). Elige cuál vas a cargar.");
+          return std;
+        }
+        std.genValor = genValor;
+        const antes = entries.length;
+        entries = entries.filter(e => String(e.r[cols.generacion] ?? "").trim() === genValor);
+        if(antes - entries.length) std.warnings.push((antes - entries.length) + " fila(s) de otras generaciones: se omiten.");
+      }
+    }
+
+    if(cols.avance){
+      std.scale = detectPctScale(entries.map(e => e.r[cols.avance]));
+      if(std.scale === "fraction") std.warnings.push("El Avance viene como fracción (0 a 1): se interpreta 0.5 = 50%.");
+    }
+    const txt = v => (v === null || v === undefined) ? "" : String(v).trim();
+    const byEmail = new Map();
+    let sinAvance = 0;
+    entries.forEach(({r, fila}) => {
+      const emailRaw = txt(r[cols.correo]);
+      const email = normalize(emailRaw);
+      const nombres = cols.nombres ? txt(r[cols.nombres]) : "";
+      const apellidos = cols.apellidos ? txt(r[cols.apellidos]) : "";
+      if(!/^[^@\s]+@[^@\s]+$/.test(email)){
+        std.sinCorreo.push({Fila: fila, Nombres: nombres, Apellidos: apellidos, Correo: emailRaw});
+        return;
+      }
+      let avance = null;
+      if(cols.avance){
+        avance = parsePct(r[cols.avance], std.scale);
+        if(avance === null) sinAvance++;
+      }
+      const rec = {
+        fila, email, emailRaw, nombres, apellidos,
+        nombre: [nombres, apellidos].filter(Boolean).join(" "),
+        estatusRaw: cols.estatus ? txt(r[cols.estatus]) : "",
+        avance
+      };
+      const prev = byEmail.get(email);
+      if(prev){
+        std.repetidos.push({Fila: fila, Correo: emailRaw, "Repite la fila": prev.fila});
+        if((rec.avance || 0) > (prev.avance || 0)) byEmail.set(email, rec);
+        return;
+      }
+      byEmail.set(email, rec);
+    });
+    std.rows = Array.from(byEmail.values());
+
+    if(std.sinCorreo.length) std.warnings.push(std.sinCorreo.length + " fila(s) sin correo válido: se omiten.");
+    if(std.repetidos.length) std.warnings.push(std.repetidos.length + " fila(s) con correo repetido: se unifican en un solo registro (se conserva el mayor avance).");
+    if(sinAvance) std.warnings.push(sinAvance + " fila(s) con Avance vacío o ilegible: se toman como 0%.");
+    if(kind === "santander"){
+      const raros = new Set();
+      std.rows.forEach(s => { if(classifySantanderStatus(s.estatusRaw) === "otro") raros.add(s.estatusRaw || "(vacío)"); });
+      if(raros.size) std.warnings.push("Estatus que no se reconocen (cuentan como «otro»): " + Array.from(raros).slice(0, 6).join(", ") + ".");
+    }
+    if(!std.rows.length) std.errors.push("No quedó ninguna fila válida en el archivo.");
+    return std;
+  }
+
+  function descargarPlantilla(){
+    const headers = COLUMNAS_ESTANDAR.map(c => c.label);
+    const ws = XLSX.utils.aoa_to_sheet([
+      headers,
+      ["Ana", "Pérez López", "ana@correo.com", "Accepted", "45%", "2026-1"],
+      ["Luis", "Gómez Ruiz", "luis@correo.com", "Granted", "100%", "2026-1"]
+    ]);
+    ws["!cols"] = headers.map(() => ({wch: 18}));
+    const info = XLSX.utils.aoa_to_sheet([
+      ["Columna", "Qué lleva", "Obligatoria en"],
+      ["Nombres", "Nombre(s) de la persona", "Santander, plataforma, lista final"],
+      ["Apellidos", "Apellido(s) de la persona", "Santander, plataforma, lista final (basta con Nombres o Apellidos)"],
+      ["Correo", "Correo electrónico. Es la llave de la persona: una fila por correo", "Todas las cargas"],
+      ["Estatus", "Accepted, Granted, Pregranted, Refuse o Rejected", "Santander"],
+      ["Avance", "% de avance en plataforma, de 0 a 100 (con o sin %)", "Plataforma, lista final, add on"],
+      ["Generación", "Opcional. Si el archivo trae varias ediciones juntas, el portal te deja elegir cuál cargar", "—"],
+      [],
+      ["Reglas"],
+      ["Cada carga REEMPLAZA la lista del curso: quien no venga en el archivo se quita de la base."],
+      ["El avance es el del archivo (puede bajar). Se ignoran las demás columnas."]
+    ]);
+    info["!cols"] = [{wch: 14}, {wch: 70}, {wch: 50}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
+    XLSX.utils.book_append_sheet(wb, info, "Instrucciones");
+    XLSX.writeFile(wb, "plantilla-carga-portal.xlsx");
+  }
+  document.querySelectorAll("[data-plantilla]").forEach(b => b.addEventListener("click", descargarPlantilla));
+
+  // Qué va a pasar con la base del curso si se procesa este archivo.
+  function efectoCarga(kind, std){
+    if(!app.masterReady || std.errors.length) return [];
+    const enBase = new Set(app.master.map(r => normalize(r.email)));
+    const enArchivo = new Set(std.rows.map(s => s.email));
+    const coinciden = std.rows.filter(s => enBase.has(s.email)).length;
+    const sinMatch = std.rows.length - coinciden;
+    const salen = app.master.filter(r => !enArchivo.has(normalize(r.email))).length;
+    const esLista = kind === "santander" || kind === "listafinal" || (kind === "plataforma" && esSoloPlataforma(app.meta));
+    if(esLista){
+      return ["Esta carga REEMPLAZA la lista del curso: " + std.rows.length + " persona(s) en el archivo → " + sinMatch + " nueva(s), " +
+        coinciden + " que ya estaban, " + salen + " que ya no vienen y se quitarán de la base."];
+    }
+    if(kind === "plataforma"){
+      return [coinciden + " coinciden con la base por correo. " + sinMatch + " no están en Santander (irán a «En plataforma, no en Santander»). " +
+        salen + " de la base no vienen en este archivo: quedan en «Falta registrar» con 0%."];
+    }
+    return [coinciden + " coinciden con la base por correo. " + sinMatch + " no se encontraron en la base. " +
+      salen + " de la base quedan sin avance de add on."];
+  }
+
+  function drawStdSummary(box, kind){
+    const p = app.pending[kind];
+    const std = p.std;
+    box.innerHTML = "";
+    const add = (text, style) => box.appendChild(el("div", {style: style || ""}, [document.createTextNode(text)]));
+    const sinNombres = !std.cols.nombres && !std.cols.apellidos;
+    add("Columnas reconocidas", "font-weight:700;margin-bottom:4px;");
+    COLUMNAS_ESTANDAR.forEach(c => {
+      const found = std.cols[c.key];
+      const oblig = COLUMNAS_OBLIGATORIAS[kind].includes(c.key) ||
+        (EXIGE_NOMBRE[kind] && sinNombres && (c.key === "nombres" || c.key === "apellidos"));
+      if(found) add("✓ " + c.label + "  ←  «" + found + "»");
+      else if(oblig) add("✗ " + c.label + " — falta (obligatoria)", "color:var(--rust);font-weight:600;");
+      else add("– " + c.label + " — no viene (opcional)", "color:var(--ink-soft);");
+    });
+    const usadas = new Set(Object.values(std.cols).filter(Boolean));
+    const ignoradas = p.headers.filter(h => h && !usadas.has(h));
+    if(ignoradas.length) add("Columnas que no se usan: " + ignoradas.slice(0, 8).join(", ") + (ignoradas.length > 8 ? "…" : ""), "color:var(--ink-soft);margin-top:4px;");
+
+    std.errors.forEach(t => add("✗ " + t, "color:var(--rust);font-weight:700;margin-top:8px;"));
+    if(!std.errors.length){
+      add(std.total + " fila(s) en el archivo → " + std.rows.length + " persona(s) válida(s).", "font-weight:700;margin-top:8px;");
+      std.warnings.forEach(t => add("⚠ " + t, "color:#8a5a00;margin-top:2px;"));
+      efectoCarga(kind, std).forEach(t => add(t, "margin-top:8px;font-weight:600;"));
+      add("Vista previa", "font-weight:700;margin-top:8px;");
+      std.rows.slice(0, 3).forEach(s => {
+        const dato = kind === "santander" ? "Estatus: " + (s.estatusRaw || "(vacío)") : "Avance: " + (s.avance === null ? "(vacío)" : s.avance + "%");
+        add(s.nombre + " · " + s.emailRaw + " · " + dato);
+      });
+      if(std.sinCorreo.length || std.repetidos.length){
+        const btn = el("button", {type:"button", class:"btn btn-ghost btn-small", style:"margin-top:8px;"}, [document.createTextNode("Descargar filas omitidas")]);
+        btn.addEventListener("click", () => {
+          const wb = XLSX.utils.book_new();
+          if(std.sinCorreo.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(std.sinCorreo), "Sin correo válido");
+          if(std.repetidos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(std.repetidos), "Correo repetido");
+          XLSX.writeFile(wb, "filas-omitidas.xlsx");
+        });
+        box.appendChild(btn);
+      }
+    }
+  }
+
+  function renderUploadStd(container, kind){
+    const p = app.pending[kind];
+    const savedMap = kind === "santander" ? app.meta.santanderMapping
+      : kind === "plataforma" ? app.meta.plataformaMapping
+      : kind === "addon" ? app.meta.addOnMapping
+      : app.meta.listaFinalMapping;
+    if(p.genValor === undefined) p.genValor = (savedMap && savedMap.generacionValor) || "";
+    p.std = buildStd(kind, p.genValor);
+
+    const genWrap = el("div", {class:"field-row hidden"});
+    genWrap.appendChild(el("label", {}, [document.createTextNode("Generación a cargar (el archivo trae varias)")]));
+    const genSel = el("select");
+    genSel.id = "map-" + kind + "-genval";
+    genWrap.appendChild(genSel);
+    container.appendChild(genWrap);
+    const summary = el("div", {style:"margin:0 0 12px;font-size:12.5px;padding:10px 12px;border-radius:8px;background:var(--paper);border:1px solid var(--line-soft);"});
+    container.appendChild(summary);
+
+    function draw(){
+      genSel.innerHTML = "";
+      if(p.std.genValues.length > 1){
+        genWrap.classList.remove("hidden");
+        genSel.appendChild(el("option", {value:""}, [document.createTextNode("— elige una —")]));
+        p.std.genValues.forEach(v => {
+          const opt = el("option", {value:v}, [document.createTextNode(v)]);
+          if(v === p.genValor) opt.selected = true;
+          genSel.appendChild(opt);
+        });
+      } else {
+        genWrap.classList.add("hidden");
+      }
+      drawStdSummary(summary, kind);
+    }
+    genSel.addEventListener("change", () => {
+      p.genValor = genSel.value;
+      p.std = buildStd(kind, p.genValor);
+      draw();
+      checkReady();
+    });
+    draw();
+
+    if(kind === "plataforma" && esSoloPlataforma(app.meta)){
+      app.pruebaSel = new Set(app.meta.pruebaKeys || []);
+      renderPruebasPicker(container);
+    }
   }
 
   function renderMapping(kind, sheetNames){
@@ -2694,300 +2934,7 @@ const db = firebase.firestore();
       return;
     }
 
-    const emailRow = el("div", {class:"field-row"});
-    emailRow.appendChild(el("label", {}, [document.createTextNode("Columna de correo electrónico")]));
-    const emailDefault = (savedMap && headers.includes(savedMap.emailCol)) ? savedMap.emailCol : guessColumn(headers, ["email","correo","direccion email","e-mail"]);
-    const emailSel = makeHeaderSelect(headers, emailDefault);
-    emailSel.id = "map-" + kind + "-email";
-    emailRow.appendChild(emailSel);
-    container.appendChild(emailRow);
-    emailSel.addEventListener("change", checkReady);
-
-    const namePreview = el("div", {id:"name-preview-" + kind, style:"margin:0 0 12px;font-size:12.5px;padding:10px 12px;border-radius:8px;background:var(--paper);border:1px solid var(--line-soft);"});
-    container.appendChild(namePreview);
-    // onchange (no addEventListener) para no acumular oyentes cuando se
-    // vuelve a dibujar el mapeo, p. ej. al cambiar de hoja.
-    container.onchange = () => updateNamePreview(kind);
-
-    if(kind === "santander"){
-      const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode : "split";
-      const modeRow = el("div", {class:"radio-row"});
-      const opt1 = el("label", {class:"radio-opt"});
-      const r1 = el("input", {type:"radio", name:"name-mode-santander", value:"split"});
-      r1.checked = mode === "split";
-      opt1.appendChild(r1); opt1.appendChild(document.createTextNode("Nombre y apellido en columnas separadas"));
-      const opt2 = el("label", {class:"radio-opt"});
-      const r2 = el("input", {type:"radio", name:"name-mode-santander", value:"single"});
-      r2.checked = mode === "single";
-      opt2.appendChild(r2); opt2.appendChild(document.createTextNode("Un nombre completo"));
-      modeRow.appendChild(opt1); modeRow.appendChild(opt2);
-      container.appendChild(modeRow);
-
-      const splitWrap = el("div", {class:"two-col" + (mode==="split" ? "" : " hidden"), id:"santander-split-wrap"});
-      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : (guessFirstNameCol(headers) || headers[0] || "");
-      const firstSel = makeHeaderSelect(headers, firstDefault);
-      firstSel.id = "map-santander-first";
-      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : (guessLastNameCol(headers) || headers[0] || "");
-      const lastSel = makeHeaderSelect(headers, lastDefault);
-      lastSel.id = "map-santander-last";
-      splitWrap.appendChild(labeled("Nombre", firstSel));
-      splitWrap.appendChild(labeled("Apellido", lastSel));
-      container.appendChild(splitWrap);
-
-      const singleWrap = el("div", {class:"field-row" + (mode==="single" ? "" : " hidden"), id:"santander-single-wrap"});
-      const singleDefault = (savedMap && headers.includes(savedMap.fullNameCol)) ? savedMap.fullNameCol : guessFullNameCol(headers);
-      const singleSel = makeHeaderSelect(headers, singleDefault);
-      singleSel.id = "map-santander-fullname";
-      singleWrap.appendChild(el("label",{},[document.createTextNode("Columna de nombre completo")]));
-      singleWrap.appendChild(singleSel);
-      container.appendChild(singleWrap);
-
-      r1.addEventListener("change", () => { splitWrap.classList.remove("hidden"); singleWrap.classList.add("hidden"); checkReady(); });
-      r2.addEventListener("change", () => { splitWrap.classList.add("hidden"); singleWrap.classList.remove("hidden"); checkReady(); });
-
-      const statusRow = el("div", {class:"field-row"});
-      statusRow.appendChild(el("label", {}, [document.createTextNode("Columna de estatus (Accepted/Granted/Pregranted/Refuse/Rejected — solo Accepted+Granted cuentan contra plataforma)")]));
-      const statusDefault = (savedMap && savedMap.statusCol && headers.includes(savedMap.statusCol))
-        ? savedMap.statusCol
-        : guessColumnOptional(headers, ["status","estatus","estado"]);
-      const statusSel = el("select");
-      statusSel.id = "map-santander-status";
-      statusSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
-      headers.forEach(h => {
-        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
-        if(h === statusDefault) opt.selected = true;
-        statusSel.appendChild(opt);
-      });
-      statusRow.appendChild(statusSel);
-      container.appendChild(statusRow);
-
-    } else if(kind === "plataforma"){
-      const mode = (savedMap && savedMap.nameMode) ? savedMap.nameMode
-        : ((guessFirstNameCol(headers) && guessLastNameCol(headers)) ? "split" : "single");
-      const modeRow = el("div", {class:"radio-row"});
-      const opt1 = el("label", {class:"radio-opt"});
-      const r1 = el("input", {type:"radio", name:"name-mode-plataforma", value:"split"});
-      r1.checked = mode === "split";
-      opt1.appendChild(r1); opt1.appendChild(document.createTextNode("Nombre y apellido en columnas separadas"));
-      const opt2 = el("label", {class:"radio-opt"});
-      const r2 = el("input", {type:"radio", name:"name-mode-plataforma", value:"single"});
-      r2.checked = mode === "single";
-      opt2.appendChild(r2); opt2.appendChild(document.createTextNode("Un nombre completo"));
-      modeRow.appendChild(opt1); modeRow.appendChild(opt2);
-      container.appendChild(modeRow);
-
-      const splitWrap = el("div", {class:"two-col" + (mode==="split" ? "" : " hidden"), id:"plataforma-split-wrap"});
-      const firstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : (guessFirstNameCol(headers) || headers[0] || "");
-      const firstSel = makeHeaderSelect(headers, firstDefault);
-      firstSel.id = "map-plataforma-first";
-      const lastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : (guessLastNameCol(headers) || headers[0] || "");
-      const lastSel = makeHeaderSelect(headers, lastDefault);
-      lastSel.id = "map-plataforma-last";
-      splitWrap.appendChild(labeled("Nombre", firstSel));
-      splitWrap.appendChild(labeled("Apellido", lastSel));
-      container.appendChild(splitWrap);
-      firstSel.addEventListener("change", checkReady);
-      lastSel.addEventListener("change", checkReady);
-
-      const nameRow = el("div", {class:"field-row" + (mode==="single" ? "" : " hidden"), id:"plataforma-single-wrap"});
-      nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
-      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
-      const nameSel = makeHeaderSelect(headers, nameDefault);
-      nameSel.id = "map-plataforma-fullname";
-      nameRow.appendChild(nameSel);
-      container.appendChild(nameRow);
-      nameSel.addEventListener("change", checkReady);
-
-      r1.addEventListener("change", () => { splitWrap.classList.remove("hidden"); nameRow.classList.add("hidden"); checkReady(); });
-      r2.addEventListener("change", () => { splitWrap.classList.add("hidden"); nameRow.classList.remove("hidden"); checkReady(); });
-
-      const progRow = el("div", {class:"field-row"});
-      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
-      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
-        ? savedMap.progresoCol
-        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
-      const progSel = el("select");
-      progSel.id = "map-plataforma-progreso";
-      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
-      headers.forEach(h => {
-        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
-        if(h === progDefault) opt.selected = true;
-        progSel.appendChild(opt);
-      });
-      progRow.appendChild(progSel);
-      container.appendChild(progRow);
-
-      const genRow = el("div", {class:"field-row"});
-      genRow.appendChild(el("label", {}, [document.createTextNode("Columna de generación (opcional — úsala si el archivo trae varias ediciones juntas, ej. N+V)")]));
-      const genColDefault = savedGenCol(headers, app.pending.plataforma.rows, savedMap);
-      const genColSel = el("select");
-      genColSel.id = "map-plataforma-gencol";
-      genColSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
-      headers.forEach(h => {
-        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
-        if(h === genColDefault) opt.selected = true;
-        genColSel.appendChild(opt);
-      });
-      genRow.appendChild(genColSel);
-      container.appendChild(genRow);
-
-      const genValRow = el("div", {class:"field-row" + (genColDefault ? "" : " hidden"), id:"plataforma-genval-wrap"});
-      genValRow.appendChild(el("label", {}, [document.createTextNode("Valor de esta generación")]));
-      const genValSel = el("select");
-      genValSel.id = "map-plataforma-genval";
-      genValRow.appendChild(genValSel);
-      container.appendChild(genValRow);
-
-      function populateGenValues(col, selectedVal){
-        genValSel.innerHTML = "";
-        if(!col) return;
-        const values = Array.from(new Set(
-          app.pending.plataforma.rows.map(r => r[col]).filter(v => v !== undefined && v !== null && v !== "")
-        )).sort((a,b) => String(a).localeCompare(String(b)));
-        values.forEach(v => {
-          const opt = el("option", {value:v}, [document.createTextNode(String(v))]);
-          if(String(v) === String(selectedVal)) opt.selected = true;
-          genValSel.appendChild(opt);
-        });
-      }
-      const genValDefault = (savedMap && genColDefault) ? savedMap.generacionValor : "";
-      populateGenValues(genColDefault, genValDefault);
-      genColSel.addEventListener("change", () => {
-        genValRow.classList.toggle("hidden", !genColSel.value);
-        populateGenValues(genColSel.value, "");
-      });
-
-      if(esSoloPlataforma(app.meta)){
-        app.pruebaSel = new Set(app.meta.pruebaKeys || []);
-        renderPruebasPicker(container);
-      }
-
-    } else if(kind === "listafinal"){
-      const lfMode = (savedMap && savedMap.nameMode) ? savedMap.nameMode
-        : ((guessFirstNameCol(headers) && guessLastNameCol(headers)) ? "split" : "single");
-      const lfModeRow = el("div", {class:"radio-row"});
-      const lfOpt1 = el("label", {class:"radio-opt"});
-      const lfR1 = el("input", {type:"radio", name:"name-mode-listafinal", value:"split"});
-      lfR1.checked = lfMode === "split";
-      lfOpt1.appendChild(lfR1); lfOpt1.appendChild(document.createTextNode("Nombre y apellido en columnas separadas"));
-      const lfOpt2 = el("label", {class:"radio-opt"});
-      const lfR2 = el("input", {type:"radio", name:"name-mode-listafinal", value:"single"});
-      lfR2.checked = lfMode === "single";
-      lfOpt2.appendChild(lfR2); lfOpt2.appendChild(document.createTextNode("Un nombre completo"));
-      lfModeRow.appendChild(lfOpt1); lfModeRow.appendChild(lfOpt2);
-      container.appendChild(lfModeRow);
-
-      const lfSplitWrap = el("div", {class:"two-col" + (lfMode === "split" ? "" : " hidden")});
-      const lfFirstDefault = (savedMap && headers.includes(savedMap.firstCol)) ? savedMap.firstCol : (guessFirstNameCol(headers) || headers[0] || "");
-      const lfFirstSel = makeHeaderSelect(headers, lfFirstDefault);
-      lfFirstSel.id = "map-listafinal-first";
-      const lfLastDefault = (savedMap && headers.includes(savedMap.lastCol)) ? savedMap.lastCol : (guessLastNameCol(headers) || headers[0] || "");
-      const lfLastSel = makeHeaderSelect(headers, lfLastDefault);
-      lfLastSel.id = "map-listafinal-last";
-      lfSplitWrap.appendChild(labeled("Nombre", lfFirstSel));
-      lfSplitWrap.appendChild(labeled("Apellido", lfLastSel));
-      container.appendChild(lfSplitWrap);
-      lfFirstSel.addEventListener("change", checkReady);
-      lfLastSel.addEventListener("change", checkReady);
-
-      const nameRow = el("div", {class:"field-row" + (lfMode === "single" ? "" : " hidden")});
-      nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
-      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
-      const nameSel = makeHeaderSelect(headers, nameDefault);
-      nameSel.id = "map-listafinal-fullname";
-      nameRow.appendChild(nameSel);
-      container.appendChild(nameRow);
-      nameSel.addEventListener("change", checkReady);
-
-      lfR1.addEventListener("change", () => { lfSplitWrap.classList.remove("hidden"); nameRow.classList.add("hidden"); checkReady(); });
-      lfR2.addEventListener("change", () => { lfSplitWrap.classList.add("hidden"); nameRow.classList.remove("hidden"); checkReady(); });
-
-      const progRow = el("div", {class:"field-row"});
-      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
-      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
-        ? savedMap.progresoCol
-        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
-      const progSel = el("select");
-      progSel.id = "map-listafinal-progreso";
-      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
-      headers.forEach(h => {
-        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
-        if(h === progDefault) opt.selected = true;
-        progSel.appendChild(opt);
-      });
-      progRow.appendChild(progSel);
-      container.appendChild(progRow);
-      progSel.addEventListener("change", checkReady);
-
-      const genRowLF = el("div", {class:"field-row"});
-      genRowLF.appendChild(el("label", {}, [document.createTextNode("Columna de generación (opcional — úsala si el archivo trae varias ediciones juntas)")]));
-      const genColDefaultLF = savedGenCol(headers, app.pending.listafinal.rows, savedMap);
-      const genColSelLF = el("select");
-      genColSelLF.id = "map-listafinal-gencol";
-      genColSelLF.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
-      headers.forEach(h => {
-        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
-        if(h === genColDefaultLF) opt.selected = true;
-        genColSelLF.appendChild(opt);
-      });
-      genRowLF.appendChild(genColSelLF);
-      container.appendChild(genRowLF);
-
-      const genValRowLF = el("div", {class:"field-row" + (genColDefaultLF ? "" : " hidden"), id:"listafinal-genval-wrap"});
-      genValRowLF.appendChild(el("label", {}, [document.createTextNode("Valor de esta generación")]));
-      const genValSelLF = el("select");
-      genValSelLF.id = "map-listafinal-genval";
-      genValRowLF.appendChild(genValSelLF);
-      container.appendChild(genValRowLF);
-
-      function populateGenValuesLF(col, selectedVal){
-        genValSelLF.innerHTML = "";
-        if(!col) return;
-        const values = Array.from(new Set(
-          app.pending.listafinal.rows.map(r => r[col]).filter(v => v !== undefined && v !== null && v !== "")
-        )).sort((a,b) => String(a).localeCompare(String(b)));
-        values.forEach(v => {
-          const opt = el("option", {value:v}, [document.createTextNode(String(v))]);
-          if(String(v) === String(selectedVal)) opt.selected = true;
-          genValSelLF.appendChild(opt);
-        });
-      }
-      const genValDefaultLF = (savedMap && genColDefaultLF) ? savedMap.generacionValor : "";
-      populateGenValuesLF(genColDefaultLF, genValDefaultLF);
-      genColSelLF.addEventListener("change", () => {
-        genValRowLF.classList.toggle("hidden", !genColSelLF.value);
-        populateGenValuesLF(genColSelLF.value, "");
-      });
-
-    } else if(kind === "addon"){
-      const nameRow = el("div", {class:"field-row"});
-      nameRow.appendChild(el("label", {}, [document.createTextNode("Columna de nombre completo")]));
-      const nameDefault = (savedMap && headers.includes(savedMap.nameCol)) ? savedMap.nameCol : guessFullNameCol(headers);
-      const nameSel = makeHeaderSelect(headers, nameDefault);
-      nameSel.id = "map-addon-fullname";
-      nameRow.appendChild(nameSel);
-      container.appendChild(nameRow);
-      nameSel.addEventListener("change", checkReady);
-
-      const progRow = el("div", {class:"field-row"});
-      progRow.appendChild(el("label", {}, [document.createTextNode("Columna de % de avance (candado: el progreso nunca baja)")]));
-      const progDefault = (savedMap && savedMap.progresoCol && headers.includes(savedMap.progresoCol))
-        ? savedMap.progresoCol
-        : guessColumnOptional(headers, ["progreso","avance","porcentaje","% avance","completado","progress"]);
-      const progSel = el("select");
-      progSel.id = "map-addon-progreso";
-      progSel.appendChild(el("option", {value:""}, [document.createTextNode("— No usar —")]));
-      headers.forEach(h => {
-        const opt = el("option", {value:h}, [document.createTextNode(h || "(sin nombre)")]);
-        if(h === progDefault) opt.selected = true;
-        progSel.appendChild(opt);
-      });
-      progRow.appendChild(progSel);
-      container.appendChild(progRow);
-      progSel.addEventListener("change", checkReady);
-    }
-
-    updateNamePreview(kind);
+    renderUploadStd(container, kind);
     checkReady();
   }
 
@@ -3000,50 +2947,13 @@ const db = firebase.firestore();
   }
 
   function isReady(kind){
-    if(!app.pending[kind] || !app.pending[kind].rows.length) return false;
+    const p = app.pending[kind];
+    if(!p || !p.rows.length) return false;
     if(kind === "nps"){
       const sc = document.getElementById("map-nps-score");
       return !!(sc && sc.value);
     }
-    const emailSel = document.getElementById("map-" + kind + "-email");
-    if(!emailSel || !emailSel.value) return false;
-    if(kind === "santander"){
-      const mode = document.querySelector('input[name="name-mode-santander"]:checked');
-      if(!mode) return false;
-      if(mode.value === "split"){
-        const f = document.getElementById("map-santander-first");
-        const l = document.getElementById("map-santander-last");
-        return !!(f && f.value) || !!(l && l.value);
-      } else {
-        const s = document.getElementById("map-santander-fullname");
-        return !!(s && s.value);
-      }
-    } else if(kind === "plataforma"){
-      const mode = document.querySelector('input[name="name-mode-plataforma"]:checked');
-      if(!mode) return false;
-      if(mode.value === "split"){
-        const f = document.getElementById("map-plataforma-first");
-        const l = document.getElementById("map-plataforma-last");
-        return !!(f && f.value) || !!(l && l.value);
-      } else {
-        const s = document.getElementById("map-plataforma-fullname");
-        return !!(s && s.value);
-      }
-    } else if(kind === "listafinal"){
-      const mode = document.querySelector('input[name="name-mode-listafinal"]:checked');
-      if(!mode) return false;
-      if(mode.value === "split"){
-        const f = document.getElementById("map-listafinal-first");
-        const l = document.getElementById("map-listafinal-last");
-        return !!(f && f.value) || !!(l && l.value);
-      } else {
-        const s = document.getElementById("map-listafinal-fullname");
-        return !!(s && s.value);
-      }
-    } else {
-      const n = document.getElementById("map-" + kind + "-fullname");
-      return !!(n && n.value);
-    }
+    return !!(p.std && !p.std.errors.length && p.std.rows.length);
   }
 
   function checkReady(){
@@ -3069,597 +2979,329 @@ const db = firebase.firestore();
 
   document.getElementById("btn-open-addon").addEventListener("click", () => openModal("modal-addon"));
 
-  function getSantanderName(row){
-    const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
-    if(mode === "split"){
-      const f = document.getElementById("map-santander-first").value;
-      const l = document.getElementById("map-santander-last").value;
-      return [f ? row[f] : "", l ? row[l] : ""].filter(Boolean).join(" ").trim();
-    } else {
-      const s = document.getElementById("map-santander-fullname").value;
-      return (row[s] || "").toString().trim();
+  // ================= PROCESAR CARGAS =================
+  // Regla general: cada archivo REEMPLAZA lo que había. Santander (o la
+  // plataforma de Alianza, o la lista final) define quién está en el curso;
+  // la plataforma define el avance de cada quien. Lo que no viene en el
+  // archivo se quita o vuelve a cero — la base nunca acumula lo de cargas
+  // viejas. El avance es el del archivo, tal cual.
+
+  // Antes de guardar se confirma que nadie más actualizó el curso desde que
+  // se abrió; si no, esta carga pisaría su trabajo.
+  async function assertFresh(){
+    try{
+      const snap = await courseDoc(app.slug).get({source: "server"});
+      const actual = snap.exists ? (snap.data().updatedAt || null) : null;
+      if(snap.exists && actual !== (app.loadedUpdatedAt || null)){
+        alert("Otra persona del equipo actualizó este curso mientras lo tenías abierto.\n\nPara no pisar su trabajo se va a recargar el curso. Vuelve a subir tu archivo después.");
+        await loadCourse(app.slug);
+        return false;
+      }
+      return true;
+    }catch(err){
+      console.error(err);
+      alert("No se pudo verificar el estado del curso en Firestore (revisa la conexión). No se guardó nada.");
+      return false;
     }
   }
 
-  // Si el archivo de Santander trae nombre y apellido en columnas
-  // separadas, se guardan tal cual; con "nombre completo" se separan al
-  // exportar (splitFullName).
-  function getSantanderNameParts(row){
-    const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
-    if(mode !== "split") return null;
-    const f = document.getElementById("map-santander-first").value;
-    const l = document.getElementById("map-santander-last").value;
-    return {
-      nombres: f && row[f] ? String(row[f]).trim() : "",
-      apellidos: l && row[l] ? String(row[l]).trim() : ""
-    };
+  // Guarda una carga ya calculada. Solo si TODO se guardó se actualiza la
+  // pantalla; si algo falla, se recarga el curso desde Firestore para que
+  // lo que se ve sea exactamente lo que quedó guardado.
+  async function aplicarCarga(next, logEntry, removedKeys){
+    if(!(await assertFresh())) return false;
+    app.master = next.master;
+    app.meta = next.meta;
+    app.lastRun = next.lastRun;
+    app.log.unshift(logEntry);
+    app.dupCache = null;
+    const ok = await persistUpdate(logEntry, removedKeys);
+    if(!ok){
+      await loadCourse(app.slug);
+      return false;
+    }
+    app.loadedUpdatedAt = app.meta.updatedAt;
+    return true;
   }
 
-  // ---------- procesar actualización de Santander (diff incremental) ----------
-  document.getElementById("btn-process-santander").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-process-santander");
-    btn.disabled = true; btn.textContent = "Procesando...";
-    setSaveStatus("Comparando contra la tabla madre...");
-
-    const emailCol = document.getElementById("map-santander-email").value;
-    const mode = document.querySelector('input[name="name-mode-santander"]:checked').value;
-    const firstCol = mode === "split" ? document.getElementById("map-santander-first").value : null;
-    const lastCol = mode === "split" ? document.getElementById("map-santander-last").value : null;
-    const fullNameCol = mode === "single" ? document.getElementById("map-santander-fullname").value : null;
-    const statusCol = document.getElementById("map-santander-status").value;
-    const extraCols = otherCols(app.pending.santander.headers, [emailCol, firstCol, lastCol, fullNameCol, statusCol]);
-    const watchCols = extraCols;
-    const allExtra = extraCols;
-
-    const masterByKey = new Map(app.master.map(r => [r._key, r]));
-    const touched = new Set();
-    const nuevos = [];
-    const cambios = [];
-    const today = todayISO();
-
-    app.pending.santander.rows.forEach(row => {
-      const email = row[emailCol];
-      const name = getSantanderName(row);
-      const nameSplit = getSantanderNameParts(row);
-      const key = recordKey(email, name);
-      touched.add(key);
-
-      const newVals = {};
-      allExtra.forEach(c => newVals[c] = row[c]);
-
-      let record = masterByKey.get(key);
-      if(!record){
-        record = {
-          _key:key, nombre:name, email:email || "",
-          nombres: nameSplit ? nameSplit.nombres : "", apellidos: nameSplit ? nameSplit.apellidos : "",
-          santanderExtra:{}, plataformaExtra:{},
-          estado:"Falta registrar", progreso:0,
-          primeraVez:today, ultimaCargaSantander:today, presenteUltimaCarga:true,
-          ultimaActualizacionPlataforma:null
-        };
-        record.santanderExtra = newVals;
-        app.master.push(record);
-        masterByKey.set(key, record);
-        nuevos.push(flattenForDiff(record));
-      } else {
-        const changedFields = [];
-        watchCols.forEach(c => {
-          const oldV = record.santanderExtra ? record.santanderExtra[c] : undefined;
-          const newV = row[c];
-          if(normalize(oldV) !== normalize(newV)) changedFields.push({col:c, from:oldV, to:newV});
-        });
-        record.nombre = name || record.nombre;
-        if(nameSplit && (nameSplit.nombres || nameSplit.apellidos)){
-          record.nombres = nameSplit.nombres;
-          record.apellidos = nameSplit.apellidos;
-        } else if(name && !nameSplit){
-          // Nombre completo en una sola columna: se limpian las partes
-          // guardadas antes para que no queden datos viejos o equivocados.
-          record.nombres = ""; record.apellidos = "";
-        }
-        record.email = email || record.email;
-        record.santanderExtra = Object.assign({}, record.santanderExtra, newVals);
-        record.ultimaCargaSantander = today;
-        record.presenteUltimaCarga = true;
-        if(changedFields.length){
-          const diffRow = flattenForDiff(record);
-          diffRow["Cambios"] = changedFields.map(cf => cf.col + ": " + (cf.from ?? "—") + " → " + (cf.to ?? "—")).join(" | ");
-          cambios.push(diffRow);
-        }
-      }
-    });
-
-    app.master.forEach(r => { if(!touched.has(r._key)) r.presenteUltimaCarga = false; });
-
-    const prevSantanderSnapshot = app.meta.santanderStatusSnapshot;
-    app.meta.santanderMapping = {emailCol, nameMode:mode, firstCol, lastCol, fullNameCol, extraCols, watchCols, statusCol};
-    app.meta.lastSantanderUpload = today;
-    app.meta.lastSantanderFile = app.pending.santander.fileName;
-    app.meta.santanderStatusSnapshot = computeStatusSnapshotFromRows(app.pending.santander.rows, statusCol);
-    app.meta.updatedAt = nowISO();
-
-    await ensureWeeklySnapshot(app.slug, app.meta.stats, prevSantanderSnapshot && prevSantanderSnapshot.santanderCount);
-    app.meta.stats = computeMasterStats(app.master);
-
-    const logEntry = {
-      date: nowISO(), tipo:"Santander", archivo: app.pending.santander.fileName,
-      resumen: nuevos.length + " nuevos, " + cambios.length + " cambios, " + (app.pending.santander.rows.length - nuevos.length - cambios.length) + " sin cambios",
-      por: (auth.currentUser && auth.currentUser.email) || ""
-    };
-    app.log.unshift(logEntry);
-
-    await persistUpdate(logEntry);
-
+  function refrescarTodo(){
     renderStats();
     renderMasterTable();
+    renderSideTable("revisar", app.lastRun.revisar);
+    renderSideTable("pruebas", app.lastRun.pruebas);
     renderHistorial();
-
-    btn.disabled = false; btn.textContent = "Procesar actualización";
-    document.querySelector('.tab[data-tab="madre"]').click();
-    closeModal("modal-santander");
-  });
-
-  function flattenForDiff(record){
-    const np = nameParts(record);
-    const row = {Nombres: np.nombres, Apellidos: np.apellidos, Email: record.email};
-    Object.keys(record.santanderExtra || {}).forEach(c => row[c] = record.santanderExtra[c]);
-    return row;
   }
 
-  // ---------- procesar actualización de plataforma (refresco completo) ----------
-  // Si el archivo de plataforma trae nombre y apellido en columnas
-  // separadas (como el de Salud Financiera), se usan ambas para el
-  // nombre completo con el que se cruza contra la tabla madre.
-  function getPlataformaName(row){
-    const modeInput = document.querySelector('input[name="name-mode-plataforma"]:checked');
-    const mode = modeInput ? modeInput.value : "single";
-    if(mode === "split"){
-      const f = document.getElementById("map-plataforma-first").value;
-      const l = document.getElementById("map-plataforma-last").value;
-      return [f ? row[f] : "", l ? row[l] : ""].filter(Boolean).join(" ").trim();
-    } else {
-      const s = document.getElementById("map-plataforma-fullname").value;
-      return (row[s] || "").toString().trim();
+  async function procesar(kind, etiqueta, fn){
+    const btn = document.getElementById("btn-process-" + kind);
+    btn.disabled = true; btn.textContent = "Procesando...";
+    try{
+      await fn();
+    }catch(err){
+      console.error(err);
+      setSaveStatus("");
+      alert("No se pudo procesar el archivo: " + (err && err.message ? err.message : err));
+    }finally{
+      btn.textContent = etiqueta;
+      checkReady();
     }
   }
 
-  document.getElementById("btn-process-plataforma").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-process-plataforma");
-    btn.disabled = true; btn.textContent = "Procesando...";
+  const quien = () => (auth.currentUser && auth.currentUser.email) || "";
+  function resumenOmitidas(std){
+    const partes = [];
+    if(std.sinCorreo.length) partes.push(std.sinCorreo.length + " sin correo válido");
+    if(std.repetidos.length) partes.push(std.repetidos.length + " con correo repetido");
+    return partes.length ? " (archivo: " + partes.join(", ") + ")" : "";
+  }
+
+  // La lista de personas del curso pasa a ser EXACTAMENTE la del archivo.
+  // Quien ya estaba conserva su historia (primera vez visto, etc.); quien no
+  // viene se devuelve en "removed" para borrarlo de Firestore.
+  function construirRoster(std, opts){
+    const today = todayISO();
+    const cargaId = nowISO();
+    const pruebaSet = opts.pruebaSet || new Set();
+    const oldByKey = new Map(app.master.map(r => [r._key, r]));
+    const genExtra = std.genValor ? {"Generación": std.genValor} : {};
+    const master = [], pruebasRows = [], keys = new Set();
+    let nuevosCount = 0;
+    std.rows.forEach(s => {
+      if(pruebaSet.has(pruebaKeyOf(s.emailRaw, s.nombre))){
+        pruebasRows.push({Nombre: s.nombre, Email: s.emailRaw, Avance: s.avance === null ? "—" : s.avance + "%"});
+        return;
+      }
+      const key = recordKey(s.emailRaw, s.nombre);
+      keys.add(key);
+      const base = {
+        nombre: s.nombre, email: s.emailRaw, nombres: s.nombres, apellidos: s.apellidos,
+        plataformaExtra: genExtra, estado: "En plataforma", progreso: s.avance || 0,
+        presenteUltimaCarga: true, ultimaActualizacionPlataforma: today
+      };
+      if(opts.marcarUltimaCarga) base.ultimaCargaSantander = today;
+      const old = oldByKey.get(key);
+      if(old){
+        master.push(Object.assign({}, old, base));
+      }else{
+        nuevosCount++;
+        master.push(Object.assign({_key: key, santanderExtra: {}, primeraVez: today, cargaId, ultimaCargaSantander: null}, base));
+      }
+    });
+    const removed = app.master.filter(r => !keys.has(r._key));
+    return {master, removed, nuevosCount, pruebasRows, cargaId, today};
+  }
+
+  function confirmarQuitados(removed, pruebaSet){
+    const reales = removed.filter(r => !(pruebaSet && pruebaSet.has(pruebaKeyOf(r.email, r.nombre))));
+    if(!reales.length) return true;
+    return confirm(
+      "Este archivo ya no incluye a " + reales.length + " persona(s) que hoy están en la base de \"" + app.meta.displayName + "\".\n\n" +
+      "Se van a QUITAR de la base (la carga reemplaza la lista del curso).\n\n¿Continuar?"
+    );
+  }
+
+  // ---------- Santander: define quién está en el curso ----------
+  document.getElementById("btn-process-santander").addEventListener("click", () => procesar("santander", "Procesar actualización", async () => {
+    const pend = app.pending.santander;
+    const std = pend.std;
+    const today = todayISO();
+    setSaveStatus("Comparando contra la tabla madre...");
+
+    const oldByKey = new Map(app.master.map(r => [r._key, r]));
+    const master = [], keys = new Set();
+    let nuevos = 0, cambios = 0;
+    std.rows.forEach(s => {
+      const key = recordKey(s.emailRaw, "");
+      keys.add(key);
+      const base = {
+        nombre: s.nombre, email: s.emailRaw, nombres: s.nombres, apellidos: s.apellidos,
+        santanderExtra: {"Estatus": s.estatusRaw},
+        ultimaCargaSantander: today, presenteUltimaCarga: true
+      };
+      const old = oldByKey.get(key);
+      if(!old){
+        nuevos++;
+        master.push(Object.assign({_key: key, plataformaExtra: {}, estado: "Falta registrar", progreso: 0, primeraVez: today, ultimaActualizacionPlataforma: null}, base));
+      }else{
+        const estatusAntes = old.santanderExtra ? old.santanderExtra["Estatus"] : "";
+        if(normalize(estatusAntes) !== normalize(s.estatusRaw) || normalize(old.nombre) !== normalize(s.nombre)) cambios++;
+        master.push(Object.assign({}, old, base));
+      }
+    });
+    const removed = app.master.filter(r => !keys.has(r._key));
+    if(!confirmarQuitados(removed)){ setSaveStatus(""); return; }
+
+    const prevSnap = app.meta.santanderStatusSnapshot;
+    await ensureWeeklySnapshot(app.slug, app.meta.stats, prevSnap && prevSnap.santanderCount);
+    const meta = Object.assign({}, app.meta, {
+      santanderMapping: {generacionValor: std.genValor},
+      lastSantanderUpload: today,
+      lastSantanderFile: pend.fileName,
+      santanderStatusSnapshot: computeStatusSnapshotFromRows(std.rows.map(s => ({"Estatus": s.estatusRaw})), "Estatus"),
+      updatedAt: nowISO(),
+      stats: computeMasterStats(master),
+      // La lista de "en plataforma, no en Santander" ya no aplica: se
+      // recalcula con la siguiente carga de plataforma.
+      lastRun: Object.assign({}, app.meta.lastRun, {revisar: []})
+    });
+    const logEntry = {
+      date: nowISO(), tipo: "Santander", archivo: pend.fileName,
+      resumen: nuevos + " nuevos, " + cambios + " con cambios, " + (std.rows.length - nuevos - cambios) + " sin cambios, " +
+        removed.length + " quitados" + resumenOmitidas(std),
+      por: quien()
+    };
+    const ok = await aplicarCarga({master, meta, lastRun: {revisar: [], pruebas: app.lastRun.pruebas || [], alta: []}}, logEntry, removed.map(r => r._key));
+    if(!ok) return;
+    refrescarTodo();
+    document.querySelector('.tab[data-tab="madre"]').click();
+    closeModal("modal-santander");
+  }));
+
+  // ---------- Plataforma: avance de cada quien (o lista completa en Alianza) ----------
+  document.getElementById("btn-process-plataforma").addEventListener("click", () => procesar("plataforma", "Cruzar con tabla madre", async () => {
+    const pend = app.pending.plataforma;
+    const std = pend.std;
+    const today = todayISO();
     setSaveStatus("Cruzando con la tabla madre...");
 
-    const emailCol = document.getElementById("map-plataforma-email").value;
-    const nameModeInput = document.querySelector('input[name="name-mode-plataforma"]:checked');
-    const nameMode = nameModeInput ? nameModeInput.value : "single";
-    const nameCol = nameMode === "single" ? document.getElementById("map-plataforma-fullname").value : null;
-    const firstCol = nameMode === "split" ? document.getElementById("map-plataforma-first").value : null;
-    const lastCol = nameMode === "split" ? document.getElementById("map-plataforma-last").value : null;
-    const progresoCol = document.getElementById("map-plataforma-progreso").value;
-    const generacionCol = document.getElementById("map-plataforma-gencol").value;
-    const generacionValor = generacionCol ? document.getElementById("map-plataforma-genval").value : "";
-    const extraCols = otherCols(app.pending.plataforma.headers, [emailCol, nameCol, firstCol, lastCol, progresoCol, generacionCol]);
-    const today = todayISO();
-    let lockedCount = 0;
-
-    const sourceRows = generacionCol
-      ? app.pending.plataforma.rows.filter(r => String(r[generacionCol]) === String(generacionValor))
-      : app.pending.plataforma.rows;
-
-    // Alianza no tiene base de Santander: la plataforma ES la base. Quien
-    // no estaba en la tabla madre se agrega y queda marcado como "nuevo"
-    // de esta carga; quien ya estaba solo se actualiza (con candado de %).
+    // Alianza no tiene base de Santander: la plataforma ES la lista del curso.
     if(esSoloPlataforma(app.meta)){
-      const cargaId = nowISO();
-      const byEmail = new Map();
-      const byName = new Map();
-      app.master.forEach(r => {
-        const e = normalize(r.email), n = normalize(r.nombre);
-        if(e && !byEmail.has(e)) byEmail.set(e, r);
-        if(n && !byName.has(n)) byName.set(n, r);
-      });
-      const touched = new Set();
-      let nuevosCount = 0;
       const pruebaSet = app.pruebaSel || new Set(app.meta.pruebaKeys || []);
-      const pruebasRows = [];
-      const pruebasVistas = new Set();
-      sourceRows.forEach(row => {
-        const email = row[emailCol];
-        const name = getPlataformaName(row);
-        const eNorm = normalize(email), nNorm = normalize(name);
-        if(!eNorm && !nNorm) return;
-        const pk = pruebaKeyOf(email, name);
-        if(pruebaSet.has(pk)){
-          if(pruebasVistas.has(pk)) return;
-          pruebasVistas.add(pk);
-          const pr = {Nombre: name, Email: email || ""};
-          if(progresoCol){
-            const parsedP = parsePct(row[progresoCol]);
-            pr["Progreso"] = parsedP === null ? "—" : parsedP + "%";
-          }
-          extraCols.forEach(c => { if(!(c in pr)) pr[c] = row[c]; });
-          pruebasRows.push(pr);
-          return;
-        }
-        const vals = {};
-        extraCols.forEach(c => vals[c] = row[c]);
-
-        let record = (eNorm && byEmail.get(eNorm)) || (nNorm && byName.get(nNorm)) || null;
-        if(!record){
-          record = {
-            _key: recordKey(email, name), nombre: name, email: email || "",
-            nombres: nameMode === "split" && firstCol && row[firstCol] ? String(row[firstCol]).trim() : "",
-            apellidos: nameMode === "split" && lastCol && row[lastCol] ? String(row[lastCol]).trim() : "",
-            santanderExtra: {}, plataformaExtra: vals,
-            estado: "En plataforma", progreso: 0,
-            primeraVez: today, cargaId,
-            ultimaCargaSantander: null, presenteUltimaCarga: true,
-            ultimaActualizacionPlataforma: today
-          };
-          app.master.push(record);
-          if(eNorm) byEmail.set(eNorm, record);
-          if(nNorm) byName.set(nNorm, record);
-          nuevosCount++;
-        } else {
-          if(name){
-            record.nombre = name;
-            if(nameMode === "split"){
-              record.nombres = firstCol && row[firstCol] ? String(row[firstCol]).trim() : "";
-              record.apellidos = lastCol && row[lastCol] ? String(row[lastCol]).trim() : "";
-            } else {
-              record.nombres = ""; record.apellidos = "";
-            }
-          }
-          record.email = email || record.email;
-          record.plataformaExtra = Object.assign({}, record.plataformaExtra, vals);
-          record.estado = "En plataforma";
-          record.presenteUltimaCarga = true;
-          record.ultimaActualizacionPlataforma = today;
-        }
-        touched.add(record._key);
-
-        if(progresoCol){
-          const parsed = parsePct(row[progresoCol]);
-          if(parsed !== null){
-            const prevProgreso = typeof record.progreso === "number" ? record.progreso : 0;
-            if(parsed < prevProgreso) lockedCount++;
-            record.progreso = Math.max(prevProgreso, parsed);
-          }
-        }
-      });
-      app.master.forEach(r => { if(!touched.has(r._key)) r.presenteUltimaCarga = false; });
-
-      // Quien ya estaba en la base y ahora se marcó como prueba sale de la
-      // tabla madre (y de Firestore, más abajo) para que deje de contarse.
-      const quitadosPrueba = app.master.filter(r => pruebaSet.has(pruebaKeyOf(r.email, r.nombre)));
-      if(quitadosPrueba.length){
-        const quitarKeys = new Set(quitadosPrueba.map(r => r._key));
-        app.master = app.master.filter(r => !quitarKeys.has(r._key));
-      }
-      app.meta.pruebaKeys = Array.from(pruebaSet);
-
-      app.meta.plataformaMapping = {emailCol, nameMode, nameCol, firstCol, lastCol, progresoCol, generacionCol, generacionValor, extraCols};
-      app.meta.lastPlataformaUpload = today;
-      app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
-      app.meta.lastCargaId = cargaId;
-      app.meta.updatedAt = nowISO();
-
+      const r = construirRoster(std, {pruebaSet});
+      if(!confirmarQuitados(r.removed, pruebaSet)){ setSaveStatus(""); return; }
       await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
-      app.meta.stats = computeMasterStats(app.master);
-      app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount, pruebas: capForStorage(pruebasRows)});
-
-      let resumen = sourceRows.length + " registros en el archivo, " + nuevosCount + " nuevos, " + (touched.size - nuevosCount) + " ya estaban en la base";
-      if(pruebasRows.length) resumen += ", " + pruebasRows.length + " no son estudiantes (omitidos)";
-      if(quitadosPrueba.length) resumen += " — se quitaron de la base " + quitadosPrueba.length + " registro(s) marcados como no estudiantes";
-      if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
-      const logEntryA = {
-        date: nowISO(), tipo:"Plataforma", archivo: app.pending.plataforma.fileName,
-        resumen, por: (auth.currentUser && auth.currentUser.email) || ""
-      };
-      app.log.unshift(logEntryA);
-      const guardado = await persistUpdate(logEntryA);
-      if(guardado && quitadosPrueba.length){
-        try{
-          for(const chunk of chunkArray(quitadosPrueba, 400)){
-            const batch = db.batch();
-            chunk.forEach(r => batch.delete(masterColl(app.slug).doc(sanitizeDocId(r._key))));
-            await batch.commit();
-          }
-        }catch(err){
-          console.error("No se pudieron quitar los registros de prueba de la base:", err);
-          alert("Los marcados como no estudiantes no se pudieron quitar de la base guardada. Vuelve a procesar esta carga para completarlo.");
-        }
-      }
-
-      app.lastRun.revisar = [];
-      app.lastRun.pruebas = pruebasRows;
-      renderSideTable("pruebas", pruebasRows);
-      renderStats();
-      renderMasterTable();
-      renderHistorial();
-
-      btn.disabled = false; btn.textContent = "Cruzar con tabla madre";
+      const meta = Object.assign({}, app.meta, {
+        plataformaMapping: {generacionValor: std.genValor},
+        lastPlataformaUpload: today,
+        lastPlataformaFile: pend.fileName,
+        lastCargaId: r.cargaId,
+        pruebaKeys: Array.from(pruebaSet),
+        updatedAt: nowISO(),
+        stats: computeMasterStats(r.master),
+        lastRun: Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount: r.nuevosCount, pruebas: capForStorage(r.pruebasRows)})
+      });
+      let resumen = std.rows.length + " personas en el archivo, " + r.nuevosCount + " nuevas, " + (r.master.length - r.nuevosCount) + " ya estaban, " +
+        r.removed.length + " quitadas";
+      if(r.pruebasRows.length) resumen += ", " + r.pruebasRows.length + " no son estudiantes (omitidas)";
+      resumen += resumenOmitidas(std);
+      const logEntry = {date: nowISO(), tipo: "Plataforma", archivo: pend.fileName, resumen, por: quien()};
+      const ok = await aplicarCarga({master: r.master, meta, lastRun: {revisar: [], pruebas: r.pruebasRows, alta: []}}, logEntry, r.removed.map(x => x._key));
+      if(!ok) return;
+      refrescarTodo();
       document.querySelector('.tab[data-tab="nuevos"]').click();
       closeModal("modal-plataforma");
       return;
     }
 
-    const platByEmail = new Map();
-    const platByName = new Map();
-    sourceRows.forEach(row => {
-      const e = normalize(row[emailCol]);
-      const n = normalize(getPlataformaName(row));
-      if(e && !platByEmail.has(e)) platByEmail.set(e, row);
-      if(n && !platByName.has(n)) platByName.set(n, row);
-    });
-
-    const usedPlatEmails = new Set();
-    app.master.forEach(record => {
-      const eNorm = normalize(record.email);
-      const nNorm = normalize(record.nombre);
-      let match = null;
-      if(eNorm && platByEmail.has(eNorm)) match = platByEmail.get(eNorm);
-      else if(nNorm && platByName.has(nNorm)) match = platByName.get(nNorm);
-
-      if(match){
-        const vals = {};
-        extraCols.forEach(c => vals[c] = match[c]);
-        record.plataformaExtra = vals;
-        record.estado = "En plataforma";
-        record.ultimaActualizacionPlataforma = today;
-        usedPlatEmails.add(normalize(match[emailCol]));
-
-        if(progresoCol){
-          const parsed = parsePct(match[progresoCol]);
-          if(parsed !== null){
-            const prevProgreso = typeof record.progreso === "number" ? record.progreso : 0;
-            if(parsed < prevProgreso) lockedCount++;
-            record.progreso = Math.max(prevProgreso, parsed);
-          }
-        }
-      } else {
-        record.estado = "Falta registrar";
+    // Con Santander: se cruza por correo contra la base. El avance es el del
+    // archivo; quien no viene queda en "Falta registrar" con 0%.
+    const porCorreo = new Map(std.rows.map(s => [s.email, s]));
+    const encontrados = new Set();
+    const genExtra = std.genValor ? {"Generación": std.genValor} : {};
+    const master = app.master.map(rec => {
+      const s = porCorreo.get(normalize(rec.email));
+      if(s){
+        encontrados.add(s.email);
+        return Object.assign({}, rec, {plataformaExtra: genExtra, estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
       }
+      return Object.assign({}, rec, {plataformaExtra: {}, estado: "Falta registrar", progreso: 0});
     });
-
-    const revisar = [];
-    sourceRows.forEach(row => {
-      const e = normalize(row[emailCol]);
-      if(e && usedPlatEmails.has(e)) return;
-      const r = {Nombre: getPlataformaName(row), Email: row[emailCol]};
-      extraCols.forEach(c => { r[c] = row[c]; });
-      revisar.push(r);
-    });
-
-    app.meta.plataformaMapping = {emailCol, nameMode, nameCol, firstCol, lastCol, progresoCol, generacionCol, generacionValor, extraCols};
-    app.meta.lastPlataformaUpload = today;
-    app.meta.lastPlataformaFile = app.pending.plataforma.fileName;
-    app.meta.updatedAt = nowISO();
+    const revisar = std.rows.filter(s => !encontrados.has(s.email))
+      .map(s => ({Nombre: s.nombre, Email: s.emailRaw, Avance: s.avance === null ? "—" : s.avance + "%"}));
 
     await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
-    app.meta.stats = computeMasterStats(app.master);
-
-    // Se guarda "revisar" (gente en plataforma que no está en Santander)
-    // para que no desaparezca al recargar — antes solo vivía en memoria y
-    // se perdía la próxima vez que alguien abría el curso.
-    app.meta.lastRun = Object.assign({}, app.meta.lastRun, {revisar: capForStorage(revisar)});
-
-    const altaCount = app.master.filter(r => r.estado !== "En plataforma").length;
-    let resumen = (app.master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander";
-    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
+    const meta = Object.assign({}, app.meta, {
+      plataformaMapping: {generacionValor: std.genValor},
+      lastPlataformaUpload: today,
+      lastPlataformaFile: pend.fileName,
+      updatedAt: nowISO(),
+      stats: computeMasterStats(master),
+      lastRun: Object.assign({}, app.meta.lastRun, {revisar: capForStorage(revisar)})
+    });
+    const altaCount = master.filter(r => r.estado !== "En plataforma").length;
     const logEntry = {
-      date: nowISO(), tipo:"Plataforma", archivo: app.pending.plataforma.fileName,
-      resumen: resumen,
-      por: (auth.currentUser && auth.currentUser.email) || ""
+      date: nowISO(), tipo: "Plataforma", archivo: pend.fileName,
+      resumen: (master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander" + resumenOmitidas(std),
+      por: quien()
     };
-    app.log.unshift(logEntry);
-
-    await persistUpdate(logEntry);
-
-    app.lastRun.revisar = revisar;
-
-    renderStats();
-    renderMasterTable();
-    renderSideTable("revisar", app.lastRun.revisar);
-    renderHistorial();
-
-    btn.disabled = false; btn.textContent = "Cruzar con tabla madre";
+    const ok = await aplicarCarga({master, meta, lastRun: {revisar, pruebas: app.lastRun.pruebas || [], alta: []}}, logEntry, []);
+    if(!ok) return;
+    refrescarTodo();
     document.querySelector('.tab[data-tab="madre"]').click();
     closeModal("modal-plataforma");
-  });
+  }));
 
-  // ---------- procesar plataforma add on (comparte el roster de Santander, sin su propia carga de Santander) ----------
-  document.getElementById("btn-process-addon").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-process-addon");
-    btn.disabled = true; btn.textContent = "Procesando...";
+  // ---------- Add on: comparte la lista de Santander del curso ----------
+  document.getElementById("btn-process-addon").addEventListener("click", () => procesar("addon", "Cruzar con el roster", async () => {
+    const pend = app.pending.addon;
+    const std = pend.std;
+    const today = todayISO();
     setSaveStatus("Cruzando add on con el roster...");
 
-    const emailCol = document.getElementById("map-addon-email").value;
-    const nameCol = document.getElementById("map-addon-fullname").value;
-    const progresoCol = document.getElementById("map-addon-progreso").value;
-    const extraCols = otherCols(app.pending.addon.headers, [emailCol, nameCol, progresoCol]);
-    const today = todayISO();
-    let lockedCount = 0;
-    let matchedCount = 0;
-
-    const rows = app.pending.addon.rows;
-    const byEmail = new Map();
-    const byName = new Map();
-    rows.forEach(row => {
-      const e = normalize(row[emailCol]);
-      const n = normalize(row[nameCol]);
-      if(e && !byEmail.has(e)) byEmail.set(e, row);
-      if(n && !byName.has(n)) byName.set(n, row);
-    });
-
-    app.master.forEach(record => {
-      const eNorm = normalize(record.email);
-      const nNorm = normalize(record.nombre);
-      let match = null;
-      if(eNorm && byEmail.has(eNorm)) match = byEmail.get(eNorm);
-      else if(nNorm && byName.has(nNorm)) match = byName.get(nNorm);
-
-      if(match){
-        matchedCount++;
-        const vals = {};
-        extraCols.forEach(c => vals[c] = match[c]);
-        record.addOnExtra = vals;
-        record.addOnEstado = "En plataforma";
-        record.addOnUltimaActualizacion = today;
-        if(progresoCol){
-          const parsed = parsePct(match[progresoCol]);
-          if(parsed !== null){
-            const prevProgreso = typeof record.addOnProgreso === "number" ? record.addOnProgreso : 0;
-            if(parsed < prevProgreso) lockedCount++;
-            record.addOnProgreso = Math.max(prevProgreso, parsed);
-          }
-        }
+    const porCorreo = new Map(std.rows.map(s => [s.email, s]));
+    const encontrados = new Set();
+    const genExtra = std.genValor ? {"Generación": std.genValor} : {};
+    const master = app.master.map(r => {
+      const rec = Object.assign({}, r);
+      const s = porCorreo.get(normalize(r.email));
+      if(s){
+        encontrados.add(s.email);
+        rec.addOnEstado = "En plataforma";
+        rec.addOnProgreso = s.avance || 0;
+        rec.addOnExtra = genExtra;
+        rec.addOnUltimaActualizacion = today;
+      }else{
+        delete rec.addOnEstado; delete rec.addOnProgreso; delete rec.addOnExtra; delete rec.addOnUltimaActualizacion;
       }
+      return rec;
     });
-    const noEncontrados = rows.length - matchedCount;
-
-    app.meta.addOnMapping = {emailCol, nameCol, progresoCol, extraCols};
-    app.meta.lastAddOnUpload = today;
-    app.meta.lastAddOnFile = app.pending.addon.fileName;
-    app.meta.updatedAt = nowISO();
-
-    let resumen = matchedCount + " coinciden con el roster";
-    if(noEncontrados > 0) resumen += ", " + noEncontrados + " fila(s) del archivo no se encontraron en la tabla madre (revisa nombre/correo)";
-    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s)";
-    const logEntry = {
-      date: nowISO(), tipo:"Add on", archivo: app.pending.addon.fileName,
-      resumen: resumen,
-      por: (auth.currentUser && auth.currentUser.email) || ""
-    };
-    app.log.unshift(logEntry);
-
-    await persistUpdate(logEntry);
-
-    document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
-
-    renderMasterTable();
-    renderHistorial();
-
-    btn.disabled = false; btn.textContent = "Cruzar con el roster";
+    const noEncontrados = std.rows.length - encontrados.size;
+    const meta = Object.assign({}, app.meta, {
+      addOnMapping: {generacionValor: std.genValor},
+      lastAddOnUpload: today,
+      lastAddOnFile: pend.fileName,
+      updatedAt: nowISO()
+    });
+    let resumen = encontrados.size + " coinciden con el roster";
+    if(noEncontrados > 0) resumen += ", " + noEncontrados + " fila(s) del archivo no están en la tabla madre (revisa el correo)";
+    resumen += resumenOmitidas(std);
+    const logEntry = {date: nowISO(), tipo: "Add on", archivo: pend.fileName, resumen, por: quien()};
+    const ok = await aplicarCarga({master, meta, lastRun: app.lastRun}, logEntry, []);
+    if(!ok) return;
+    refrescarTodo();
     document.querySelector('.tab[data-tab="addon"]').click();
     closeModal("modal-addon");
-  });
+  }));
 
-  // Nombre completo de una fila de la lista final: nombre + apellido si
-  // vienen en columnas separadas, o la columna de nombre completo.
-  function getListaFinalName(row){
-    const modeInput = document.querySelector('input[name="name-mode-listafinal"]:checked');
-    const mode = modeInput ? modeInput.value : "single";
-    if(mode === "split"){
-      const f = document.getElementById("map-listafinal-first").value;
-      const l = document.getElementById("map-listafinal-last").value;
-      return [f ? row[f] : "", l ? row[l] : ""].filter(Boolean).join(" ").trim();
-    }
-    const s = document.getElementById("map-listafinal-fullname").value;
-    return (row[s] || "").toString().trim();
-  }
-
-  // ---------- procesar lista final (cursos históricos, sin cruce con Santander) ----------
-  document.getElementById("btn-process-listafinal").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-process-listafinal");
-    btn.disabled = true; btn.textContent = "Procesando...";
+  // ---------- Lista final (cursos históricos) ----------
+  document.getElementById("btn-process-listafinal").addEventListener("click", () => procesar("listafinal", "Actualizar lista final", async () => {
+    const pend = app.pending.listafinal;
+    const std = pend.std;
     setSaveStatus("Actualizando la lista final...");
 
-    const emailCol = document.getElementById("map-listafinal-email").value;
-    const lfModeInput = document.querySelector('input[name="name-mode-listafinal"]:checked');
-    const nameMode = lfModeInput ? lfModeInput.value : "single";
-    const nameCol = nameMode === "single" ? document.getElementById("map-listafinal-fullname").value : null;
-    const firstCol = nameMode === "split" ? document.getElementById("map-listafinal-first").value : null;
-    const lastCol = nameMode === "split" ? document.getElementById("map-listafinal-last").value : null;
-    const progresoCol = document.getElementById("map-listafinal-progreso").value;
-    const generacionCol = document.getElementById("map-listafinal-gencol").value;
-    const generacionValor = generacionCol ? document.getElementById("map-listafinal-genval").value : "";
-    const extraCols = otherCols(app.pending.listafinal.headers, [emailCol, nameCol, firstCol, lastCol, progresoCol, generacionCol]);
-    const today = todayISO();
-    let lockedCount = 0;
-    let nuevosCount = 0;
-    const cargaId = nowISO();
-
-    const masterByKey = new Map(app.master.map(r => [r._key, r]));
-
-    const sourceRowsLF = generacionCol
-      ? app.pending.listafinal.rows.filter(r => String(r[generacionCol]) === String(generacionValor))
-      : app.pending.listafinal.rows;
-
-    sourceRowsLF.forEach(row => {
-      const email = row[emailCol];
-      const name = getListaFinalName(row);
-      const nombresLF = nameMode === "split" && firstCol && row[firstCol] ? String(row[firstCol]).trim() : "";
-      const apellidosLF = nameMode === "split" && lastCol && row[lastCol] ? String(row[lastCol]).trim() : "";
-      const key = recordKey(email, name);
-
-      const extraVals = {};
-      extraCols.forEach(c => extraVals[c] = row[c]);
-
-      let record = masterByKey.get(key);
-      if(!record){
-        record = {
-          _key:key, nombre:name, email:email || "",
-          nombres: nombresLF, apellidos: apellidosLF,
-          santanderExtra:{}, plataformaExtra: extraVals,
-          estado:"En plataforma", progreso:0,
-          primeraVez:today, cargaId, ultimaCargaSantander:today, presenteUltimaCarga:true,
-          ultimaActualizacionPlataforma:today
-        };
-        app.master.push(record);
-        masterByKey.set(key, record);
-        nuevosCount++;
-      } else {
-        if(name){ record.nombre = name; record.nombres = nombresLF; record.apellidos = apellidosLF; }
-        // Las columnas de nombre ya no son "extras": se quitan las que una
-        // carga anterior haya dejado guardadas como columnas sueltas.
-        [nameCol, firstCol, lastCol].forEach(c => { if(c && record.plataformaExtra) delete record.plataformaExtra[c]; });
-        record.email = email || record.email;
-        record.plataformaExtra = Object.assign({}, record.plataformaExtra, extraVals);
-        record.estado = "En plataforma";
-        record.ultimaCargaSantander = today;
-        record.presenteUltimaCarga = true;
-        record.ultimaActualizacionPlataforma = today;
-      }
-
-      if(progresoCol){
-        const parsed = parsePct(row[progresoCol]);
-        if(parsed !== null){
-          const prevProgreso = typeof record.progreso === "number" ? record.progreso : 0;
-          if(parsed < prevProgreso) lockedCount++;
-          record.progreso = Math.max(prevProgreso, parsed);
-        }
-      }
-    });
-
-    app.meta.listaFinalMapping = {emailCol, nameMode, nameCol, firstCol, lastCol, progresoCol, generacionCol, generacionValor, extraCols};
-    app.meta.lastListaFinalUpload = today;
-    app.meta.lastListaFinalFile = app.pending.listafinal.fileName;
-    app.meta.lastCargaId = cargaId;
-    app.meta.lastRun = Object.assign({}, app.meta.lastRun, {nuevosCount});
-    app.meta.updatedAt = nowISO();
-
+    const r = construirRoster(std, {marcarUltimaCarga: true});
+    if(!confirmarQuitados(r.removed)){ setSaveStatus(""); return; }
     await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
-    app.meta.stats = computeMasterStats(app.master);
-
-    let resumen = app.pending.listafinal.rows.length + " registros procesados, " + nuevosCount + " nuevos";
-    if(progresoCol && lockedCount > 0) resumen += " — candado de progreso activado en " + lockedCount + " registro(s) (se conservó el % más alto)";
+    const meta = Object.assign({}, app.meta, {
+      listaFinalMapping: {generacionValor: std.genValor},
+      lastListaFinalUpload: r.today,
+      lastListaFinalFile: pend.fileName,
+      lastCargaId: r.cargaId,
+      updatedAt: nowISO(),
+      stats: computeMasterStats(r.master),
+      lastRun: Object.assign({}, app.meta.lastRun, {nuevosCount: r.nuevosCount})
+    });
     const logEntry = {
-      date: nowISO(), tipo:"Lista final", archivo: app.pending.listafinal.fileName,
-      resumen: resumen,
-      por: (auth.currentUser && auth.currentUser.email) || ""
+      date: nowISO(), tipo: "Lista final", archivo: pend.fileName,
+      resumen: std.rows.length + " personas en el archivo, " + r.nuevosCount + " nuevas, " + r.removed.length + " quitadas" + resumenOmitidas(std),
+      por: quien()
     };
-    app.log.unshift(logEntry);
-
-    await persistUpdate(logEntry);
-
-    renderStats();
-    renderMasterTable();
-    renderHistorial();
-
-    btn.disabled = false; btn.textContent = "Actualizar lista final";
+    const ok = await aplicarCarga({master: r.master, meta, lastRun: app.lastRun}, logEntry, r.removed.map(x => x._key));
+    if(!ok) return;
+    refrescarTodo();
     document.querySelector('.tab[data-tab="madre"]').click();
     closeModal("modal-listafinal");
-  });
+  }));
 
   // El NPS es por PROGRAMA: Moodle no distingue una generación de otra, así
   // que una misma encuesta sirve a todas las ediciones del mismo programa
@@ -4217,6 +3859,7 @@ const db = firebase.firestore();
         // Se reemplaza el objeto completo (sin merge dentro de "manual")
         // para no arrastrar campos de capturas anteriores.
         await courseDoc(app.slug).update({manual, stats: app.meta.stats, capturaManual: true, updatedAt: app.meta.updatedAt});
+        app.loadedUpdatedAt = app.meta.updatedAt;
         const logEntry = {
           date: nowISO(), tipo:"Captura manual", archivo:"",
           resumen: "Santander " + v.santander + ", plataforma " + v.plataforma + ", 80–100% " + v.p4 + ", por iniciar " + v.p0,
