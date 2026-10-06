@@ -3401,7 +3401,8 @@ const db = firebase.firestore();
       app.dupCache = null;
       renderMasterTable();
       renderHistorial();
-      setSaveStatus("Correo actualizado. Vuelve a cargar el reporte de plataforma para que se cruce con el nuevo correo.");
+      setSaveStatus("Correo actualizado.");
+      alert("Correo actualizado. Para que esta persona salga de «Faltan por dar de alta», vuelve a subir el reporte de plataforma del curso: el estado solo se recalcula al cargarlo.");
     }catch(err){
       console.error("No se pudo guardar el correo:", err);
       if(previo.emailManual === undefined) delete rec.emailManual; else rec.emailManual = previo.emailManual;
