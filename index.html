@@ -452,8 +452,6 @@
       <div class="course-tabs-row">
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
-        <button class="btn btn-ghost btn-small" id="btn-wipe-portal" type="button" style="color:var(--rust);" title="Borra TODOS los cursos y sus datos">Vaciar portal…</button>
-        <button class="btn btn-ghost btn-small" id="btn-open-multi" type="button" title="Un solo reporte de Moodle repartido entre varios cursos">Cargar plataforma de todos los cursos</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -529,6 +527,7 @@
       <div class="tab-panel" data-panel="alta">
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="alta">
+          <button class="btn btn-primary btn-small" id="btn-alta-moodle" type="button" title="Archivo CSV para la subida de usuarios de Moodle (pide la contraseña inicial del curso)">Descargar para Moodle (CSV)</button>
           <button class="btn btn-ghost btn-small" data-download="alta">Descargar Excel</button>
         </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
@@ -687,27 +686,6 @@
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
       </div>
-    </div>
-  </div>
-
-  <!-- ======================= MODAL: plataforma de varios cursos ======================= -->
-  <div class="modal-overlay hidden" id="modal-multi">
-    <div class="modal-box">
-      <button class="modal-close" type="button" data-close-modal="modal-multi">&times;</button>
-      <h3 class="modal-title">Cargar plataforma de varios cursos</h3>
-      <div class="panel-note teal">Un solo reporte de Moodle con todos los cursos. Las filas se reparten por <strong>Nombre corto del curso + Grupo</strong> (grupo vacío = grupo principal). Obligatorias: Nombres o Apellidos, Correo, Avance y Nombre corto del curso. En los cursos de <strong>Santander Open Academy</strong> el reporte se cruza con su base de Santander (debe estar cargada antes). En los de <strong>Santander y Ceneval</strong> el reporte ES la lista del curso. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
-      <div class="drop" id="drop-multi">
-        <div class="drop-icon">&#8593;</div>
-        <div class="drop-main">Arrastra el archivo o haz clic</div>
-        <div class="drop-sub">.xlsx o .csv</div>
-      </div>
-      <input type="file" id="file-multi" accept=".xlsx,.xls,.csv">
-      <div id="multi-body" style="margin-top:16px;"></div>
-      <div class="cross-cta hidden" id="cta-multi">
-        <button class="btn btn-primary" id="btn-process-multi" disabled>Cargar a los cursos asignados</button>
-        <div class="status-line" id="multi-hint"></div>
-      </div>
-      <div id="multi-result" style="margin-top:12px;font-size:12.5px;"></div>
     </div>
   </div>
 
@@ -1150,55 +1128,6 @@ const db = firebase.firestore();
       console.error("No se pudo eliminar el curso:", err);
       alert("No se pudo eliminar: " + (err && err.message ? err.message : err));
       setSaveStatus("");
-    }
-  });
-
-  // Vacía el portal completo (todos los cursos, con sus registros, historial
-  // y semanas). Pide la exportación antes y que se escriba una frase.
-  document.getElementById("btn-wipe-portal").addEventListener("click", async () => {
-    let cursos;
-    try{
-      cursos = await fetchCoursesIndex();
-    }catch(err){
-      alert("No se pudo leer la lista de cursos: " + (err && err.message ? err.message : err));
-      return;
-    }
-    if(!cursos.length){ alert("El portal ya está vacío."); return; }
-    if(!confirm(
-      "Esto va a BORRAR los " + cursos.length + " curso(s) del portal, con todos sus registros, cargas e historial. No se puede deshacer.\n\n" +
-      "¿Ya descargaste la exportación completa (botón \"Exportar base completa\")?\n\n" +
-      "Aceptar = sí, ya la tengo.   Cancelar = no, voy a exportarla primero."
-    )){
-      document.getElementById("btn-export-full-db").click();
-      return;
-    }
-    const frase = prompt("Para confirmar escribe: VACIAR TODO");
-    if(frase === null) return;
-    if(frase.trim() !== "VACIAR TODO"){ alert("No coincide — no se borró nada."); return; }
-    let hechos = 0;
-    const wipeBtn = document.getElementById("btn-wipe-portal");
-    const wipeTexto = wipeBtn.textContent;
-    wipeBtn.disabled = true;
-    try{
-      for(const c of cursos){
-        wipeBtn.textContent = "Borrando " + (hechos + 1) + " de " + cursos.length + "...";
-        await deleteCourseRemote(c.slug);
-        hechos++;
-      }
-      app.coursesIndex = await fetchCoursesIndex();
-      closeOpenCourse();
-      renderCourseSelect();
-      renderCourseTabs();
-      alert(app.coursesIndex.length
-        ? "Se borraron " + hechos + " curso(s), pero Firestore todavía devuelve " + app.coursesIndex.length + ". Recarga la página (Ctrl+F5) y revisa."
-        : "Portal vacío: " + hechos + " curso(s) borrado(s).");
-    }catch(err){
-      console.error("No se pudo vaciar el portal:", err);
-      alert("Se borraron " + hechos + " de " + cursos.length + " curso(s) y luego falló: " + (err && err.message ? err.message : err) +
-        "\n\nSi dice \"permissions\", las reglas de Firestore no dejan borrar con tu cuenta.");
-    }finally{
-      wipeBtn.disabled = false;
-      wipeBtn.textContent = wipeTexto;
     }
   });
 
@@ -3334,164 +3263,6 @@ const db = firebase.firestore();
     document.querySelector('.tab[data-tab="' + (r.solo ? "nuevos" : "madre") + '"]').click();
     closeModal("modal-plataforma");
   }));
-
-  // ================= PLATAFORMA DE VARIOS CURSOS =================
-  // Un solo reporte de Moodle con varios cursos: las filas se reparten por
-  // Nombre corto del curso + Grupo (grupo vacío = grupo principal). Cada
-  // combinación se asigna una vez a un curso del portal y se recuerda.
-  const multi = {headers: [], rows: [], fileName: "", cols: null, combos: [], assign: {}};
-  const comboKey = (curso, grupo) => normalize(curso) + "||" + normalize(grupo);
-
-  function cursosAsignables(){
-    return app.coursesIndex
-      .filter(c => !c.archived && c.tipo !== "historico" && !esCapturaManual(c))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  }
-
-  function renderMulti(){
-    const body = document.getElementById("multi-body");
-    const cta = document.getElementById("cta-multi");
-    body.innerHTML = "";
-    document.getElementById("multi-result").innerHTML = "";
-    multi.combos = []; multi.assign = {};
-    const cols = detectStdCols(multi.headers);
-    multi.cols = cols;
-    const faltan = [];
-    if(!cols.correo) faltan.push("Correo");
-    if(!cols.avance) faltan.push("Avance");
-    if(!cols.cursocorto) faltan.push("Nombre corto del curso");
-    if(!cols.nombres && !cols.apellidos) faltan.push("Nombres y/o Apellidos");
-    if(faltan.length){
-      body.appendChild(el("div", {style:"color:var(--rust);font-weight:700;"}, [document.createTextNode("✗ Faltan columnas obligatorias: " + faltan.join(", ") + ". Usa la plantilla estándar.")]));
-      cta.classList.add("hidden");
-      return;
-    }
-    const txt = v => (v === null || v === undefined) ? "" : String(v).trim();
-    const map = new Map();
-    let sinCurso = 0;
-    multi.rows.forEach(r => {
-      const curso = txt(r[cols.cursocorto]);
-      if(!curso){ sinCurso++; return; }
-      const grupo = cols.grupo ? txt(r[cols.grupo]) : "";
-      const k = comboKey(curso, grupo);
-      if(!map.has(k)) map.set(k, {key: k, curso, grupo, rows: []});
-      map.get(k).rows.push(r);
-    });
-    multi.combos = Array.from(map.values()).sort((a, b) => a.curso.localeCompare(b.curso) || a.grupo.localeCompare(b.grupo));
-    const cursos = cursosAsignables();
-
-    body.appendChild(el("div", {style:"font-weight:700;margin-bottom:6px;"}, [document.createTextNode(
-      multi.rows.length + " fila(s) · " + multi.combos.length + " combinación(es) de curso y grupo. Asigna cada una a un curso del portal:")]));
-    if(sinCurso) body.appendChild(el("div", {style:"color:#8a5a00;margin-bottom:6px;"}, [document.createTextNode("⚠ " + sinCurso + " fila(s) sin nombre corto de curso: se omiten.")]));
-
-    const msg = el("div", {style:"color:var(--rust);font-weight:600;margin-top:6px;"});
-    function validar(){
-      const usados = new Set();
-      let dup = null;
-      Object.keys(multi.assign).forEach(k => {
-        const slug = multi.assign[k];
-        if(!slug) return;
-        if(usados.has(slug)) dup = slug; else usados.add(slug);
-      });
-      const n = Object.values(multi.assign).filter(Boolean).length;
-      msg.textContent = dup ? "✗ Dos combinaciones están asignadas al mismo curso: " + ((cursos.find(c => c.slug === dup) || {}).displayName || dup) + "." : "";
-      document.getElementById("btn-process-multi").disabled = !(n > 0 && !dup);
-      document.getElementById("multi-hint").textContent = dup ? "Corrige las asignaciones." : (n ? n + " curso(s) se van a actualizar." : "Asigna al menos un curso.");
-    }
-    multi.combos.forEach(cb => {
-      const row = el("div", {style:"display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;"});
-      row.appendChild(el("div", {style:"flex:1;min-width:220px;"}, [document.createTextNode(
-        cb.curso + " · " + (cb.grupo || "grupo principal") + " — " + cb.rows.length + " fila(s)")]));
-      const sel = el("select", {class:"input-text", style:"flex:1;min-width:220px;"});
-      sel.appendChild(el("option", {value:""}, [document.createTextNode("— no cargar —")]));
-      const guardado = cursos.find(c => c.moodleCurso && comboKey(c.moodleCurso, c.moodleGrupo || "") === cb.key);
-      cursos.forEach(c => {
-        const opt = el("option", {value:c.slug}, [document.createTextNode(c.displayName + (c.anio ? " (" + c.anio + ")" : "") + (esSoloPlataforma(c) ? " — el reporte es la lista" : " — cruza con Santander"))]);
-        if(guardado && guardado.slug === c.slug) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      multi.assign[cb.key] = guardado ? guardado.slug : "";
-      sel.addEventListener("change", () => { multi.assign[cb.key] = sel.value; validar(); });
-      row.appendChild(sel);
-      body.appendChild(row);
-    });
-    body.appendChild(msg);
-    cta.classList.remove("hidden");
-    validar();
-  }
-
-  (function wireMulti(){
-    const drop = document.getElementById("drop-multi");
-    const input = document.getElementById("file-multi");
-    const leer = file => readWorkbook(file, wb => {
-      const {headers, rows} = sheetToRows(wb, wb.SheetNames[0], true);
-      multi.headers = headers; multi.rows = rows; multi.fileName = file.name;
-      renderMulti();
-    });
-    drop.addEventListener("click", () => input.click());
-    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
-    drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
-    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); if(e.dataTransfer.files.length) leer(e.dataTransfer.files[0]); });
-    input.addEventListener("change", e => { if(e.target.files.length) leer(e.target.files[0]); });
-  })();
-
-  document.getElementById("btn-open-multi").addEventListener("click", () => {
-    document.getElementById("multi-body").innerHTML = "";
-    document.getElementById("multi-result").innerHTML = "";
-    document.getElementById("cta-multi").classList.add("hidden");
-    document.getElementById("file-multi").value = "";
-    openModal("modal-multi");
-  });
-
-  document.getElementById("btn-process-multi").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-process-multi");
-    const lista = multi.combos.filter(cb => multi.assign[cb.key]);
-    if(!lista.length) return;
-    if(!confirm("Se van a actualizar " + lista.length + " curso(s) con este reporte.\n\nEn cada uno el avance se REEMPLAZA por el del archivo (quien no venga queda en 0%). ¿Continuar?")) return;
-    const out = document.getElementById("multi-result");
-    out.innerHTML = "";
-    const linea = (ok, texto) => out.appendChild(el("div", {style:"margin-bottom:4px;" + (ok ? "" : "color:var(--rust);font-weight:600;")}, [document.createTextNode((ok ? "✓ " : "✗ ") + texto)]));
-    btn.disabled = true;
-    const original = btn.textContent;
-    let buenos = 0;
-    try{
-      for(let i = 0; i < lista.length; i++){
-        const cb = lista[i];
-        const slug = multi.assign[cb.key];
-        const idx = app.coursesIndex.find(c => c.slug === slug);
-        const nombre = idx ? idx.displayName : slug;
-        btn.textContent = "Cargando " + (i + 1) + " de " + lista.length + ": " + nombre + "...";
-        try{
-          // La asignación se recuerda para las próximas veces.
-          await courseDoc(slug).set({moodleCurso: cb.curso, moodleGrupo: cb.grupo}, {merge: true});
-          if(idx){ idx.moodleCurso = cb.curso; idx.moodleGrupo = cb.grupo; }
-          await loadCourse(slug);
-          if(app.slug !== slug || !app.masterReady){ linea(false, nombre + ": no se pudo abrir el curso."); continue; }
-          if(!esSoloPlataforma(app.meta) && !app.meta.lastSantanderUpload){
-            linea(false, nombre + ": primero carga su base de Santander (sin ella todos saldrían como «en plataforma, no en Santander»).");
-            continue;
-          }
-          const std = buildStd("plataforma", "", {headers: multi.headers, rows: cb.rows});
-          if(std.errors.length){ linea(false, nombre + ": " + std.errors[0]); continue; }
-          const r = await aplicarPlataforma(std, multi.fileName, {pruebaSet: new Set(app.meta.pruebaKeys || [])});
-          if(!r){ linea(false, nombre + ": no se guardó (cancelado o con error)."); continue; }
-          refrescarTodo();
-          buenos++;
-          linea(true, nombre + ": " + r.resumen);
-        }catch(err){
-          console.error(err);
-          linea(false, nombre + ": " + (err && err.message ? err.message : err));
-        }
-      }
-    }finally{
-      btn.textContent = original;
-      btn.disabled = false;
-      setSaveStatus("");
-      const sin = cursosAsignables().filter(c => !lista.some(cb => multi.assign[cb.key] === c.slug));
-      if(sin.length) out.appendChild(el("div", {style:"margin-top:8px;color:var(--ink-soft);"}, [document.createTextNode("Sin tocar (no vienen en este reporte): " + sin.map(c => c.displayName).join(", ") + ".")]));
-      alert("Listo: " + buenos + " de " + lista.length + " curso(s) actualizados. Revisa el detalle en la ventana.");
-    }
-  });
 
   // ---------- Add on: comparte la lista de Santander del curso ----------
   document.getElementById("btn-process-addon").addEventListener("click", () => procesar("addon", "Cruzar con el roster", async () => {
