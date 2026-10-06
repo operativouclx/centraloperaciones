@@ -453,6 +453,7 @@
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-ghost btn-small" id="btn-wipe-portal" type="button" style="color:var(--rust);" title="Borra TODOS los cursos y sus datos">Vaciar portal…</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-multi" type="button" title="Un solo reporte de Moodle repartido entre varios cursos">Cargar plataforma de todos los cursos</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -646,7 +647,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-santander">&times;</button>
       <h3 class="modal-title">Actualizar base de Santander</h3>
-      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance y Generación (aquí son obligatorias Correo, Estatus y Nombres o Apellidos). <strong>Cada carga reemplaza la lista del curso</strong>: quien no venga en el archivo se quita de la base. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
+      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance, Generación, Usuario, Fecha de inscripción, Grupo, Nombre corto del curso y Última entrada (aquí son obligatorias Correo, Estatus y Nombres o Apellidos). <strong>Cada carga reemplaza la lista del curso</strong>: quien no venga en el archivo se quita de la base. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de Santander</h3>
         <span class="file-tag hidden" id="tag-santander"></span>
@@ -654,9 +655,9 @@
       <div class="drop" id="drop-santander">
         <div class="drop-icon">&#8593;</div>
         <div class="drop-main">Arrastra el archivo o haz clic</div>
-        <div class="drop-sub">.xlsx</div>
+        <div class="drop-sub">.xlsx o .csv</div>
       </div>
-      <input type="file" id="file-santander" accept=".xlsx,.xls">
+      <input type="file" id="file-santander" accept=".xlsx,.xls,.csv">
       <div id="mapping-santander" class="hidden" style="margin-top:16px;"></div>
       <div class="cross-cta hidden" id="cta-santander">
         <button class="btn btn-primary" id="btn-process-santander" disabled>Procesar actualización</button>
@@ -670,7 +671,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-plataforma">&times;</button>
       <h3 class="modal-title">Actualizar plataforma</h3>
-      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance y Generación (aquí son obligatorias Correo, Avance y Nombres o Apellidos). Se cruza por correo y el avance es el del archivo. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
+      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance, Generación, Usuario, Fecha de inscripción, Grupo, Nombre corto del curso y Última entrada (aquí son obligatorias Correo, Avance y Nombres o Apellidos). Se cruza por correo y el avance es el del archivo. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de plataforma</h3>
         <span class="file-tag hidden" id="tag-plataforma"></span>
@@ -678,14 +679,35 @@
       <div class="drop" id="drop-plataforma">
         <div class="drop-icon">&#8593;</div>
         <div class="drop-main">Arrastra el archivo o haz clic</div>
-        <div class="drop-sub">.xlsx</div>
+        <div class="drop-sub">.xlsx o .csv</div>
       </div>
-      <input type="file" id="file-plataforma" accept=".xlsx,.xls">
+      <input type="file" id="file-plataforma" accept=".xlsx,.xls,.csv">
       <div id="mapping-plataforma" class="hidden" style="margin-top:16px;"></div>
       <div class="cross-cta hidden" id="cta-plataforma">
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: plataforma de varios cursos ======================= -->
+  <div class="modal-overlay hidden" id="modal-multi">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-multi">&times;</button>
+      <h3 class="modal-title">Cargar plataforma de varios cursos</h3>
+      <div class="panel-note teal">Un solo reporte de Moodle con todos los cursos. Las filas se reparten por <strong>Nombre corto del curso + Grupo</strong> (grupo vacío = grupo principal). Obligatorias: Nombres o Apellidos, Correo, Avance y Nombre corto del curso. En los cursos de <strong>Santander Open Academy</strong> el reporte se cruza con su base de Santander (debe estar cargada antes). En los de <strong>Santander y Ceneval</strong> el reporte ES la lista del curso. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
+      <div class="drop" id="drop-multi">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx o .csv</div>
+      </div>
+      <input type="file" id="file-multi" accept=".xlsx,.xls,.csv">
+      <div id="multi-body" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-multi">
+        <button class="btn btn-primary" id="btn-process-multi" disabled>Cargar a los cursos asignados</button>
+        <div class="status-line" id="multi-hint"></div>
+      </div>
+      <div id="multi-result" style="margin-top:12px;font-size:12.5px;"></div>
     </div>
   </div>
 
@@ -702,9 +724,9 @@
       <div class="drop" id="drop-addon">
         <div class="drop-icon">&#8593;</div>
         <div class="drop-main">Arrastra el archivo o haz clic</div>
-        <div class="drop-sub">.xlsx</div>
+        <div class="drop-sub">.xlsx o .csv</div>
       </div>
-      <input type="file" id="file-addon" accept=".xlsx,.xls">
+      <input type="file" id="file-addon" accept=".xlsx,.xls,.csv">
       <div id="mapping-addon" class="hidden" style="margin-top:16px;"></div>
       <div class="cross-cta hidden" id="cta-addon">
         <button class="btn btn-primary" id="btn-process-addon" disabled>Cruzar con el roster</button>
@@ -742,7 +764,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-listafinal">&times;</button>
       <h3 class="modal-title">Actualizar lista final</h3>
-      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance y Generación (aquí son obligatorias Correo, Avance y Nombres o Apellidos). <strong>Cada carga reemplaza la lista del curso.</strong> <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
+      <div class="panel-note teal">Usa siempre las <strong>mismas columnas</strong>: Nombres, Apellidos, Correo, Estatus, Avance, Generación, Usuario, Fecha de inscripción, Grupo, Nombre corto del curso y Última entrada (aquí son obligatorias Correo, Avance y Nombres o Apellidos). <strong>Cada carga reemplaza la lista del curso.</strong> <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
       <div class="panel-head">
         <h3>Archivo de lista final</h3>
         <span class="file-tag hidden" id="tag-listafinal"></span>
@@ -750,9 +772,9 @@
       <div class="drop" id="drop-listafinal">
         <div class="drop-icon">&#8593;</div>
         <div class="drop-main">Arrastra el archivo o haz clic</div>
-        <div class="drop-sub">.xlsx</div>
+        <div class="drop-sub">.xlsx o .csv</div>
       </div>
-      <input type="file" id="file-listafinal" accept=".xlsx,.xls">
+      <input type="file" id="file-listafinal" accept=".xlsx,.xls,.csv">
       <div id="mapping-listafinal" class="hidden" style="margin-top:16px;"></div>
       <div class="cross-cta hidden" id="cta-listafinal">
         <button class="btn btn-primary" id="btn-process-listafinal" disabled>Actualizar lista final</button>
@@ -1418,11 +1440,13 @@ const db = firebase.firestore();
   }
   // Cursos "solo plataforma": la plataforma ES la base — cada carga detecta
   // a los nuevos y omite siempre a quienes se marcaron como no estudiantes.
-  // Los cursos de Ceneval que ya existían como "activo" se tratan igual.
+  // Solo Santander Open Academy trabaja con base de Santander: los cursos de
+  // Santander y de Ceneval no la tienen, así que se tratan siempre así
+  // (salvo los históricos, que usan lista final).
   function esSoloPlataforma(meta){
     if(!meta) return false;
     if(meta.tipo === "plataforma") return true;
-    return meta.tipo !== "historico" && esAlianzaMeta(meta);
+    return meta.tipo !== "historico" && clienteDe(meta) !== "soa";
   }
 
   // Salud Financiera ya no sube bases (ni Santander ni plataforma): todos
@@ -1643,6 +1667,9 @@ const db = firebase.firestore();
         lastPlataformaUpload: data.lastPlataformaUpload || null,
         lastListaFinalUpload: data.lastListaFinalUpload || null,
         archived: !!data.archived,
+        capturaManual: data.capturaManual === true,
+        moodleCurso: data.moodleCurso || null,
+        moodleGrupo: data.moodleGrupo || "",
         npsFecha: (data.nps && data.nps.fecha) || null,
         npsAlcance: (data.nps && data.nps.alcance) || null
       };
@@ -2670,11 +2697,51 @@ const db = firebase.firestore();
   const COLUMNAS_ESTANDAR = [
     {key:"nombres",    label:"Nombres",    alias:["nombres","nombre","nombre(s)","name","first name","firstname"]},
     {key:"apellidos",  label:"Apellidos",  alias:["apellidos","apellido","apellido(s)","last name","lastname"]},
-    {key:"correo",     label:"Correo",     alias:["correo","correo electronico","email","e-mail"]},
+    {key:"correo",     label:"Correo",     alias:["correo","correo electronico","email","e-mail","direccion email","direccion de email","direccion de correo","direccion de correo electronico"]},
     {key:"estatus",    label:"Estatus",    alias:["estatus","status"]},
-    {key:"avance",     label:"Avance",     alias:["avance","progreso","% avance","progress"]},
-    {key:"generacion", label:"Generación", alias:["generacion"]}
+    {key:"avance",     label:"Avance",     alias:["avance","progreso","% avance","progress","progreso del estudiante","progreso del curso"]},
+    {key:"generacion", label:"Generación", alias:["generacion"]},
+    {key:"usuario",    label:"Usuario",    alias:["usuario","username","user name","nombre de usuario"]},
+    {key:"inscripcion",label:"Fecha de inscripción", alias:["fecha de inscripcion","fecha inscripcion","inscripcion","enrolment date","enrollment date","time enrolled","enrolled","hora de creado","hora de inscripcion","fecha de creado"]},
+    {key:"grupo",      label:"Grupo",      alias:["grupo","grupos","group","groups","group name","nombre del grupo"]},
+    {key:"cursocorto", label:"Nombre corto del curso", alias:["nombre corto del curso","nombre corto","course short name","course shortname","short name","shortname"]},
+    {key:"ultima",     label:"Última entrada", alias:["ultima entrada","fecha de ultima entrada","ultimo acceso","last access","last access to course","last access to site","last login","ultimo acceso al curso","ultimo acceso al sitio"]}
   ];
+
+  // Fechas de Moodle: pueden llegar como texto, como número de serie de
+  // Excel o como "Nunca". Se guardan como texto legible.
+  function fechaTexto(v){
+    if(v === null || v === undefined) return "";
+    if(v instanceof Date) return isNaN(v) ? "" : v.toISOString().slice(0, 16).replace("T", " ");
+    if(typeof v === "number"){
+      if(v > 20000 && v < 80000){
+        const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+        return d.toISOString().slice(0, 16).replace("T", " ").replace(/ 00:00$/, "");
+      }
+      return String(v);
+    }
+    const t = String(v).trim();
+    // "miércoles, 25 de febrero de 2026, 15:10" (como exporta Moodle en
+    // español) -> "2026-02-25 15:10", para que se pueda ordenar.
+    const m = normalize(t).match(/(\d{1,2}) de ([a-z]+) de (\d{4})(?:,? (\d{1,2}):(\d{2}))?/);
+    const MESES = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+    if(m && MESES[m[2]]){
+      const f = m[3] + "-" + String(MESES[m[2]]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0");
+      return m[4] ? f + " " + String(m[4]).padStart(2, "0") + ":" + m[5] : f;
+    }
+    return t;
+  }
+  // Datos opcionales de plataforma que se guardan junto a cada persona.
+  function extrasPlataforma(std, s){
+    const e = {};
+    if(std.genValor) e["Generación"] = std.genValor;
+    if(s.usuario) e["Usuario"] = s.usuario;
+    if(s.inscripcion) e["Fecha de inscripción"] = s.inscripcion;
+    if(s.grupo) e["Grupo"] = s.grupo;
+    if(s.cursocorto) e["Nombre corto del curso"] = s.cursocorto;
+    if(s.ultima) e["Última entrada"] = s.ultima;
+    return e;
+  }
   const COLUMNAS_OBLIGATORIAS = {
     santander:  ["correo","estatus"],
     plataforma: ["correo","avance"],
@@ -2682,20 +2749,31 @@ const db = firebase.firestore();
     addon:      ["correo","avance"]
   };
   const EXIGE_NOMBRE = {santander:true, plataforma:true, listafinal:true, addon:false};
+  // Cuentas de prueba o del equipo: nunca cuentan como estudiantes, en
+  // ninguna carga. Se omiten solas y quedan listadas para descargar.
+  const DOMINIOS_EXCLUIDOS = ["emtech.digital", "uclx.media"];
+  function esCuentaExcluida(email){
+    const dom = String(email).split("@").pop();
+    return DOMINIOS_EXCLUIDOS.some(d => dom === d || dom.endsWith("." + d));
+  }
   function labelColumna(key){ return COLUMNAS_ESTANDAR.find(c => c.key === key).label; }
 
   // Lee el archivo subido con las columnas estándar y devuelve filas ya
   // limpias: una por correo, con nombre, estatus y avance. Lo que se omite
   // (sin correo válido, repetidos) queda contado y listado, nunca en silencio.
-  function buildStd(kind, genValor){
-    const p = app.pending[kind];
-    const norm = p.headers.map(normalize);
+  function detectStdCols(headers){
+    const norm = headers.map(normalize);
     const cols = {};
     COLUMNAS_ESTANDAR.forEach(c => {
       const i = norm.findIndex(h => c.alias.includes(h));
-      cols[c.key] = i === -1 ? null : p.headers[i];
+      cols[c.key] = i === -1 ? null : headers[i];
     });
-    const std = {cols, errors:[], warnings:[], rows:[], total:p.rows.length, sinCorreo:[], repetidos:[], genValues:[], genValor:"", scale:"percent"};
+    return cols;
+  }
+  function buildStd(kind, genValor, src){
+    const p = src || app.pending[kind];
+    const cols = detectStdCols(p.headers);
+    const std = {cols, errors:[], warnings:[], rows:[], total:p.rows.length, sinCorreo:[], excluidos:[], repetidos:[], genValues:[], genValor:"", scale:"percent"};
     const faltan = COLUMNAS_OBLIGATORIAS[kind].filter(k => !cols[k]).map(labelColumna);
     if(EXIGE_NOMBRE[kind] && !cols.nombres && !cols.apellidos) faltan.push("Nombres y/o Apellidos");
     if(faltan.length){
@@ -2738,6 +2816,10 @@ const db = firebase.firestore();
         std.sinCorreo.push({Fila: fila, Nombres: nombres, Apellidos: apellidos, Correo: emailRaw});
         return;
       }
+      if(esCuentaExcluida(email)){
+        std.excluidos.push({Fila: fila, Nombres: nombres, Apellidos: apellidos, Correo: emailRaw});
+        return;
+      }
       let avance = null;
       if(cols.avance){
         avance = parsePct(r[cols.avance], std.scale);
@@ -2747,7 +2829,12 @@ const db = firebase.firestore();
         fila, email, emailRaw, nombres, apellidos,
         nombre: [nombres, apellidos].filter(Boolean).join(" "),
         estatusRaw: cols.estatus ? txt(r[cols.estatus]) : "",
-        avance
+        avance,
+        usuario: cols.usuario ? txt(r[cols.usuario]) : "",
+        inscripcion: cols.inscripcion ? fechaTexto(r[cols.inscripcion]) : "",
+        ultima: cols.ultima ? fechaTexto(r[cols.ultima]) : "",
+        cursocorto: cols.cursocorto ? txt(r[cols.cursocorto]) : "",
+        grupo: cols.grupo ? txt(r[cols.grupo]) : ""
       };
       const prev = byEmail.get(email);
       if(prev){
@@ -2760,6 +2847,7 @@ const db = firebase.firestore();
     std.rows = Array.from(byEmail.values());
 
     if(std.sinCorreo.length) std.warnings.push(std.sinCorreo.length + " fila(s) sin correo válido: se omiten.");
+    if(std.excluidos.length) std.warnings.push(std.excluidos.length + " cuenta(s) de prueba o del equipo (" + DOMINIOS_EXCLUIDOS.join(", ") + "): se excluyen y no cuentan como estudiantes.");
     if(std.repetidos.length) std.warnings.push(std.repetidos.length + " fila(s) con correo repetido: se unifican en un solo registro (se conserva el mayor avance).");
     if(sinAvance) std.warnings.push(sinAvance + " fila(s) con Avance vacío o ilegible: se toman como 0%.");
     if(kind === "santander"){
@@ -2775,8 +2863,8 @@ const db = firebase.firestore();
     const headers = COLUMNAS_ESTANDAR.map(c => c.label);
     const ws = XLSX.utils.aoa_to_sheet([
       headers,
-      ["Ana", "Pérez López", "ana@correo.com", "Accepted", "45%", "2026-1"],
-      ["Luis", "Gómez Ruiz", "luis@correo.com", "Granted", "100%", "2026-1"]
+      ["Ana", "Pérez López", "ana@correo.com", "Accepted", "45%", "2026-1", "aperez", "2026-01-15", "Grupo A", "MATE-2026-1", "2026-03-02 18:30"],
+      ["Luis", "Gómez Ruiz", "luis@correo.com", "Granted", "100%", "2026-1", "lgomez", "2026-01-15", "Grupo B", "MATE-2026-1", "Nunca"]
     ]);
     ws["!cols"] = headers.map(() => ({wch: 18}));
     const info = XLSX.utils.aoa_to_sheet([
@@ -2787,6 +2875,11 @@ const db = firebase.firestore();
       ["Estatus", "Accepted, Granted, Pregranted, Refuse o Rejected", "Santander"],
       ["Avance", "% de avance en plataforma, de 0 a 100 (con o sin %)", "Plataforma, lista final, add on"],
       ["Generación", "Opcional. Si el archivo trae varias ediciones juntas, el portal te deja elegir cuál cargar", "—"],
+      ["Usuario", "Opcional. Nombre de usuario en la plataforma", "—"],
+      ["Fecha de inscripción", "Opcional. Cuándo se inscribió en el curso", "—"],
+      ["Grupo", "Opcional. Grupo de Moodle al que pertenece (no es lo mismo que Generación: no filtra, solo se guarda)", "—"],
+      ["Nombre corto del curso", "Opcional. Shortname del curso en Moodle (útil para la subida de usuarios)", "—"],
+      ["Última entrada", "Opcional. Último acceso al curso (puede decir Nunca)", "—"],
       [],
       ["Reglas"],
       ["Cada carga REEMPLAZA la lista del curso: quien no venga en el archivo se quita de la base."],
@@ -2850,12 +2943,13 @@ const db = firebase.firestore();
         const dato = kind === "santander" ? "Estatus: " + (s.estatusRaw || "(vacío)") : "Avance: " + (s.avance === null ? "(vacío)" : s.avance + "%");
         add(s.nombre + " · " + s.emailRaw + " · " + dato);
       });
-      if(std.sinCorreo.length || std.repetidos.length){
+      if(std.sinCorreo.length || std.repetidos.length || std.excluidos.length){
         const btn = el("button", {type:"button", class:"btn btn-ghost btn-small", style:"margin-top:8px;"}, [document.createTextNode("Descargar filas omitidas")]);
         btn.addEventListener("click", () => {
           const wb = XLSX.utils.book_new();
           if(std.sinCorreo.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(std.sinCorreo), "Sin correo válido");
           if(std.repetidos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(std.repetidos), "Correo repetido");
+          if(std.excluidos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(std.excluidos), "Cuentas excluidas");
           XLSX.writeFile(wb, "filas-omitidas.xlsx");
         });
         box.appendChild(btn);
@@ -3060,6 +3154,7 @@ const db = firebase.firestore();
     const partes = [];
     if(std.sinCorreo.length) partes.push(std.sinCorreo.length + " sin correo válido");
     if(std.repetidos.length) partes.push(std.repetidos.length + " con correo repetido");
+    if(std.excluidos.length) partes.push(std.excluidos.length + " cuentas de prueba excluidas");
     return partes.length ? " (archivo: " + partes.join(", ") + ")" : "";
   }
 
@@ -3071,7 +3166,6 @@ const db = firebase.firestore();
     const cargaId = nowISO();
     const pruebaSet = opts.pruebaSet || new Set();
     const oldByKey = new Map(app.master.map(r => [r._key, r]));
-    const genExtra = std.genValor ? {"Generación": std.genValor} : {};
     const master = [], pruebasRows = [], keys = new Set();
     let nuevosCount = 0;
     std.rows.forEach(s => {
@@ -3083,7 +3177,7 @@ const db = firebase.firestore();
       keys.add(key);
       const base = {
         nombre: s.nombre, email: s.emailRaw, nombres: s.nombres, apellidos: s.apellidos,
-        plataformaExtra: genExtra, estado: "En plataforma", progreso: s.avance || 0,
+        plataformaExtra: extrasPlataforma(std, s), estado: "En plataforma", progreso: s.avance || 0,
         presenteUltimaCarga: true, ultimaActualizacionPlataforma: today
       };
       if(opts.marcarUltimaCarga) base.ultimaCargaSantander = today;
@@ -3166,22 +3260,23 @@ const db = firebase.firestore();
   }));
 
   // ---------- Plataforma: avance de cada quien (o lista completa en Alianza) ----------
-  document.getElementById("btn-process-plataforma").addEventListener("click", () => procesar("plataforma", "Cruzar con tabla madre", async () => {
-    const pend = app.pending.plataforma;
-    const std = pend.std;
+  // Aplica un archivo de plataforma al curso que está abierto. Devuelve null
+  // si se canceló o falló, o {resumen, solo} si quedó guardado.
+  async function aplicarPlataforma(std, fileName, opts){
+    opts = opts || {};
     const today = todayISO();
     setSaveStatus("Cruzando con la tabla madre...");
 
     // Alianza no tiene base de Santander: la plataforma ES la lista del curso.
     if(esSoloPlataforma(app.meta)){
-      const pruebaSet = app.pruebaSel || new Set(app.meta.pruebaKeys || []);
+      const pruebaSet = opts.pruebaSet || app.pruebaSel || new Set(app.meta.pruebaKeys || []);
       const r = construirRoster(std, {pruebaSet});
-      if(!confirmarQuitados(r.removed, pruebaSet)){ setSaveStatus(""); return; }
+      if(!confirmarQuitados(r.removed, pruebaSet)){ setSaveStatus(""); return null; }
       await ensureWeeklySnapshot(app.slug, app.meta.stats, getInscritosTotalFor(app.meta));
       const meta = Object.assign({}, app.meta, {
         plataformaMapping: {generacionValor: std.genValor},
         lastPlataformaUpload: today,
-        lastPlataformaFile: pend.fileName,
+        lastPlataformaFile: fileName,
         lastCargaId: r.cargaId,
         pruebaKeys: Array.from(pruebaSet),
         updatedAt: nowISO(),
@@ -3192,25 +3287,20 @@ const db = firebase.firestore();
         r.removed.length + " quitadas";
       if(r.pruebasRows.length) resumen += ", " + r.pruebasRows.length + " no son estudiantes (omitidas)";
       resumen += resumenOmitidas(std);
-      const logEntry = {date: nowISO(), tipo: "Plataforma", archivo: pend.fileName, resumen, por: quien()};
+      const logEntry = {date: nowISO(), tipo: "Plataforma", archivo: fileName, resumen, por: quien()};
       const ok = await aplicarCarga({master: r.master, meta, lastRun: {revisar: [], pruebas: r.pruebasRows, alta: []}}, logEntry, r.removed.map(x => x._key));
-      if(!ok) return;
-      refrescarTodo();
-      document.querySelector('.tab[data-tab="nuevos"]').click();
-      closeModal("modal-plataforma");
-      return;
+      return ok ? {resumen, solo: true} : null;
     }
 
     // Con Santander: se cruza por correo contra la base. El avance es el del
     // archivo; quien no viene queda en "Falta registrar" con 0%.
     const porCorreo = new Map(std.rows.map(s => [s.email, s]));
     const encontrados = new Set();
-    const genExtra = std.genValor ? {"Generación": std.genValor} : {};
     const master = app.master.map(rec => {
       const s = porCorreo.get(normalize(rec.email));
       if(s){
         encontrados.add(s.email);
-        return Object.assign({}, rec, {plataformaExtra: genExtra, estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
+        return Object.assign({}, rec, {plataformaExtra: extrasPlataforma(std, s), estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
       }
       return Object.assign({}, rec, {plataformaExtra: {}, estado: "Falta registrar", progreso: 0});
     });
@@ -3221,23 +3311,187 @@ const db = firebase.firestore();
     const meta = Object.assign({}, app.meta, {
       plataformaMapping: {generacionValor: std.genValor},
       lastPlataformaUpload: today,
-      lastPlataformaFile: pend.fileName,
+      lastPlataformaFile: fileName,
       updatedAt: nowISO(),
       stats: computeMasterStats(master),
       lastRun: Object.assign({}, app.meta.lastRun, {revisar: capForStorage(revisar)})
     });
     const altaCount = master.filter(r => r.estado !== "En plataforma").length;
     const logEntry = {
-      date: nowISO(), tipo: "Plataforma", archivo: pend.fileName,
+      date: nowISO(), tipo: "Plataforma", archivo: fileName,
       resumen: (master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander" + resumenOmitidas(std),
       por: quien()
     };
     const ok = await aplicarCarga({master, meta, lastRun: {revisar, pruebas: app.lastRun.pruebas || [], alta: []}}, logEntry, []);
-    if(!ok) return;
+    return ok ? {resumen: logEntry.resumen, solo: false} : null;
+  }
+
+  document.getElementById("btn-process-plataforma").addEventListener("click", () => procesar("plataforma", "Cruzar con tabla madre", async () => {
+    const pend = app.pending.plataforma;
+    const r = await aplicarPlataforma(pend.std, pend.fileName);
+    if(!r) return;
     refrescarTodo();
-    document.querySelector('.tab[data-tab="madre"]').click();
+    document.querySelector('.tab[data-tab="' + (r.solo ? "nuevos" : "madre") + '"]').click();
     closeModal("modal-plataforma");
   }));
+
+  // ================= PLATAFORMA DE VARIOS CURSOS =================
+  // Un solo reporte de Moodle con varios cursos: las filas se reparten por
+  // Nombre corto del curso + Grupo (grupo vacío = grupo principal). Cada
+  // combinación se asigna una vez a un curso del portal y se recuerda.
+  const multi = {headers: [], rows: [], fileName: "", cols: null, combos: [], assign: {}};
+  const comboKey = (curso, grupo) => normalize(curso) + "||" + normalize(grupo);
+
+  function cursosAsignables(){
+    return app.coursesIndex
+      .filter(c => !c.archived && c.tipo !== "historico" && !esCapturaManual(c))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  function renderMulti(){
+    const body = document.getElementById("multi-body");
+    const cta = document.getElementById("cta-multi");
+    body.innerHTML = "";
+    document.getElementById("multi-result").innerHTML = "";
+    multi.combos = []; multi.assign = {};
+    const cols = detectStdCols(multi.headers);
+    multi.cols = cols;
+    const faltan = [];
+    if(!cols.correo) faltan.push("Correo");
+    if(!cols.avance) faltan.push("Avance");
+    if(!cols.cursocorto) faltan.push("Nombre corto del curso");
+    if(!cols.nombres && !cols.apellidos) faltan.push("Nombres y/o Apellidos");
+    if(faltan.length){
+      body.appendChild(el("div", {style:"color:var(--rust);font-weight:700;"}, [document.createTextNode("✗ Faltan columnas obligatorias: " + faltan.join(", ") + ". Usa la plantilla estándar.")]));
+      cta.classList.add("hidden");
+      return;
+    }
+    const txt = v => (v === null || v === undefined) ? "" : String(v).trim();
+    const map = new Map();
+    let sinCurso = 0;
+    multi.rows.forEach(r => {
+      const curso = txt(r[cols.cursocorto]);
+      if(!curso){ sinCurso++; return; }
+      const grupo = cols.grupo ? txt(r[cols.grupo]) : "";
+      const k = comboKey(curso, grupo);
+      if(!map.has(k)) map.set(k, {key: k, curso, grupo, rows: []});
+      map.get(k).rows.push(r);
+    });
+    multi.combos = Array.from(map.values()).sort((a, b) => a.curso.localeCompare(b.curso) || a.grupo.localeCompare(b.grupo));
+    const cursos = cursosAsignables();
+
+    body.appendChild(el("div", {style:"font-weight:700;margin-bottom:6px;"}, [document.createTextNode(
+      multi.rows.length + " fila(s) · " + multi.combos.length + " combinación(es) de curso y grupo. Asigna cada una a un curso del portal:")]));
+    if(sinCurso) body.appendChild(el("div", {style:"color:#8a5a00;margin-bottom:6px;"}, [document.createTextNode("⚠ " + sinCurso + " fila(s) sin nombre corto de curso: se omiten.")]));
+
+    const msg = el("div", {style:"color:var(--rust);font-weight:600;margin-top:6px;"});
+    function validar(){
+      const usados = new Set();
+      let dup = null;
+      Object.keys(multi.assign).forEach(k => {
+        const slug = multi.assign[k];
+        if(!slug) return;
+        if(usados.has(slug)) dup = slug; else usados.add(slug);
+      });
+      const n = Object.values(multi.assign).filter(Boolean).length;
+      msg.textContent = dup ? "✗ Dos combinaciones están asignadas al mismo curso: " + ((cursos.find(c => c.slug === dup) || {}).displayName || dup) + "." : "";
+      document.getElementById("btn-process-multi").disabled = !(n > 0 && !dup);
+      document.getElementById("multi-hint").textContent = dup ? "Corrige las asignaciones." : (n ? n + " curso(s) se van a actualizar." : "Asigna al menos un curso.");
+    }
+    multi.combos.forEach(cb => {
+      const row = el("div", {style:"display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;"});
+      row.appendChild(el("div", {style:"flex:1;min-width:220px;"}, [document.createTextNode(
+        cb.curso + " · " + (cb.grupo || "grupo principal") + " — " + cb.rows.length + " fila(s)")]));
+      const sel = el("select", {class:"input-text", style:"flex:1;min-width:220px;"});
+      sel.appendChild(el("option", {value:""}, [document.createTextNode("— no cargar —")]));
+      const guardado = cursos.find(c => c.moodleCurso && comboKey(c.moodleCurso, c.moodleGrupo || "") === cb.key);
+      cursos.forEach(c => {
+        const opt = el("option", {value:c.slug}, [document.createTextNode(c.displayName + (c.anio ? " (" + c.anio + ")" : "") + (esSoloPlataforma(c) ? " — el reporte es la lista" : " — cruza con Santander"))]);
+        if(guardado && guardado.slug === c.slug) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      multi.assign[cb.key] = guardado ? guardado.slug : "";
+      sel.addEventListener("change", () => { multi.assign[cb.key] = sel.value; validar(); });
+      row.appendChild(sel);
+      body.appendChild(row);
+    });
+    body.appendChild(msg);
+    cta.classList.remove("hidden");
+    validar();
+  }
+
+  (function wireMulti(){
+    const drop = document.getElementById("drop-multi");
+    const input = document.getElementById("file-multi");
+    const leer = file => readWorkbook(file, wb => {
+      const {headers, rows} = sheetToRows(wb, wb.SheetNames[0], true);
+      multi.headers = headers; multi.rows = rows; multi.fileName = file.name;
+      renderMulti();
+    });
+    drop.addEventListener("click", () => input.click());
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); if(e.dataTransfer.files.length) leer(e.dataTransfer.files[0]); });
+    input.addEventListener("change", e => { if(e.target.files.length) leer(e.target.files[0]); });
+  })();
+
+  document.getElementById("btn-open-multi").addEventListener("click", () => {
+    document.getElementById("multi-body").innerHTML = "";
+    document.getElementById("multi-result").innerHTML = "";
+    document.getElementById("cta-multi").classList.add("hidden");
+    document.getElementById("file-multi").value = "";
+    openModal("modal-multi");
+  });
+
+  document.getElementById("btn-process-multi").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-process-multi");
+    const lista = multi.combos.filter(cb => multi.assign[cb.key]);
+    if(!lista.length) return;
+    if(!confirm("Se van a actualizar " + lista.length + " curso(s) con este reporte.\n\nEn cada uno el avance se REEMPLAZA por el del archivo (quien no venga queda en 0%). ¿Continuar?")) return;
+    const out = document.getElementById("multi-result");
+    out.innerHTML = "";
+    const linea = (ok, texto) => out.appendChild(el("div", {style:"margin-bottom:4px;" + (ok ? "" : "color:var(--rust);font-weight:600;")}, [document.createTextNode((ok ? "✓ " : "✗ ") + texto)]));
+    btn.disabled = true;
+    const original = btn.textContent;
+    let buenos = 0;
+    try{
+      for(let i = 0; i < lista.length; i++){
+        const cb = lista[i];
+        const slug = multi.assign[cb.key];
+        const idx = app.coursesIndex.find(c => c.slug === slug);
+        const nombre = idx ? idx.displayName : slug;
+        btn.textContent = "Cargando " + (i + 1) + " de " + lista.length + ": " + nombre + "...";
+        try{
+          // La asignación se recuerda para las próximas veces.
+          await courseDoc(slug).set({moodleCurso: cb.curso, moodleGrupo: cb.grupo}, {merge: true});
+          if(idx){ idx.moodleCurso = cb.curso; idx.moodleGrupo = cb.grupo; }
+          await loadCourse(slug);
+          if(app.slug !== slug || !app.masterReady){ linea(false, nombre + ": no se pudo abrir el curso."); continue; }
+          if(!esSoloPlataforma(app.meta) && !app.meta.lastSantanderUpload){
+            linea(false, nombre + ": primero carga su base de Santander (sin ella todos saldrían como «en plataforma, no en Santander»).");
+            continue;
+          }
+          const std = buildStd("plataforma", "", {headers: multi.headers, rows: cb.rows});
+          if(std.errors.length){ linea(false, nombre + ": " + std.errors[0]); continue; }
+          const r = await aplicarPlataforma(std, multi.fileName, {pruebaSet: new Set(app.meta.pruebaKeys || [])});
+          if(!r){ linea(false, nombre + ": no se guardó (cancelado o con error)."); continue; }
+          refrescarTodo();
+          buenos++;
+          linea(true, nombre + ": " + r.resumen);
+        }catch(err){
+          console.error(err);
+          linea(false, nombre + ": " + (err && err.message ? err.message : err));
+        }
+      }
+    }finally{
+      btn.textContent = original;
+      btn.disabled = false;
+      setSaveStatus("");
+      const sin = cursosAsignables().filter(c => !lista.some(cb => multi.assign[cb.key] === c.slug));
+      if(sin.length) out.appendChild(el("div", {style:"margin-top:8px;color:var(--ink-soft);"}, [document.createTextNode("Sin tocar (no vienen en este reporte): " + sin.map(c => c.displayName).join(", ") + ".")]));
+      alert("Listo: " + buenos + " de " + lista.length + " curso(s) actualizados. Revisa el detalle en la ventana.");
+    }
+  });
 
   // ---------- Add on: comparte la lista de Santander del curso ----------
   document.getElementById("btn-process-addon").addEventListener("click", () => procesar("addon", "Cruzar con el roster", async () => {
@@ -3248,7 +3502,6 @@ const db = firebase.firestore();
 
     const porCorreo = new Map(std.rows.map(s => [s.email, s]));
     const encontrados = new Set();
-    const genExtra = std.genValor ? {"Generación": std.genValor} : {};
     const master = app.master.map(r => {
       const rec = Object.assign({}, r);
       const s = porCorreo.get(normalize(r.email));
@@ -3256,7 +3509,7 @@ const db = firebase.firestore();
         encontrados.add(s.email);
         rec.addOnEstado = "En plataforma";
         rec.addOnProgreso = s.avance || 0;
-        rec.addOnExtra = genExtra;
+        rec.addOnExtra = extrasPlataforma(std, s);
         rec.addOnUltimaActualizacion = today;
       }else{
         delete rec.addOnEstado; delete rec.addOnProgreso; delete rec.addOnExtra; delete rec.addOnUltimaActualizacion;
