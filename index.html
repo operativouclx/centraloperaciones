@@ -3225,12 +3225,35 @@ const db = firebase.firestore();
     // archivo; quien no viene queda en "Falta registrar" con 0%.
     const porCorreo = new Map(std.rows.map(s => [s.email, s]));
     const encontrados = new Set();
-    const master = app.master.map(rec => {
+    const cruzados = new Set();
+    const conPlataforma = (rec, s, porNombre) => {
+      const ex = extrasPlataforma(std, s);
+      if(porNombre) ex["Correo en plataforma"] = s.emailRaw;
+      return Object.assign({}, rec, {plataformaExtra: ex, estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
+    };
+    // 1) Por correo.
+    let master = app.master.map(rec => {
       const s = porCorreo.get(normalize(rec.email));
-      if(s){
-        encontrados.add(s.email);
-        return Object.assign({}, rec, {plataformaExtra: extrasPlataforma(std, s), estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
-      }
+      if(!s) return rec;
+      encontrados.add(s.email); cruzados.add(rec._key);
+      return conPlataforma(rec, s, false);
+    });
+    // 2) Respaldo por nombre completo para quien se registró con otro correo
+    // en la plataforma: solo cuando ese nombre aparece exactamente una vez
+    // entre los que quedaron sin cruzar de la base y una vez entre los del
+    // archivo. Queda anotado en "Correo en plataforma".
+    const claveNombre = n => { const t = normalize(n); return t.split(" ").filter(Boolean).length >= 2 ? t : ""; };
+    const baseNom = new Map(), archNom = new Map();
+    master.forEach(rec => { if(cruzados.has(rec._key)) return; const k = claveNombre(rec.nombre); if(k) baseNom.set(k, (baseNom.get(k) || []).concat(rec)); });
+    std.rows.forEach(sr => { if(encontrados.has(sr.email)) return; const k = claveNombre(sr.nombre); if(k) archNom.set(k, (archNom.get(k) || []).concat(sr)); });
+    const porNombre = new Map();
+    baseNom.forEach((recs, k) => {
+      const ss = archNom.get(k);
+      if(ss && recs.length === 1 && ss.length === 1){ porNombre.set(recs[0]._key, ss[0]); encontrados.add(ss[0].email); }
+    });
+    master = master.map(rec => {
+      if(cruzados.has(rec._key)) return rec;
+      if(porNombre.has(rec._key)) return conPlataforma(rec, porNombre.get(rec._key), true);
       return Object.assign({}, rec, {plataformaExtra: {}, estado: "Falta registrar", progreso: 0});
     });
     const revisar = std.rows.filter(s => !encontrados.has(s.email))
@@ -3248,7 +3271,8 @@ const db = firebase.firestore();
     const altaCount = master.filter(r => r.estado !== "En plataforma").length;
     const logEntry = {
       date: nowISO(), tipo: "Plataforma", archivo: fileName,
-      resumen: (master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander" + resumenOmitidas(std),
+      resumen: (master.length - altaCount) + " coinciden, " + altaCount + " faltan por dar de alta, " + revisar.length + " en plataforma sin Santander" +
+        (porNombre.size ? ", " + porNombre.size + " cruzados por nombre (correo distinto)" : "") + resumenOmitidas(std),
       por: quien()
     };
     const ok = await aplicarCarga({master, meta, lastRun: {revisar, pruebas: app.lastRun.pruebas || [], alta: []}}, logEntry, []);
@@ -3296,7 +3320,12 @@ const db = firebase.firestore();
     const corto = prompt("Nombre corto del curso en Moodle (columna course1). Déjalo vacío si no quieres matricularlos en el archivo:", app.meta.moodleCurso || "");
     if(corto === null) return;
     const cursoCorto = corto.trim();
-    const grupo = (app.meta.moodleGrupo || "").trim();
+    let grupo = "";
+    if(cursoCorto){
+      const g = prompt("Grupo de Moodle al que se agregan (columna group1). Déjalo vacío si no quieres asignar grupo. El grupo debe existir ya en el curso:", app.meta.moodleGrupo || "");
+      if(g === null) return;
+      grupo = g.trim();
+    }
 
     let sinApellido = 0;
     const cab = ["username", "password", "firstname", "lastname", "email"];
@@ -3325,10 +3354,10 @@ const db = firebase.firestore();
     // tocar updatedAt, para no chocar con las cargas).
     try{
       const datos = {passwordInicial: password};
-      if(cursoCorto) datos.moodleCurso = cursoCorto;
+      if(cursoCorto){ datos.moodleCurso = cursoCorto; datos.moodleGrupo = grupo; }
       await courseDoc(app.slug).set(datos, {merge: true});
       app.meta.passwordInicial = password;
-      if(cursoCorto) app.meta.moodleCurso = cursoCorto;
+      if(cursoCorto){ app.meta.moodleCurso = cursoCorto; app.meta.moodleGrupo = grupo; }
       const idx = app.coursesIndex.find(c => c.slug === app.slug);
       if(idx && cursoCorto) idx.moodleCurso = cursoCorto;
       setSaveStatus("Contraseña guardada para este curso.");
