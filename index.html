@@ -1154,21 +1154,29 @@ const db = firebase.firestore();
     if(frase === null) return;
     if(frase.trim() !== "VACIAR TODO"){ alert("No coincide — no se borró nada."); return; }
     let hechos = 0;
+    const wipeBtn = document.getElementById("btn-wipe-portal");
+    const wipeTexto = wipeBtn.textContent;
+    wipeBtn.disabled = true;
     try{
       for(const c of cursos){
-        setSaveStatus("Vaciando el portal... " + hechos + " de " + cursos.length + " (" + c.displayName + ")");
+        wipeBtn.textContent = "Borrando " + (hechos + 1) + " de " + cursos.length + "...";
         await deleteCourseRemote(c.slug);
         hechos++;
       }
-      app.coursesIndex = [];
+      app.coursesIndex = await fetchCoursesIndex();
       closeOpenCourse();
       renderCourseSelect();
       renderCourseTabs();
-      setSaveStatus("Portal vacío: " + hechos + " curso(s) borrado(s).");
+      alert(app.coursesIndex.length
+        ? "Se borraron " + hechos + " curso(s), pero Firestore todavía devuelve " + app.coursesIndex.length + ". Recarga la página (Ctrl+F5) y revisa."
+        : "Portal vacío: " + hechos + " curso(s) borrado(s).");
     }catch(err){
       console.error("No se pudo vaciar el portal:", err);
-      alert("Se borraron " + hechos + " de " + cursos.length + " curso(s) y luego falló: " + (err && err.message ? err.message : err) + "\n\nRecarga la página y vuelve a intentarlo.");
-      setSaveStatus("");
+      alert("Se borraron " + hechos + " de " + cursos.length + " curso(s) y luego falló: " + (err && err.message ? err.message : err) +
+        "\n\nSi dice \"permissions\", las reglas de Firestore no dejan borrar con tu cuenta.");
+    }finally{
+      wipeBtn.disabled = false;
+      wipeBtn.textContent = wipeTexto;
     }
   });
 
