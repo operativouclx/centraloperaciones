@@ -452,6 +452,7 @@
       <div class="course-tabs-row">
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-cruce" type="button" title="Personas que aparecen en más de un curso">Personas en varios cursos</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -498,6 +499,7 @@
         <button class="tab active" data-tab="madre">Tabla madre <span class="badge" id="badge-madre">0</span></button>
         <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
         <button class="tab" data-tab="revisar">En plataforma, no en Santander <span class="badge" id="badge-revisar">0</span></button>
+        <button class="tab hidden" data-tab="becas">Becas sin correo <span class="badge" id="badge-becas">0</span></button>
         <button class="tab hidden" data-tab="nuevos">Nuevos en la última carga <span class="badge" id="badge-nuevos">0</span></button>
         <button class="tab hidden" data-tab="pruebas">No estudiantes <span class="badge" id="badge-pruebas">0</span></button>
         <button class="tab hidden" data-tab="manual">Captura manual</button>
@@ -540,6 +542,15 @@
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="revisar">
           <button class="btn btn-ghost btn-small" data-download="revisar">Descargar Excel</button>
+        </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="tab-panel" data-panel="becas">
+        <div class="panel-note amber">Becas del archivo de Santander que no traen correo. Cuentan en los totales de Santander, pero no entran a la tabla madre porque no se pueden cruzar con plataforma ni dar de alta sin correo. Si consigues su correo, agrégalo en el archivo de Santander y vuelve a cargarlo.</div>
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar por nombre..." data-search="becas">
+          <button class="btn btn-ghost btn-small" data-download="becas">Descargar Excel</button>
         </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
@@ -689,6 +700,22 @@
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: personas en varios cursos ======================= -->
+  <div class="modal-overlay hidden" id="modal-cruce">
+    <div class="modal-box" style="max-width:960px;">
+      <button class="modal-close" type="button" data-close-modal="modal-cruce">&times;</button>
+      <h3 class="modal-title">Personas en varios cursos</h3>
+      <div class="panel-note teal">Busca en la tabla madre de todos los cursos a quien aparece en más de uno. Se cruza por correo (el original, el corregido a mano o el de plataforma). Lee toda la base, así que puede tardar unos segundos.</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;">
+        <button class="btn btn-primary btn-small" id="btn-run-cruce" type="button">Buscar en todos los cursos</button>
+        <input class="search-box" id="cruce-search" placeholder="Filtrar por nombre, correo o curso..." style="flex:1;min-width:200px;">
+        <button class="btn btn-ghost btn-small" id="btn-cruce-excel" type="button">Descargar Excel</button>
+      </div>
+      <div class="status-line" id="cruce-status"></div>
+      <div class="table-scroll" style="max-height:55vh;"><table id="cruce-table"><thead></thead><tbody></tbody></table></div>
     </div>
   </div>
 
@@ -2313,6 +2340,7 @@ const db = firebase.firestore();
       madre: !esManual,
       duplicados: !esManual,
       alta: !esManual && !esAlianza,
+      becas: !esManual && !esAlianza,
       revisar: !esManual && !esAlianza,
       nuevos: !esManual && esAlianza,
       pruebas: !esManual && esAlianza,
@@ -2535,6 +2563,7 @@ const db = firebase.firestore();
     document.getElementById("badge-madre").textContent = stats.total;
     document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
+    document.getElementById("badge-becas").textContent = (app.meta && (app.meta.becasSinCorreoTotal || (app.meta.becasSinCorreo || []).length)) || 0;
     document.getElementById("badge-nuevos").textContent = courseVisualOpts().nuevos;
     document.getElementById("badge-pruebas").textContent = app.lastRun.pruebas.length;
     renderSideTable("pruebas", app.lastRun.pruebas);
@@ -2745,7 +2774,7 @@ const db = firebase.firestore();
       const nombres = cols.nombres ? txt(r[cols.nombres]) : "";
       const apellidos = cols.apellidos ? txt(r[cols.apellidos]) : "";
       if(!/^[^@\s]+@[^@\s]+$/.test(email)){
-        std.sinCorreo.push({Fila: fila, Nombres: nombres, Apellidos: apellidos, Correo: emailRaw});
+        std.sinCorreo.push({Fila: fila, Nombres: nombres, Apellidos: apellidos, Correo: emailRaw, Estatus: cols.estatus ? txt(r[cols.estatus]) : ""});
         return;
       }
       if(esCuentaExcluida(email)){
@@ -2778,7 +2807,11 @@ const db = firebase.firestore();
     });
     std.rows = Array.from(byEmail.values());
 
-    if(std.sinCorreo.length) std.warnings.push(std.sinCorreo.length + " fila(s) sin correo válido: se omiten.");
+    if(std.sinCorreo.length){
+      std.warnings.push(kind === "santander"
+        ? std.sinCorreo.length + " fila(s) sin correo (becas asignadas): cuentan en los totales de Santander y quedan en la pestaña «Becas sin correo»."
+        : std.sinCorreo.length + " fila(s) sin correo válido: se omiten.");
+    }
     if(std.excluidos.length) std.warnings.push(std.excluidos.length + " cuenta(s) de prueba o del equipo (" + DOMINIOS_EXCLUIDOS.join(", ") + "): se excluyen y no cuentan como estudiantes.");
     if(std.repetidos.length) std.warnings.push(std.repetidos.length + " fila(s) con correo repetido: se unifican en un solo registro (se conserva el mayor avance).");
     if(sinAvance) std.warnings.push(sinAvance + " fila(s) con Avance vacío o ilegible: se toman como 0%.");
@@ -2867,7 +2900,8 @@ const db = firebase.firestore();
 
     std.errors.forEach(t => add("✗ " + t, "color:var(--rust);font-weight:700;margin-top:8px;"));
     if(!std.errors.length){
-      add(std.total + " fila(s) en el archivo → " + std.rows.length + " persona(s) válida(s).", "font-weight:700;margin-top:8px;");
+      add(std.total + " fila(s) en el archivo → " + std.rows.length + " persona(s) válida(s)" +
+        (kind === "santander" && std.sinCorreo.length ? " + " + std.sinCorreo.length + " beca(s) sin correo" : "") + ".", "font-weight:700;margin-top:8px;");
       std.warnings.forEach(t => add("⚠ " + t, "color:#8a5a00;margin-top:2px;"));
       efectoCarga(kind, std).forEach(t => add(t, "margin-top:8px;font-weight:600;"));
       add("Vista previa", "font-weight:700;margin-top:8px;");
@@ -3082,9 +3116,9 @@ const db = firebase.firestore();
   }
 
   const quien = () => (auth.currentUser && auth.currentUser.email) || "";
-  function resumenOmitidas(std){
+  function resumenOmitidas(std, esSantander){
     const partes = [];
-    if(std.sinCorreo.length) partes.push(std.sinCorreo.length + " sin correo válido");
+    if(std.sinCorreo.length) partes.push(std.sinCorreo.length + (esSantander ? " becas sin correo (contadas aparte)" : " sin correo válido"));
     if(std.repetidos.length) partes.push(std.repetidos.length + " con correo repetido");
     if(std.excluidos.length) partes.push(std.excluidos.length + " cuentas de prueba excluidas");
     return partes.length ? " (archivo: " + partes.join(", ") + ")" : "";
@@ -3171,7 +3205,12 @@ const db = firebase.firestore();
       santanderMapping: {generacionValor: std.genValor},
       lastSantanderUpload: today,
       lastSantanderFile: pend.fileName,
-      santanderStatusSnapshot: computeStatusSnapshotFromRows(std.rows.map(s => ({"Estatus": s.estatusRaw})), "Estatus"),
+      // Los totales de Santander cuentan TODAS las filas del archivo, también
+      // las becas sin correo (que no entran a la tabla madre).
+      santanderStatusSnapshot: computeStatusSnapshotFromRows(
+        std.rows.map(s => ({"Estatus": s.estatusRaw})).concat(std.sinCorreo.map(r => ({"Estatus": r.Estatus}))), "Estatus"),
+      becasSinCorreo: capForStorage(std.sinCorreo),
+      becasSinCorreoTotal: std.sinCorreo.length,
       updatedAt: nowISO(),
       stats: computeMasterStats(master),
       // La lista de "en plataforma, no en Santander" ya no aplica: se
@@ -3181,7 +3220,7 @@ const db = firebase.firestore();
     const logEntry = {
       date: nowISO(), tipo: "Santander", archivo: pend.fileName,
       resumen: nuevos + " nuevos, " + cambios + " con cambios, " + (std.rows.length - nuevos - cambios) + " sin cambios, " +
-        removed.length + " quitados" + resumenOmitidas(std),
+        removed.length + " quitados" + resumenOmitidas(std, true),
       por: quien()
     };
     const ok = await aplicarCarga({master, meta, lastRun: {revisar: [], pruebas: app.lastRun.pruebas || [], alta: []}}, logEntry, removed.map(r => r._key));
@@ -3453,6 +3492,106 @@ const db = firebase.firestore();
       console.error("No se pudo guardar el correo:", err);
       if(previo.emailManual === undefined) delete rec.emailManual; else rec.emailManual = previo.emailManual;
       alert("No se pudo guardar el correo: " + (err && err.message ? err.message : err));
+    }
+  });
+
+  // ---------- personas que están en varios cursos ----------
+  // Lee la tabla madre de todos los cursos y agrupa por correo (cualquiera de
+  // los que tenga la persona: el original, el corregido o el de plataforma).
+  const cruce = {rows: []};
+  const CRUCE_LIMITE = 500;
+
+  function pintarCruce(){
+    const q = normalize(document.getElementById("cruce-search").value);
+    const filtradas = q ? cruce.rows.filter(r => Object.keys(r).some(k => normalize(r[k]).includes(q))) : cruce.rows;
+    const thead = document.querySelector("#cruce-table thead");
+    const tbody = document.querySelector("#cruce-table tbody");
+    thead.innerHTML = ""; tbody.innerHTML = "";
+    if(!cruce.rows.length) return;
+    const cols = Object.keys(cruce.rows[0]);
+    const hr = el("tr");
+    cols.forEach(c => hr.appendChild(el("th", {}, [document.createTextNode(c)])));
+    thead.appendChild(hr);
+    filtradas.slice(0, CRUCE_LIMITE).forEach(r => {
+      const tr = el("tr");
+      cols.forEach(c => tr.appendChild(el("td", {}, [document.createTextNode(r[c] === null || r[c] === undefined ? "" : String(r[c]))])));
+      tbody.appendChild(tr);
+    });
+    if(filtradas.length > CRUCE_LIMITE){
+      const tr = el("tr");
+      const td = el("td", {colspan: String(cols.length)}, [document.createTextNode("Mostrando " + CRUCE_LIMITE + " de " + filtradas.length + ". Usa el buscador o descarga el Excel para verlas todas.")]);
+      td.style.color = "var(--ink-soft)"; td.style.padding = "10px";
+      tr.appendChild(td); tbody.appendChild(tr);
+    }
+  }
+
+  document.getElementById("btn-open-cruce").addEventListener("click", () => openModal("modal-cruce"));
+  document.getElementById("cruce-search").addEventListener("input", pintarCruce);
+  document.getElementById("btn-cruce-excel").addEventListener("click", () => {
+    if(!cruce.rows.length) return;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cruce.rows), "Varios cursos");
+    XLSX.writeFile(wb, "personas-en-varios-cursos-" + todayISO() + ".xlsx");
+  });
+
+  document.getElementById("btn-run-cruce").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-run-cruce");
+    const estado = document.getElementById("cruce-status");
+    const cursos = app.coursesIndex.filter(c => !c.archived && !esCapturaManual(c))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    if(!cursos.length){ estado.textContent = "No hay cursos con tabla madre."; return; }
+    const aprox = cursos.reduce((n, c) => n + ((c.stats && c.stats.total) || 0), 0);
+    if(!confirm("Se va a leer la base de " + cursos.length + " curso(s) (unos " + aprox.toLocaleString("es-MX") + " registros) para buscar personas en más de un curso.\n\n¿Continuar?")) return;
+    btn.disabled = true;
+    cruce.rows = []; pintarCruce();
+    try{
+      const entradas = [];
+      for(let i = 0; i < cursos.length; i++){
+        const c = cursos[i];
+        estado.textContent = "Leyendo curso " + (i + 1) + " de " + cursos.length + ": " + c.displayName + "...";
+        const snap = await masterColl(c.slug).get();
+        snap.docs.forEach(d => {
+          const rec = d.data();
+          const np = nameParts(rec);
+          entradas.push({
+            curso: c.displayName, slug: c.slug, emails: emailsDe(rec), correo: emailDe(rec),
+            nombres: np.nombres || "", apellidos: np.apellidos || "",
+            avance: typeof rec.progreso === "number" ? rec.progreso : null, enPlat: rec.estado === "En plataforma"
+          });
+        });
+      }
+      // Se unen las entradas que comparten cualquier correo.
+      const padre = entradas.map((_, i) => i);
+      const raiz = i => { while(padre[i] !== i){ padre[i] = padre[padre[i]]; i = padre[i]; } return i; };
+      const porCorreo = new Map();
+      entradas.forEach((e, i) => e.emails.forEach(m => {
+        if(porCorreo.has(m)){ const a = raiz(porCorreo.get(m)), b = raiz(i); if(a !== b) padre[b] = a; }
+        else porCorreo.set(m, i);
+      }));
+      const grupos = new Map();
+      entradas.forEach((e, i) => { const r = raiz(i); if(!grupos.has(r)) grupos.set(r, []); grupos.get(r).push(e); });
+      const filas = [];
+      grupos.forEach(lista => {
+        const slugs = new Set(lista.map(e => e.slug));
+        if(slugs.size < 2) return;
+        const base = lista.slice().sort((a, b) => (b.nombres + b.apellidos).length - (a.nombres + a.apellidos).length)[0];
+        const correos = Array.from(new Set(lista.map(e => e.correo).filter(Boolean)));
+        const detalle = lista.slice().sort((a, b) => a.curso.localeCompare(b.curso)).map(e =>
+          e.curso + " (" + (e.enPlat && e.avance !== null ? e.avance + "%" : "sin plataforma") + ")");
+        filas.push({
+          "Nombres": base.nombres, "Apellidos": base.apellidos, "Correo": correos.join(" / "),
+          "Cursos": slugs.size, "Detalle": detalle.join(" · ")
+        });
+      });
+      filas.sort((a, b) => b["Cursos"] - a["Cursos"] || a["Apellidos"].localeCompare(b["Apellidos"]));
+      cruce.rows = filas;
+      estado.textContent = filas.length + " persona(s) en 2 o más cursos, de " + entradas.length.toLocaleString("es-MX") + " registros en " + cursos.length + " curso(s).";
+      pintarCruce();
+    }catch(err){
+      console.error(err);
+      estado.textContent = "No se pudo leer: " + (err && err.message ? err.message : err);
+    }finally{
+      btn.disabled = false;
     }
   });
 
@@ -4203,6 +4342,8 @@ const db = firebase.firestore();
     document.getElementById("badge-nuevos").textContent = nuevosUltimaCarga().length;
     document.getElementById("badge-duplicados").textContent = computeDuplicates().groups.reduce((n, g) => n + g.length, 0);
     renderSideTable("addon", app.master.map(flattenAddOnRow));
+    renderSideTable("becas", (app.meta && app.meta.becasSinCorreo) || []);
+    document.getElementById("badge-becas").textContent = (app.meta && (app.meta.becasSinCorreoTotal || (app.meta.becasSinCorreo || []).length)) || 0;
   }
 
   function renderSideTable(key, rows){
@@ -5032,6 +5173,7 @@ const db = firebase.firestore();
     if(key === "addon") return app.master.map(flattenAddOnRow);
     if(key === "nuevos") return nuevosUltimaCarga().map(flattenMasterRow);
     if(key === "pruebas") return app.lastRun.pruebas || [];
+    if(key === "becas") return (app.meta && app.meta.becasSinCorreo) || [];
     if(key === "nps") return npsRows();
     return (app.lastRun[key] || []).map(splitNombreColumn);
   }
@@ -5093,7 +5235,7 @@ const db = firebase.firestore();
       const rows = currentRowsFor(key);
       if(!rows.length) return;
       const curso = (app.meta ? app.meta.displayName : "curso").trim().replace(/\s+/g, "-");
-      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", duplicados:"duplicados", pruebas:"no-estudiantes", nps:"nps-comentarios"};
+      const names = {madre:"tabla-madre", alta:"pendientes-de-alta", revisar:"en-plataforma-sin-santander", addon:"add-on", nuevos:"nuevos-ultima-carga", duplicados:"duplicados", pruebas:"no-estudiantes", becas:"becas-sin-correo", nps:"nps-comentarios"};
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Datos");
