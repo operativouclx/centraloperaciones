@@ -472,6 +472,11 @@
             <button class="btn btn-primary btn-small" id="btn-open-nps" type="button" title="Sube la encuesta de satisfacción: calcula el NPS y el promedio de estrellas por pregunta.">Cargar NPS</button>
             <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
           </div>
+          <div class="course-head-actions" style="margin-top:6px;">
+            <button class="btn btn-ghost btn-small" data-vista="dashboard" type="button">Dashboard</button>
+            <button class="btn btn-ghost btn-small" data-vista="nps" type="button">Ver NPS</button>
+            <button class="btn btn-ghost btn-small" data-vista="historial" type="button">Historial de cargas</button>
+          </div>
           <div class="save-status" id="save-status"></div>
         </div>
         <div id="course-family-meta-panel"></div>
@@ -504,10 +509,9 @@
         <button class="tab hidden" data-tab="pruebas">No estudiantes <span class="badge" id="badge-pruebas">0</span></button>
         <button class="tab hidden" data-tab="manual">Captura manual</button>
         <button class="tab" data-tab="duplicados">Duplicados <span class="badge" id="badge-duplicados">0</span></button>
-        <button class="tab" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
-        <button class="tab" data-tab="addon">Add on <span class="badge" id="badge-addon">0</span></button>
-        <button class="tab" data-tab="nps">NPS <span class="badge" id="badge-nps">—</span></button>
-        <button class="tab" data-tab="dashboard">Dashboard</button>
+        <button class="tab hidden" data-tab="historial">Historial <span class="badge" id="badge-historial">0</span></button>
+        <button class="tab hidden" data-tab="nps">NPS <span class="badge" id="badge-nps">—</span></button>
+        <button class="tab hidden" data-tab="dashboard">Dashboard</button>
       </div>
 
       <div class="tab-panel active" data-panel="madre">
@@ -596,15 +600,6 @@
       </div>
 
       <div class="tab-panel" data-panel="historial">
-        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
-      </div>
-
-      <div class="tab-panel" data-panel="addon">
-        <div class="table-toolbar">
-          <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="addon">
-          <button class="btn btn-primary btn-small" id="btn-open-addon" type="button">Actualizar plataforma add on</button>
-          <button class="btn btn-ghost btn-small" data-download="addon">Descargar Excel</button>
-        </div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
 
@@ -719,27 +714,12 @@
     </div>
   </div>
 
-  <!-- ======================= MODAL: cargar plataforma add on ======================= -->
-  <div class="modal-overlay hidden" id="modal-addon">
-    <div class="modal-box">
-      <button class="modal-close" type="button" data-close-modal="modal-addon">&times;</button>
-      <h3 class="modal-title">Actualizar plataforma — Add on</h3>
-      <div class="panel-note teal">Mismas columnas de siempre (obligatorias aquí: Correo y Avance). Se cruza por correo con la lista del curso. <button type="button" class="btn btn-ghost btn-small" data-plantilla>Descargar plantilla</button></div>
-      <div class="panel-head">
-        <h3>Archivo de plataforma add on</h3>
-        <span class="file-tag hidden" id="tag-addon"></span>
-      </div>
-      <div class="drop" id="drop-addon">
-        <div class="drop-icon">&#8593;</div>
-        <div class="drop-main">Arrastra el archivo o haz clic</div>
-        <div class="drop-sub">.xlsx o .csv</div>
-      </div>
-      <input type="file" id="file-addon" accept=".xlsx,.xls,.csv">
-      <div id="mapping-addon" class="hidden" style="margin-top:16px;"></div>
-      <div class="cross-cta hidden" id="cta-addon">
-        <button class="btn btn-primary" id="btn-process-addon" disabled>Cruzar con el roster</button>
-        <div class="status-line" id="addon-hint">Configura las columnas para continuar.</div>
-      </div>
+  <!-- ======================= MODAL: vistas del curso (dashboard, NPS, historial) ======================= -->
+  <div class="modal-overlay hidden" id="modal-vista">
+    <div class="modal-box" style="max-width:1100px;">
+      <button class="modal-close" type="button" data-close-modal="modal-vista">&times;</button>
+      <h3 class="modal-title" id="vista-title"></h3>
+      <div id="vista-body"></div>
     </div>
   </div>
 
@@ -1077,7 +1057,36 @@ const db = firebase.firestore();
 
   // ---------- modales ----------
   function openModal(id){ document.getElementById(id).classList.remove("hidden"); }
-  function closeModal(id){ document.getElementById(id).classList.add("hidden"); }
+  function closeModal(id){
+    if(id === "modal-vista") devolverVista();
+    document.getElementById(id).classList.add("hidden");
+  }
+
+  // Dashboard, NPS e Historial no son segmentos de la tabla madre: se abren
+  // desde botones del encabezado del curso. El panel se mueve a una ventana
+  // mientras está abierta y regresa a su lugar al cerrarla, así todo lo que
+  // ya lo dibuja sigue funcionando igual.
+  const VISTAS = {dashboard: "Dashboard del curso", nps: "NPS", historial: "Historial de cargas"};
+  const vistaAbierta = {panel: null, padre: null, siguiente: null};
+  function devolverVista(){
+    if(!vistaAbierta.panel) return;
+    vistaAbierta.panel.classList.remove("active");
+    vistaAbierta.padre.insertBefore(vistaAbierta.panel, vistaAbierta.siguiente);
+    vistaAbierta.panel = null;
+  }
+  function abrirVista(key){
+    const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+    if(!panel || !VISTAS[key]) return;
+    devolverVista();
+    vistaAbierta.panel = panel;
+    vistaAbierta.padre = panel.parentNode;
+    vistaAbierta.siguiente = panel.nextSibling;
+    document.getElementById("vista-body").appendChild(panel);
+    panel.classList.add("active");
+    document.getElementById("vista-title").textContent = VISTAS[key] + (app.meta ? " — " + (app.meta.displayName || "") : "");
+    openModal("modal-vista");
+  }
+  document.querySelectorAll("[data-vista]").forEach(b => b.addEventListener("click", () => abrirVista(b.dataset.vista)));
 
   document.getElementById("btn-open-new-course").addEventListener("click", () => {
     document.getElementById("course-new-name").value = "";
@@ -1618,6 +1627,7 @@ const db = firebase.firestore();
         displayName: data.displayName || d.id,
         updatedAt: data.updatedAt,
         stats: data.stats || emptyStats(),
+        inscritos: getInscritosTotalFor(Object.assign({slug: d.id, displayName: data.displayName || d.id}, data)),
         tipo: normalizeTipo(data.tipo),
         cliente: data.cliente || inferClienteLegacy(data.displayName || d.id),
         anio: data.anio || inferAnioLegacy(d.id, data.displayName),
@@ -1972,10 +1982,23 @@ const db = firebase.firestore();
 
   // Suma el "Total Inscritos" de las ediciones del grupo en ESE año, para
   // comparar contra la meta el avance de todo el grupo ese año.
+  // Inscritos de un curso: el total de Santander (incluye becas sin correo);
+  // si no lo hay (Alianza, solo plataforma), el total de la tabla madre.
+  function inscritosCurso(c){
+    if(typeof c.inscritos === "number" && c.inscritos > 0) return c.inscritos;
+    return (c.stats && c.stats.total) || 0;
+  }
+  // Mantiene al día el índice del curso abierto (lo usan la meta y el dashboard).
+  function sincronizarIndiceActual(stats){
+    const idx = app.coursesIndex.find(c => c.slug === app.slug);
+    if(!idx || !app.meta) return;
+    idx.stats = stats;
+    idx.inscritos = getInscritosTotalFor(app.meta);
+  }
   function familiaInscritosTotal(familia, cliente, anio){
-    if(!familia) return (app.meta.stats && app.meta.stats.total) || 0;
+    if(!familia) return inscritosCurso({inscritos: getInscritosTotalFor(app.meta), stats: app.meta.stats});
     return cursosDelGrupo(familia, cliente, anio)
-      .reduce((sum, c) => sum + ((c.stats && c.stats.total) || 0), 0);
+      .reduce((sum, c) => sum + inscritosCurso(c), 0);
   }
 
   // Guarda la meta de convocatoria para el grupo en ese año — se usa
@@ -2058,7 +2081,7 @@ const db = firebase.firestore();
       const totalInscritos = familiaInscritosTotal(familia, cliente, anio);
       const list = el("div", {style:"display:flex;flex-direction:column;gap:3px;"});
       grupo.slice().sort((a,b)=>a.displayName.localeCompare(b.displayName)).forEach(c => {
-        const inscritosC = (c.stats && c.stats.total) || 0;
+        const inscritosC = inscritosCurso(c);
         const pctC = Math.round((inscritosC/metaVal)*100);
         const row = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:11.5px;" +
           (c.slug === app.slug ? "font-weight:700;color:var(--teal-dark);" : "color:var(--ink-soft);")});
@@ -2345,12 +2368,11 @@ const db = firebase.firestore();
       nuevos: !esManual && esAlianza,
       pruebas: !esManual && esAlianza,
       manual: esManual,
-      addon: !esManual
     });
 
     document.getElementById("course-dependent").classList.remove("hidden");
 
-    ["santander","plataforma","listafinal","addon","nps"].forEach(kind => {
+    ["santander","plataforma","listafinal","nps"].forEach(kind => {
       document.getElementById("mapping-" + kind).classList.add("hidden");
       document.getElementById("mapping-" + kind).innerHTML = "";
       document.getElementById("cta-" + kind).classList.add("hidden");
@@ -2560,6 +2582,8 @@ const db = firebase.firestore();
 
   function renderStatsFromMeta(){
     const stats = esCapturaManual(app.meta) ? statsFromManual(app.meta) : ((app.meta && app.meta.stats) || emptyStats());
+    sincronizarIndiceActual(stats);
+    renderFamilyMetaPanel();
     document.getElementById("badge-madre").textContent = stats.total;
     document.getElementById("badge-alta").textContent = stats.alta;
     document.getElementById("badge-revisar").textContent = app.lastRun.revisar.length;
@@ -2568,7 +2592,6 @@ const db = firebase.firestore();
     document.getElementById("badge-pruebas").textContent = app.lastRun.pruebas.length;
     renderSideTable("pruebas", app.lastRun.pruebas);
     document.getElementById("badge-historial").textContent = "…";
-    document.getElementById("badge-addon").textContent = "…";
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getInscritosTotalFor(app.meta)), courseVisualOpts());
     renderDashboard(stats);
   }
@@ -3025,7 +3048,7 @@ const db = firebase.firestore();
   }
 
   function checkReady(){
-    ["santander","plataforma","listafinal","addon","nps"].forEach(kind => {
+    ["santander","plataforma","listafinal","nps"].forEach(kind => {
       const mappingReady = isReady(kind);
       // El NPS no toca la tabla madre: no hay que esperar a que cargue.
       const ready = mappingReady && (app.masterReady || kind === "nps");
@@ -3042,10 +3065,8 @@ const db = firebase.firestore();
   wireUpload("santander");
   wireUpload("plataforma");
   wireUpload("listafinal");
-  wireUpload("addon");
   wireUpload("nps");
 
-  document.getElementById("btn-open-addon").addEventListener("click", () => openModal("modal-addon"));
 
   // ================= PROCESAR CARGAS =================
   // Regla general: cada archivo REEMPLAZA lo que había. Santander (o la
@@ -3594,47 +3615,6 @@ const db = firebase.firestore();
       btn.disabled = false;
     }
   });
-
-  // ---------- Add on: comparte la lista de Santander del curso ----------
-  document.getElementById("btn-process-addon").addEventListener("click", () => procesar("addon", "Cruzar con el roster", async () => {
-    const pend = app.pending.addon;
-    const std = pend.std;
-    const today = todayISO();
-    setSaveStatus("Cruzando add on con el roster...");
-
-    const porCorreo = new Map(std.rows.map(s => [s.email, s]));
-    const encontrados = new Set();
-    const master = app.master.map(r => {
-      const rec = Object.assign({}, r);
-      const s = buscarPorCorreos(porCorreo, r, encontrados);
-      if(s){
-        encontrados.add(s.email);
-        rec.addOnEstado = "En plataforma";
-        rec.addOnProgreso = s.avance || 0;
-        rec.addOnExtra = extrasPlataforma(std, s);
-        rec.addOnUltimaActualizacion = today;
-      }else{
-        delete rec.addOnEstado; delete rec.addOnProgreso; delete rec.addOnExtra; delete rec.addOnUltimaActualizacion;
-      }
-      return rec;
-    });
-    const noEncontrados = std.rows.length - encontrados.size;
-    const meta = Object.assign({}, app.meta, {
-      addOnMapping: {generacionValor: std.genValor},
-      lastAddOnUpload: today,
-      lastAddOnFile: pend.fileName,
-      updatedAt: nowISO()
-    });
-    let resumen = encontrados.size + " coinciden con el roster";
-    if(noEncontrados > 0) resumen += ", " + noEncontrados + " fila(s) del archivo no están en la tabla madre (revisa el correo)";
-    resumen += resumenOmitidas(std);
-    const logEntry = {date: nowISO(), tipo: "Add on", archivo: pend.fileName, resumen, por: quien()};
-    const ok = await aplicarCarga({master, meta, lastRun: app.lastRun}, logEntry, []);
-    if(!ok) return;
-    refrescarTodo();
-    document.querySelector('.tab[data-tab="addon"]').click();
-    closeModal("modal-addon");
-  }));
 
   // ---------- Lista final (cursos históricos) ----------
   document.getElementById("btn-process-listafinal").addEventListener("click", () => procesar("listafinal", "Actualizar lista final", async () => {
@@ -4313,6 +4293,8 @@ const db = firebase.firestore();
     app.dupCache = null;
     const stats = esCapturaManual(app.meta) ? statsFromManual(app.meta) : computeMasterStats(app.master);
     app.meta.stats = stats;
+    sincronizarIndiceActual(stats);
+    renderFamilyMetaPanel();
 
     document.getElementById("badge-madre").textContent = stats.total;
     document.getElementById("badge-alta").textContent = esCapturaManual(app.meta) ? stats.alta : altaRecords().length;
@@ -4321,7 +4303,6 @@ const db = firebase.firestore();
     document.getElementById("badge-nuevos").textContent = nuevosUltimaCarga().length;
     document.getElementById("badge-pruebas").textContent = app.lastRun.pruebas.length;
     document.getElementById("badge-historial").textContent = app.log.length;
-    document.getElementById("badge-addon").textContent = app.master.filter(r => r.addOnEstado === "En plataforma").length;
 
     renderCourseVisualInto(document.getElementById("course-progress-summary"), stats, computeDeltas(stats, app.baseline, getInscritosTotalFor(app.meta)), courseVisualOpts());
     renderDashboard(stats);
@@ -4341,7 +4322,6 @@ const db = firebase.firestore();
     document.getElementById("badge-alta").textContent = altaRecords().length;
     document.getElementById("badge-nuevos").textContent = nuevosUltimaCarga().length;
     document.getElementById("badge-duplicados").textContent = computeDuplicates().groups.reduce((n, g) => n + g.length, 0);
-    renderSideTable("addon", app.master.map(flattenAddOnRow));
     renderSideTable("becas", (app.meta && app.meta.becasSinCorreo) || []);
     document.getElementById("badge-becas").textContent = (app.meta && (app.meta.becasSinCorreoTotal || (app.meta.becasSinCorreo || []).length)) || 0;
   }
@@ -5159,6 +5139,8 @@ const db = firebase.firestore();
   // ---------- tabs, search, download ----------
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => {
+      // Dashboard, NPS e Historial se abren en su ventana, no como pestaña.
+      if(VISTAS[tab.dataset.tab]){ abrirVista(tab.dataset.tab); return; }
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
       document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
       tab.classList.add("active");
@@ -5170,7 +5152,6 @@ const db = firebase.firestore();
     if(key === "madre") return app.master.map(flattenMasterRow);
     if(key === "alta") return altaRecords().map(flattenMasterRow);
     if(key === "duplicados") return duplicadosRows();
-    if(key === "addon") return app.master.map(flattenAddOnRow);
     if(key === "nuevos") return nuevosUltimaCarga().map(flattenMasterRow);
     if(key === "pruebas") return app.lastRun.pruebas || [];
     if(key === "becas") return (app.meta && app.meta.becasSinCorreo) || [];
