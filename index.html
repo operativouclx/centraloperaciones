@@ -636,7 +636,7 @@
         <select id="course-new-cliente" class="input-text">
           <option value="soa">Santander Open Academy</option>
           <option value="santander">Santander</option>
-          <option value="alianza">Ceneval</option>
+          <option value="alianza">UCLX</option>
         </select>
       </div>
       <div class="field-row">
@@ -1093,7 +1093,7 @@ const db = firebase.firestore();
     const defaultTipo = document.querySelector('input[name="course-new-tipo"][value="activo"]');
     if(defaultTipo) defaultTipo.checked = true;
     // Arranca con el cliente y año de la pestaña en la que estás, para que
-    // un curso creado desde Ceneval no caiga en Santander Open Academy.
+    // un curso creado desde UCLX no caiga en Santander Open Academy.
     const clienteSel = document.getElementById("course-new-cliente");
     if(clienteSel && CLIENTES.some(c => c.id === app.selectedCliente)) clienteSel.value = app.selectedCliente;
     const anioInput = document.getElementById("course-new-anio");
@@ -1364,7 +1364,7 @@ const db = firebase.firestore();
   const CLIENTES = [
     {id:"soa", label:"Santander Open Academy"},
     {id:"santander", label:"Santander"},
-    {id:"alianza", label:"Ceneval"}
+    {id:"alianza", label:"UCLX"}
   ];
   function inferClienteLegacy(displayName){
     return (displayName || "").trim().toLowerCase() === "salud financiera" ? "santander" : "soa";
@@ -1409,7 +1409,7 @@ const db = firebase.firestore();
   // Cursos "solo plataforma": la plataforma ES la base — cada carga detecta
   // a los nuevos y omite siempre a quienes se marcaron como no estudiantes.
   // Solo Santander Open Academy trabaja con base de Santander: los cursos de
-  // Santander y de Ceneval no la tienen, así que se tratan siempre así
+  // Santander y de UCLX no la tienen, así que se tratan siempre así
   // (salvo los históricos, que usan lista final).
   function esSoloPlataforma(meta){
     if(!meta) return false;
