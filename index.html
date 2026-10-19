@@ -451,8 +451,9 @@
       <div class="course-tabs" id="anio-tabs" style="margin-bottom:6px;"></div>
       <div class="course-tabs-row">
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
+        <input id="buscar-correo" class="input-text" type="search" placeholder="Buscar un correo en todo el portal..." style="min-width:240px;flex:1;max-width:340px;">
+        <button class="btn btn-ghost btn-small" id="btn-buscar-correo" type="button">Buscar</button>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
-        <button class="btn btn-ghost btn-small" id="btn-open-cruce" type="button" title="Personas que aparecen en más de un curso">Personas en varios cursos</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -698,19 +699,12 @@
     </div>
   </div>
 
-  <!-- ======================= MODAL: personas en varios cursos ======================= -->
-  <div class="modal-overlay hidden" id="modal-cruce">
-    <div class="modal-box" style="max-width:960px;">
-      <button class="modal-close" type="button" data-close-modal="modal-cruce">&times;</button>
-      <h3 class="modal-title">Personas en varios cursos</h3>
-      <div class="panel-note teal">Busca en la tabla madre de todos los cursos a quien aparece en más de uno. Se cruza por correo (el original, el corregido a mano o el de plataforma). Lee toda la base, así que puede tardar unos segundos.</div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0;">
-        <button class="btn btn-primary btn-small" id="btn-run-cruce" type="button">Buscar en todos los cursos</button>
-        <input class="search-box" id="cruce-search" placeholder="Filtrar por nombre, correo o curso..." style="flex:1;min-width:200px;">
-        <button class="btn btn-ghost btn-small" id="btn-cruce-excel" type="button">Descargar Excel</button>
-      </div>
-      <div class="status-line" id="cruce-status"></div>
-      <div class="table-scroll" style="max-height:55vh;"><table id="cruce-table"><thead></thead><tbody></tbody></table></div>
+  <!-- ======================= MODAL: búsqueda de un correo en todo el portal ======================= -->
+  <div class="modal-overlay hidden" id="modal-buscar">
+    <div class="modal-box" style="max-width:1000px;">
+      <button class="modal-close" type="button" data-close-modal="modal-buscar">&times;</button>
+      <h3 class="modal-title" id="buscar-title">Búsqueda</h3>
+      <div id="buscar-body"></div>
     </div>
   </div>
 
@@ -728,7 +722,7 @@
     <div class="modal-box">
       <button class="modal-close" type="button" data-close-modal="modal-nps">&times;</button>
       <h3 class="modal-title">Cargar NPS</h3>
-      <div class="panel-note teal">Por defecto el NPS se aplica <strong>solo a este curso</strong>: sube en cada curso la base que la plataforma te dio para ese grupo. Si un mismo archivo sirve a varias ediciones del programa, elige "Todas las ediciones". <span id="nps-programa-note"></span> Cada carga reemplaza el NPS anterior — sube siempre la base completa de respuestas.</div>
+      <div class="panel-note teal">El NPS es <strong>solo de este curso</strong>: sube la base de respuestas de esta generación, una por una. Cada carga reemplaza el NPS anterior — sube siempre la base completa de respuestas.</div>
       <div class="panel-head">
         <h3>Archivo de NPS</h3>
         <span class="file-tag hidden" id="tag-nps"></span>
@@ -1306,6 +1300,8 @@ const db = firebase.firestore();
     let max = 0, hayNumero = false, haySigno = false;
     values.forEach(v => {
       if(v === null || v === undefined || v === "") return;
+      // "2 de 3" no cuenta: se calcula aparte (ver parsePct).
+      if(/^\s*\d+(?:[.,]\d+)?\s*(?:de|\/)\s*\d/i.test(String(v))) return;
       if(/%/.test(String(v))) haySigno = true;
       const n = parseFloat(String(v).replace("%","").replace(",","."));
       if(!isNaN(n)){ hayNumero = true; if(n > max) max = n; }
@@ -1314,6 +1310,13 @@ const db = firebase.firestore();
   }
   function parsePct(raw, scale){
     if(raw === null || raw === undefined || raw === "") return null;
+    // Avance como "2 de 3" (p. ej. assessments completos de Vocacción).
+    const dec = String(raw).match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:de|\/)\s*(\d+(?:[.,]\d+)?)\s*$/i);
+    if(dec){
+      const total = parseFloat(dec[2].replace(",", "."));
+      if(!total) return null;
+      return Math.round(Math.min(100, parseFloat(dec[1].replace(",", ".")) / total * 100) * 10) / 10;
+    }
     const hasPercentSign = /%/.test(String(raw));
     const s = String(raw).trim().replace("%","").replace(",",".");
     let n = parseFloat(s);
@@ -1640,7 +1643,7 @@ const db = firebase.firestore();
         moodleCurso: data.moodleCurso || null,
         moodleGrupo: data.moodleGrupo || "",
         npsFecha: (data.nps && data.nps.fecha) || null,
-        npsAlcance: (data.nps && data.nps.alcance) || null
+        nps: resumenNps(data.nps)
       };
     });
   }
@@ -1984,6 +1987,9 @@ const db = firebase.firestore();
   // comparar contra la meta el avance de todo el grupo ese año.
   // Inscritos de un curso: el total de Santander (incluye becas sin correo);
   // si no lo hay (Alianza, solo plataforma), el total de la tabla madre.
+  function resumenNps(n){
+    return n && n.total ? {score: n.score, total: n.total, promotores: n.promotores || 0, pasivos: n.pasivos || 0, detractores: n.detractores || 0} : null;
+  }
   function inscritosCurso(c){
     if(typeof c.inscritos === "number" && c.inscritos > 0) return c.inscritos;
     return (c.stats && c.stats.total) || 0;
@@ -1994,6 +2000,7 @@ const db = firebase.firestore();
     if(!idx || !app.meta) return;
     idx.stats = stats;
     idx.inscritos = getInscritosTotalFor(app.meta);
+    idx.nps = resumenNps(app.meta.nps);
   }
   function familiaInscritosTotal(familia, cliente, anio){
     if(!familia) return inscritosCurso({inscritos: getInscritosTotalFor(app.meta), stats: app.meta.stats});
@@ -2049,8 +2056,71 @@ const db = firebase.firestore();
     const cliente = app.meta.cliente || inferClienteLegacy(app.meta.displayName);
     const anio = app.meta.anio || inferAnioLegacy(app.slug, app.meta.displayName) || SIN_ANIO;
     const familia = app.meta.familia || inferFamiliaLegacy(app.slug, app.meta.displayName) || app.meta.displayName;
-    if(!grupoTieneMeta(cliente, anio)) return;
+    panel.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;";
+    if(grupoTieneMeta(cliente, anio)) renderMetaBox(panel, cliente, anio, familia);
+    renderFamiliaKpis(panel, cliente, anio, familia);
+  }
 
+  // NPS y tasa de término del grupo familiar completo (todas sus ediciones
+  // de ese año), junto a la meta. La tasa es: terminaron (80% o más) entre
+  // inscritos, sumando todas las ediciones. El NPS junta las respuestas de
+  // todas las ediciones que ya lo tienen.
+  function renderFamiliaKpis(panel, cliente, anio, familia){
+    const grupo = cursosDelGrupo(familia, cliente, anio).slice().sort((a, b) => a.displayName.localeCompare(b.displayName));
+    if(!grupo.length) return;
+    const etiqueta = familia + (anio && anio !== SIN_ANIO ? " " + anio : "");
+    const caja = (titulo, grande, color, detalle, lineas) => {
+      const box = el("div", {style:"background:var(--teal-bg);border-radius:8px;padding:10px 14px;min-width:200px;max-width:300px;"});
+      box.appendChild(el("div", {style:"font-size:12.5px;font-weight:700;color:var(--teal-dark);margin-bottom:2px;"}, [document.createTextNode(titulo)]));
+      box.appendChild(el("div", {style:"font-size:26px;font-weight:700;line-height:1.15;color:" + color + ";"}, [document.createTextNode(grande)]));
+      box.appendChild(el("div", {style:"font-size:11.5px;color:var(--ink-soft);margin-bottom:4px;"}, [document.createTextNode(detalle)]));
+      lineas.forEach(([izq, der, esActual]) => {
+        const row = el("div", {style:"display:flex;justify-content:space-between;gap:10px;font-size:11.5px;" + (esActual ? "font-weight:700;color:var(--teal-dark);" : "color:var(--ink-soft);")});
+        row.appendChild(el("span", {}, [document.createTextNode(izq)]));
+        row.appendChild(el("span", {}, [document.createTextNode(der)]));
+        box.appendChild(row);
+      });
+      return box;
+    };
+
+    // ---- NPS del grupo ----
+    let prom = 0, det = 0, tot = 0, edicionesNps = 0;
+    const lineasNps = [];
+    grupo.forEach(c => {
+      if(c.nps && c.nps.total){
+        prom += c.nps.promotores; det += c.nps.detractores; tot += c.nps.total; edicionesNps++;
+        lineasNps.push([c.displayName, (c.nps.score > 0 ? "+" : "") + c.nps.score + " (" + c.nps.total + ")", c.slug === app.slug]);
+      } else {
+        lineasNps.push([c.displayName, "sin NPS", c.slug === app.slug]);
+      }
+    });
+    const npsGrupo = tot ? Math.round((prom - det) / tot * 100) : null;
+    panel.appendChild(caja(
+      "NPS " + etiqueta,
+      npsGrupo === null ? "—" : (npsGrupo > 0 ? "+" : "") + npsGrupo,
+      npsGrupo === null ? "var(--ink-soft)" : npsColor(npsGrupo),
+      tot ? tot + " respuestas · " + edicionesNps + " de " + grupo.length + " edición(es)" : "Aún sin respuestas",
+      lineasNps
+    ));
+
+    // ---- Tasa de término del grupo ----
+    let terminaron = 0, inscritos = 0;
+    const lineasTasa = grupo.map(c => {
+      const t = (c.stats && c.stats.p4) || 0, i = inscritosCurso(c);
+      terminaron += t; inscritos += i;
+      return [c.displayName, t + " / " + i + " (" + (i ? Math.round(t / i * 1000) / 10 : 0) + "%)", c.slug === app.slug];
+    });
+    const tasa = inscritos ? Math.round(terminaron / inscritos * 1000) / 10 : 0;
+    panel.appendChild(caja(
+      "Tasa de término " + etiqueta,
+      tasa + "%",
+      "var(--teal-dark)",
+      terminaron + " terminaron (80%+) de " + inscritos + " inscritos",
+      lineasTasa
+    ));
+  }
+
+  function renderMetaBox(panel, cliente, anio, familia){
     const grupo = cursosDelGrupo(familia, cliente, anio);
     const anyMeta = grupo.find(c => typeof c.metaConvocatoria === "number");
     const metaVal = anyMeta ? anyMeta.metaConvocatoria : inferMetaLegacy(familia, cliente, anio);
@@ -2306,23 +2376,6 @@ const db = firebase.firestore();
     app.slug = slug;
     app.meta = meta;
     app.loadedUpdatedAt = meta.updatedAt || null;
-    // Una edición creada después de subir el NPS del programa lo hereda de
-    // otra edición del mismo programa.
-    if(!meta.nps){
-      try{
-        const prog = programaActual();
-        const donor = prog.cursos.find(c => c.slug !== slug && c.npsFecha && c.npsAlcance === "programa");
-        if(donor){
-          const donorMeta = await loadCourseMetaRemote(donor.slug);
-          if(loadToken !== app.courseLoadToken) return;
-          if(donorMeta && donorMeta.nps){
-            meta.nps = donorMeta.nps;
-            meta.npsMapping = donorMeta.npsMapping || null;
-            meta.npsHeredado = true;
-          }
-        }
-      }catch(err){ console.error("No se pudo heredar el NPS del programa:", err); }
-    }
     app.baseline = baseline;
     app.master = [];
     app.log = [];
@@ -2683,10 +2736,10 @@ const db = firebase.firestore();
     {key:"apellidos",  label:"Apellidos",  alias:["apellidos","apellido","apellido(s)","last name","lastname"]},
     {key:"correo",     label:"Correo",     alias:["correo","correo electronico","email","e-mail","direccion email","direccion de email","direccion de correo","direccion de correo electronico"]},
     {key:"estatus",    label:"Estatus",    alias:["estatus","status"]},
-    {key:"avance",     label:"Avance",     alias:["avance","progreso","% avance","progress","progreso del estudiante","progreso del curso"]},
-    {key:"generacion", label:"Generación", alias:["generacion"]},
+    {key:"avance",     label:"Avance",     alias:["avance","progreso","% avance","progress","progreso del estudiante","progreso del curso","assessments completos"]},
+    {key:"generacion", label:"Generación", alias:["generacion","etiqueta"]},
     {key:"usuario",    label:"Usuario",    alias:["usuario","username","user name","nombre de usuario"]},
-    {key:"inscripcion",label:"Fecha de inscripción", alias:["fecha de inscripcion","fecha inscripcion","inscripcion","enrolment date","enrollment date","time enrolled","enrolled","hora de creado","hora de inscripcion","fecha de creado"]},
+    {key:"inscripcion",label:"Fecha de inscripción", alias:["fecha de inscripcion","fecha inscripcion","inscripcion","enrolment date","enrollment date","time enrolled","enrolled","hora de creado","hora de inscripcion","fecha de creado","fecha de alta"]},
     {key:"grupo",      label:"Grupo",      alias:["grupo","grupos","group","groups","group name","nombre del grupo"]},
     {key:"cursocorto", label:"Nombre corto del curso", alias:["nombre corto del curso","nombre corto","course short name","course shortname","short name","shortname"]},
     {key:"ultima",     label:"Última entrada", alias:["ultima entrada","fecha de ultima entrada","ultimo acceso","last access","last access to course","last access to site","last login","ultimo acceso al curso","ultimo acceso al sitio"]}
@@ -2767,19 +2820,22 @@ const db = firebase.firestore();
 
     let entries = p.rows.map((r, i) => ({r, fila: i + 2}));
     if(cols.generacion){
-      const vals = Array.from(new Set(
-        entries.map(e => e.r[cols.generacion]).filter(v => v !== null && v !== undefined && String(v).trim() !== "").map(v => String(v).trim())
-      )).sort((a, b) => a.localeCompare(b));
-      std.genValues = vals;
-      if(vals.length === 1) std.genValor = vals[0];
-      else if(vals.length > 1){
+      // Las filas sin generación cuentan como un valor más ("(vacío)") cuando
+      // el archivo trae otras: así no se mezclan con las de una generación.
+      const VACIO = "(vacío)";
+      const valDe = e => { const t = String(e.r[cols.generacion] ?? "").trim(); return t || VACIO; };
+      const vals = Array.from(new Set(entries.map(valDe))).sort((a, b) => a.localeCompare(b));
+      std.genValues = vals.length > 1 ? vals : [];
+      if(vals.length === 1){
+        std.genValor = vals[0] === VACIO ? "" : vals[0];
+      } else if(vals.length > 1){
         if(!genValor || !vals.includes(genValor)){
           std.errors.push("El archivo trae varias generaciones (" + vals.join(", ") + "). Elige cuál vas a cargar.");
           return std;
         }
-        std.genValor = genValor;
+        std.genValor = genValor === VACIO ? "" : genValor;
         const antes = entries.length;
-        entries = entries.filter(e => String(e.r[cols.generacion] ?? "").trim() === genValor);
+        entries = entries.filter(e => valDe(e) === genValor);
         if(antes - entries.length) std.warnings.push((antes - entries.length) + " fila(s) de otras generaciones: se omiten.");
       }
     }
@@ -3516,105 +3572,98 @@ const db = firebase.firestore();
     }
   });
 
-  // ---------- personas que están en varios cursos ----------
-  // Lee la tabla madre de todos los cursos y agrupa por correo (cualquiera de
-  // los que tenga la persona: el original, el corregido o el de plataforma).
-  const cruce = {rows: []};
-  const CRUCE_LIMITE = 500;
-
-  function pintarCruce(){
-    const q = normalize(document.getElementById("cruce-search").value);
-    const filtradas = q ? cruce.rows.filter(r => Object.keys(r).some(k => normalize(r[k]).includes(q))) : cruce.rows;
-    const thead = document.querySelector("#cruce-table thead");
-    const tbody = document.querySelector("#cruce-table tbody");
-    thead.innerHTML = ""; tbody.innerHTML = "";
-    if(!cruce.rows.length) return;
-    const cols = Object.keys(cruce.rows[0]);
-    const hr = el("tr");
-    cols.forEach(c => hr.appendChild(el("th", {}, [document.createTextNode(c)])));
-    thead.appendChild(hr);
-    filtradas.slice(0, CRUCE_LIMITE).forEach(r => {
-      const tr = el("tr");
-      cols.forEach(c => tr.appendChild(el("td", {}, [document.createTextNode(r[c] === null || r[c] === undefined ? "" : String(r[c]))])));
-      tbody.appendChild(tr);
-    });
-    if(filtradas.length > CRUCE_LIMITE){
-      const tr = el("tr");
-      const td = el("td", {colspan: String(cols.length)}, [document.createTextNode("Mostrando " + CRUCE_LIMITE + " de " + filtradas.length + ". Usa el buscador o descarga el Excel para verlas todas.")]);
-      td.style.color = "var(--ink-soft)"; td.style.padding = "10px";
-      tr.appendChild(td); tbody.appendChild(tr);
-    }
+  // ---------- buscar un correo en todo el portal ----------
+  // No lee las tablas completas: por cada curso pide solo el registro de ese
+  // correo (por su llave y por los correos corregidos o de plataforma), así
+  // que son pocas lecturas aunque haya muchos cursos.
+  async function buscarCorreoEnPortal(texto){
+    const escrito = texto.trim();
+    const bajo = escrito.toLowerCase();
+    const llave = sanitizeDocId(recordKey(escrito, ""));
+    const variantes = Array.from(new Set([escrito, bajo]));
+    const cursos = app.coursesIndex.filter(c => !esCapturaManual(c))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const resultados = [], fallos = [];
+    await Promise.all(cursos.map(async c => {
+      try{
+        const col = masterColl(c.slug);
+        const [porId, porManual, porPlat] = await Promise.all([
+          col.doc(llave).get(),
+          col.where("emailManual", "==", bajo).get(),
+          col.where("correoPlataforma", "in", variantes).get()
+        ]);
+        const vistos = new Set();
+        const agregar = doc => {
+          if(!doc.exists || vistos.has(doc.id)) return;
+          vistos.add(doc.id);
+          resultados.push({curso: c, rec: Object.assign({_key: doc.id}, doc.data())});
+        };
+        agregar(porId);
+        porManual.docs.forEach(agregar);
+        porPlat.docs.forEach(agregar);
+      }catch(err){
+        console.error("Búsqueda en " + c.displayName + ":", err);
+        fallos.push(c.displayName);
+      }
+    }));
+    resultados.sort((a, b) => a.curso.displayName.localeCompare(b.curso.displayName));
+    return {resultados, fallos, total: cursos.length};
   }
 
-  document.getElementById("btn-open-cruce").addEventListener("click", () => openModal("modal-cruce"));
-  document.getElementById("cruce-search").addEventListener("input", pintarCruce);
-  document.getElementById("btn-cruce-excel").addEventListener("click", () => {
-    if(!cruce.rows.length) return;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cruce.rows), "Varios cursos");
-    XLSX.writeFile(wb, "personas-en-varios-cursos-" + todayISO() + ".xlsx");
-  });
-
-  document.getElementById("btn-run-cruce").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-run-cruce");
-    const estado = document.getElementById("cruce-status");
-    const cursos = app.coursesIndex.filter(c => !c.archived && !esCapturaManual(c))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    if(!cursos.length){ estado.textContent = "No hay cursos con tabla madre."; return; }
-    const aprox = cursos.reduce((n, c) => n + ((c.stats && c.stats.total) || 0), 0);
-    if(!confirm("Se va a leer la base de " + cursos.length + " curso(s) (unos " + aprox.toLocaleString("es-MX") + " registros) para buscar personas en más de un curso.\n\n¿Continuar?")) return;
-    btn.disabled = true;
-    cruce.rows = []; pintarCruce();
-    try{
-      const entradas = [];
-      for(let i = 0; i < cursos.length; i++){
-        const c = cursos[i];
-        estado.textContent = "Leyendo curso " + (i + 1) + " de " + cursos.length + ": " + c.displayName + "...";
-        const snap = await masterColl(c.slug).get();
-        snap.docs.forEach(d => {
-          const rec = d.data();
-          const np = nameParts(rec);
-          entradas.push({
-            curso: c.displayName, slug: c.slug, emails: emailsDe(rec), correo: emailDe(rec),
-            nombres: np.nombres || "", apellidos: np.apellidos || "",
-            avance: typeof rec.progreso === "number" ? rec.progreso : null, enPlat: rec.estado === "En plataforma"
-          });
-        });
-      }
-      // Se unen las entradas que comparten cualquier correo.
-      const padre = entradas.map((_, i) => i);
-      const raiz = i => { while(padre[i] !== i){ padre[i] = padre[padre[i]]; i = padre[i]; } return i; };
-      const porCorreo = new Map();
-      entradas.forEach((e, i) => e.emails.forEach(m => {
-        if(porCorreo.has(m)){ const a = raiz(porCorreo.get(m)), b = raiz(i); if(a !== b) padre[b] = a; }
-        else porCorreo.set(m, i);
-      }));
-      const grupos = new Map();
-      entradas.forEach((e, i) => { const r = raiz(i); if(!grupos.has(r)) grupos.set(r, []); grupos.get(r).push(e); });
-      const filas = [];
-      grupos.forEach(lista => {
-        const slugs = new Set(lista.map(e => e.slug));
-        if(slugs.size < 2) return;
-        const base = lista.slice().sort((a, b) => (b.nombres + b.apellidos).length - (a.nombres + a.apellidos).length)[0];
-        const correos = Array.from(new Set(lista.map(e => e.correo).filter(Boolean)));
-        const detalle = lista.slice().sort((a, b) => a.curso.localeCompare(b.curso)).map(e =>
-          e.curso + " (" + (e.enPlat && e.avance !== null ? e.avance + "%" : "sin plataforma") + ")");
-        filas.push({
-          "Nombres": base.nombres, "Apellidos": base.apellidos, "Correo": correos.join(" / "),
-          "Cursos": slugs.size, "Detalle": detalle.join(" · ")
-        });
-      });
-      filas.sort((a, b) => b["Cursos"] - a["Cursos"] || a["Apellidos"].localeCompare(b["Apellidos"]));
-      cruce.rows = filas;
-      estado.textContent = filas.length + " persona(s) en 2 o más cursos, de " + entradas.length.toLocaleString("es-MX") + " registros en " + cursos.length + " curso(s).";
-      pintarCruce();
-    }catch(err){
-      console.error(err);
-      estado.textContent = "No se pudo leer: " + (err && err.message ? err.message : err);
-    }finally{
-      btn.disabled = false;
+  async function ejecutarBusquedaCorreo(){
+    const input = document.getElementById("buscar-correo");
+    const texto = input.value.trim();
+    const body = document.getElementById("buscar-body");
+    if(!/^[^@\s]+@[^@\s]+$/.test(texto)){
+      alert("Escribe el correo completo, por ejemplo nombre@correo.com.");
+      return;
     }
-  });
+    document.getElementById("buscar-title").textContent = "Resultados para " + texto;
+    body.innerHTML = "";
+    body.appendChild(el("div", {class:"muted"}, [document.createTextNode("Buscando en todos los cursos...")]));
+    openModal("modal-buscar");
+    const {resultados, fallos, total} = await buscarCorreoEnPortal(texto);
+    body.innerHTML = "";
+    body.appendChild(el("div", {style:"font-weight:700;margin-bottom:8px;"}, [document.createTextNode(
+      resultados.length
+        ? resultados.length + " registro(s) en " + new Set(resultados.map(r => r.curso.slug)).size + " de " + total + " curso(s)"
+        : "No aparece en ninguno de los " + total + " curso(s)."
+    )]));
+    if(fallos.length){
+      body.appendChild(el("div", {style:"color:var(--rust);margin-bottom:8px;"}, [document.createTextNode("No se pudo revisar: " + fallos.join(", ") + ".")]));
+    }
+    if(!resultados.length) return;
+    const tabla = el("table");
+    const hr = el("tr");
+    ["Curso", "Estado", "Avance", "Nombres", "Apellidos", "Correo", "Generación / Grupo", ""].forEach(t => hr.appendChild(el("th", {}, [document.createTextNode(t)])));
+    const thead = el("thead"); thead.appendChild(hr); tabla.appendChild(thead);
+    const tbody = el("tbody");
+    resultados.forEach(({curso, rec}) => {
+      const np = nameParts(rec);
+      const extra = rec.plataformaExtra || {};
+      const gen = [extra["Generación"], extra["Grupo"]].filter(Boolean).join(" / ");
+      const tr = el("tr");
+      [curso.displayName, rec.estado || "", typeof rec.progreso === "number" ? rec.progreso + "%" : "—",
+       np.nombres || "", np.apellidos || "", emailDe(rec), gen].forEach(v => tr.appendChild(el("td", {}, [document.createTextNode(String(v))])));
+      const td = el("td");
+      const abrir = el("button", {type:"button", class:"btn btn-ghost btn-small"}, [document.createTextNode("Abrir curso")]);
+      abrir.addEventListener("click", async () => {
+        closeModal("modal-buscar");
+        await loadCourse(curso.slug);
+      });
+      td.appendChild(abrir); tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+    tabla.appendChild(tbody);
+    const wrap = el("div", {class:"table-scroll", style:"max-height:55vh;"});
+    wrap.appendChild(tabla);
+    body.appendChild(wrap);
+    body.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-top:8px;"}, [document.createTextNode(
+      "Busca el correo exacto: el original del archivo, el corregido a mano o el de plataforma."
+    )]));
+  }
+  document.getElementById("btn-buscar-correo").addEventListener("click", ejecutarBusquedaCorreo);
+  document.getElementById("buscar-correo").addEventListener("keydown", e => { if(e.key === "Enter") ejecutarBusquedaCorreo(); });
 
   // ---------- Lista final (cursos históricos) ----------
   document.getElementById("btn-process-listafinal").addEventListener("click", () => procesar("listafinal", "Actualizar lista final", async () => {
@@ -3646,30 +3695,7 @@ const db = firebase.firestore();
     closeModal("modal-listafinal");
   }));
 
-  // El NPS es por PROGRAMA: Moodle no distingue una generación de otra, así
-  // que una misma encuesta sirve a todas las ediciones del mismo programa
-  // (misma familia + cliente + año, igual que la meta de convocatoria).
-  function programaActual(){
-    const meta = app.meta || {};
-    const cliente = clienteDe(meta);
-    const anio = meta.anio || inferAnioLegacy(app.slug, meta.displayName) || SIN_ANIO;
-    const familia = meta.familia || inferFamiliaLegacy(app.slug, meta.displayName) || meta.displayName;
-    const cursos = cursosDelGrupo(familia, cliente, anio).slice();
-    if(!cursos.some(c => c.slug === app.slug)){
-      cursos.push({slug: app.slug, displayName: meta.displayName || app.slug});
-    }
-    cursos.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    return {familia, cliente, anio, cursos};
-  }
-  function textoProgramaNps(){
-    const prog = programaActual();
-    const otros = prog.cursos.filter(c => c.slug !== app.slug).map(c => c.displayName);
-    return otros.length
-      ? "Se aplicará también a: " + otros.join(", ") + "."
-      : "Este programa solo tiene esta edición por ahora.";
-  }
-
-  // ---------- NPS (todos los cursos) ----------
+  // ---------- NPS (una generación a la vez) ----------
   // Cada carga reemplaza el NPS anterior del curso. Solo se guarda el
   // resumen + los comentarios (con tope), dentro del documento del curso —
   // no toca la tabla madre.
@@ -3769,29 +3795,9 @@ const db = firebase.firestore();
     }
     populate(filColSel.value, savedMap && savedMap.filterCol === filColSel.value ? savedMap.filterVal : "");
 
-    const alcRow = el("div", {class:"field-row"});
-    alcRow.appendChild(el("label", {}, [document.createTextNode("Aplicar este NPS a")]));
-    const alcDefault = (savedMap && savedMap.alcance) ? savedMap.alcance : "curso";
-    const radios = {};
-    const alcWrap = el("div", {class:"radio-row", style:"flex-direction:column;align-items:flex-start;gap:6px;"});
-    [["curso", "Solo este curso (la base es de este grupo)"],
-     ["programa", "Todas las ediciones del programa (un solo archivo para todas)"]].forEach(([val, text]) => {
-      const opt = el("label", {class:"radio-opt"});
-      const r = el("input", {type:"radio", name:"nps-alcance", value:val});
-      r.checked = val === alcDefault;
-      radios[val] = r;
-      opt.appendChild(r); opt.appendChild(document.createTextNode(text));
-      alcWrap.appendChild(opt);
-    });
-    alcRow.appendChild(alcWrap);
-    container.appendChild(alcRow);
-
     filColSel.addEventListener("change", () => {
       filValRow.classList.toggle("hidden", !filColSel.value);
       populate(filColSel.value, "");
-      // Filtrar por grupo casi siempre significa que el NPS es de una sola
-      // edición; se sugiere, pero se puede cambiar.
-      if(filColSel.value) radios["curso"].checked = true;
     });
   }
 
@@ -3876,7 +3882,6 @@ const db = firebase.firestore();
   }
 
   document.getElementById("btn-open-nps").addEventListener("click", () => {
-    document.getElementById("nps-programa-note").textContent = textoProgramaNps();
     openModal("modal-nps");
   });
 
@@ -3942,35 +3947,24 @@ const db = firebase.firestore();
       archivo: app.pending.nps.fileName, fecha: nowISO(),
       por: (auth.currentUser && auth.currentUser.email) || ""
     };
-    const alcanceInput = document.querySelector('input[name="nps-alcance"]:checked');
-    const alcance = alcanceInput ? alcanceInput.value : "curso";
-    const npsMapping = {scoreCol, commentCol, nameCol, filterCol, filterVal, starCols, alcance};
+    const npsMapping = {scoreCol, commentCol, nameCol, filterCol, filterVal, starCols};
 
-    const progCompleto = programaActual();
-    const prog = alcance === "programa"
-      ? progCompleto
-      : Object.assign({}, progCompleto, {cursos: [{slug: app.slug, displayName: (app.meta && app.meta.displayName) || app.slug}]});
-    nps.programa = progCompleto.familia;
-    nps.alcance = alcance;
+    nps.alcance = "curso";
     nps.filtro = filterCol ? filterCol + ": " + filterVal : "";
     const logEntry = {
       date: nowISO(), tipo:"NPS", archivo: app.pending.nps.fileName,
       resumen: "NPS " + score + " — " + total + " respuestas (" + promotores + " promotores, " + pasivos + " pasivos, " + detractores + " detractores)" +
-        (prog.cursos.length > 1 ? " — aplicado a " + prog.cursos.length + " ediciones del programa" : (nps.filtro ? " — solo este curso (" + nps.filtro + ")" : "")),
+        (nps.filtro ? " — filtrado por " + nps.filtro : ""),
       por: nps.por
     };
-    setSaveStatus("Guardando NPS en " + prog.cursos.length + " edición(es)...");
+    setSaveStatus("Guardando NPS...");
     try{
-      // Mismo NPS en todas las ediciones del programa.
-      await Promise.all(prog.cursos.map(async c => {
-        await courseDoc(c.slug).set({nps, npsMapping}, {merge:true});
-        await addLogRemote(c.slug, logEntry);
-        const idx = app.coursesIndex.find(x => x.slug === c.slug);
-        if(idx){ idx.npsFecha = nps.fecha; idx.npsAlcance = alcance; }
-      }));
+      // update (no merge) para reemplazar por completo el NPS anterior.
+      await courseDoc(app.slug).update({nps, npsMapping});
+      await addLogRemote(app.slug, logEntry);
       app.meta.nps = nps;
       app.meta.npsMapping = npsMapping;
-      app.meta.npsHeredado = false;
+      sincronizarIndiceActual(app.meta.stats);
       app.log.unshift(logEntry);
       setSaveStatus("Guardado.");
       renderNps();
@@ -4078,12 +4072,8 @@ const db = firebase.firestore();
       root.appendChild(starsCard);
     }
 
-    const prog = programaActual();
-    const soloCurso = nps.alcance === "curso";
     root.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:4px;"}, [document.createTextNode(
-      soloCurso
-        ? "NPS solo de este curso" + (nps.filtro ? " (" + nps.filtro + ")" : "")
-        : "NPS del programa " + prog.familia + (prog.cursos.length > 1 ? " — aplica a: " + prog.cursos.map(c => c.displayName).join(", ") : "")
+      "NPS de este curso" + (nps.filtro ? " (" + nps.filtro + ")" : "")
     )]));
     if(nps.pregunta){
       root.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:4px;"}, [document.createTextNode("Pregunta usada: " + nps.pregunta)]));
