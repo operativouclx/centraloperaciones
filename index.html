@@ -665,6 +665,10 @@
         <div class="drop-sub">.xlsx o .csv</div>
       </div>
       <input type="file" id="file-santander" accept=".xlsx,.xls,.csv">
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer;">
+        <input type="checkbox" id="santander-solo-completar" style="margin-top:3px;">
+        <span><strong>Solo completar datos</strong> (para bases viejas): no quita ni agrega a nadie, no cambia los totales de Santander ni el estatus. Solo llena lo que falte en quienes ya están en la base, como la entidad.</span>
+      </label>
       <div id="mapping-santander" class="hidden" style="margin-top:16px;"></div>
       <div class="cross-cta hidden" id="cta-santander">
         <button class="btn btn-primary" id="btn-process-santander" disabled>Procesar actualización</button>
@@ -1241,7 +1245,16 @@ const db = firebase.firestore();
     }
   });
 
-  document.getElementById("btn-open-santander").addEventListener("click", () => openModal("modal-santander"));
+  document.getElementById("btn-open-santander").addEventListener("click", () => {
+    document.getElementById("santander-solo-completar").checked = false;
+    openModal("modal-santander");
+  });
+  document.getElementById("santander-solo-completar").addEventListener("change", () => {
+    const caja = document.getElementById("summary-santander");
+    if(caja && app.pending.santander && app.pending.santander.std) drawStdSummary(caja, "santander");
+    document.getElementById("btn-process-santander").textContent =
+      document.getElementById("santander-solo-completar").checked ? "Completar datos" : "Procesar actualización";
+  });
   document.getElementById("btn-open-plataforma").addEventListener("click", () => openModal("modal-plataforma"));
   document.getElementById("btn-open-listafinal").addEventListener("click", () => openModal("modal-listafinal"));
   document.querySelectorAll("[data-close-modal]").forEach(btn => {
@@ -3043,6 +3056,11 @@ const db = firebase.firestore();
     const sinMatch = std.rows.length - coinciden;
     const salen = app.master.filter(r => !enArchivo.has(normalize(r.email))).length;
     const esLista = kind === "santander" || kind === "listafinal" || (kind === "plataforma" && esSoloPlataforma(app.meta));
+    const casilla = kind === "santander" && document.getElementById("santander-solo-completar");
+    if(casilla && casilla.checked){
+      return ["Solo se completarán datos: " + coinciden + " persona(s) del archivo ya están en la base y se les llenará lo que falte (entidad, nombres). " +
+        sinMatch + " del archivo no están en la base y se ignoran. No se quita ni se agrega a nadie, y los totales de Santander no cambian."];
+    }
     if(esLista){
       return ["Esta carga REEMPLAZA la lista del curso: " + std.rows.length + " persona(s) en el archivo → " + sinMatch + " nueva(s), " +
         coinciden + " que ya estaban, " + salen + " que ya no vienen y se quitarán de la base."];
@@ -3114,7 +3132,7 @@ const db = firebase.firestore();
     genSel.id = "map-" + kind + "-genval";
     genWrap.appendChild(genSel);
     container.appendChild(genWrap);
-    const summary = el("div", {style:"margin:0 0 12px;font-size:12.5px;padding:10px 12px;border-radius:8px;background:var(--paper);border:1px solid var(--line-soft);"});
+    const summary = el("div", {id: "summary-" + kind, style:"margin:0 0 12px;font-size:12.5px;padding:10px 12px;border-radius:8px;background:var(--paper);border:1px solid var(--line-soft);"});
     container.appendChild(summary);
 
     function draw(){
@@ -3349,6 +3367,44 @@ const db = firebase.firestore();
     const std = pend.std;
     const today = todayISO();
     setSaveStatus("Comparando contra la tabla madre...");
+
+    // Modo "solo completar datos": para bases viejas. No quita ni agrega a
+    // nadie, no toca totales ni estatus: solo llena lo que falte.
+    if(document.getElementById("santander-solo-completar").checked){
+      const porCorreo = new Map(std.rows.map(r => [r.email, r]));
+      const usados = new Set();
+      let completados = 0;
+      const master = app.master.map(rec => {
+        const r = buscarPorCorreos(porCorreo, rec, usados);
+        if(!r) return rec;
+        usados.add(r.email);
+        const cambios = {};
+        if(r.entidad && !rec.entidad) cambios.entidad = r.entidad;
+        if(r.nombres && !rec.nombres) cambios.nombres = r.nombres;
+        if(r.apellidos && !rec.apellidos) cambios.apellidos = r.apellidos;
+        if(!Object.keys(cambios).length) return rec;
+        completados++;
+        return Object.assign({}, rec, cambios);
+      });
+      const ignoradas = std.rows.length - usados.size;
+      if(!completados){
+        setSaveStatus("");
+        alert("Este archivo no aporta datos nuevos: a las " + usados.size + " persona(s) que ya están en la base no les falta nada que él traiga. No se guardó nada.");
+        return;
+      }
+      const meta = Object.assign({}, app.meta, {updatedAt: nowISO(), stats: computeMasterStats(master), ...entidadesMeta(master)});
+      const logEntry = {
+        date: nowISO(), tipo: "Santander (completar datos)", archivo: pend.fileName,
+        resumen: completados + " persona(s) completadas, " + ignoradas + " del archivo no están en la base (ignoradas), sin quitar ni agregar a nadie",
+        por: quien()
+      };
+      const ok = await aplicarCarga({master, meta, lastRun: app.lastRun}, logEntry, []);
+      if(!ok) return;
+      refrescarTodo();
+      closeModal("modal-santander");
+      alert("Listo: se completaron datos de " + completados + " persona(s). " + (ignoradas ? ignoradas + " del archivo no estaban en la base y se ignoraron." : ""));
+      return;
+    }
 
     const oldByKey = new Map(app.master.map(r => [r._key, r]));
     const master = [], keys = new Set();
