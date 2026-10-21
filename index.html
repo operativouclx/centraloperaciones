@@ -420,12 +420,8 @@
   <div class="menu-grid">
     <button type="button" class="menu-card" id="menu-base">
       <strong>Base datos madre</strong>
-      <span>Cursos, cruce de bases, avance de participantes, NPS y dashboard.</span>
+      <span>Cursos, cruce de bases, avance de participantes, NPS, dashboard y UX del participante de cada programa.</span>
     </button>
-    <a class="menu-card" id="menu-ux" href="./experiencia-participante.html">
-      <strong>UX participantes</strong>
-      <span>Recorrido del participante de Mi Prepa - Ceneval: etapas, fechas y procesos.</span>
-    </a>
   </div>
 </div>
 
@@ -453,6 +449,7 @@
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <input id="buscar-correo" class="input-text" type="search" placeholder="Buscar un correo en todo el portal..." style="min-width:240px;flex:1;max-width:340px;">
         <button class="btn btn-ghost btn-small" id="btn-buscar-correo" type="button">Buscar</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-resumen" type="button" title="Participaron, completaron y estados con presencia por programa (Santander Open Academy)">Resumen de programas</button>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
@@ -477,6 +474,7 @@
             <button class="btn btn-ghost btn-small" data-vista="dashboard" type="button">Dashboard</button>
             <button class="btn btn-ghost btn-small" data-vista="nps" type="button">Ver NPS</button>
             <button class="btn btn-ghost btn-small" data-vista="historial" type="button">Historial de cargas</button>
+            <button class="btn btn-ghost btn-small" id="btn-open-ux" type="button" title="Recorrido del participante de este programa">UX del participante</button>
           </div>
           <div class="save-status" id="save-status"></div>
         </div>
@@ -696,6 +694,28 @@
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: UX del participante ======================= -->
+  <div class="modal-overlay hidden" id="modal-ux">
+    <div class="modal-box" style="max-width:1200px;">
+      <button class="modal-close" type="button" data-close-modal="modal-ux">&times;</button>
+      <h3 class="modal-title" id="ux-title">UX del participante</h3>
+      <div id="ux-body"></div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: resumen de programas ======================= -->
+  <div class="modal-overlay hidden" id="modal-resumen">
+    <div class="modal-box" style="max-width:1000px;">
+      <button class="modal-close" type="button" data-close-modal="modal-resumen">&times;</button>
+      <h3 class="modal-title">Resumen de programas — Santander Open Academy</h3>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;">
+        <button class="btn btn-primary btn-small" id="btn-resumen-unicos" type="button">Calcular personas únicas</button>
+        <span class="status-line" id="resumen-status"></span>
+      </div>
+      <div id="resumen-body"></div>
     </div>
   </div>
 
@@ -1643,7 +1663,9 @@ const db = firebase.firestore();
         moodleCurso: data.moodleCurso || null,
         moodleGrupo: data.moodleGrupo || "",
         npsFecha: (data.nps && data.nps.fecha) || null,
-        nps: resumenNps(data.nps)
+        nps: resumenNps(data.nps),
+        entidadesParticipan: leerJsonSeguro(data.entidadesParticipanJson),
+        entidadesInscritos: leerJsonSeguro(data.entidadesInscritosJson)
       };
     });
   }
@@ -2001,6 +2023,11 @@ const db = firebase.firestore();
     idx.stats = stats;
     idx.inscritos = getInscritosTotalFor(app.meta);
     idx.nps = resumenNps(app.meta.nps);
+    if(app.masterReady && !esCapturaManual(app.meta)){
+      const e = contarEntidades(app.master);
+      idx.entidadesParticipan = e.participan;
+      idx.entidadesInscritos = e.inscritos;
+    }
   }
   function familiaInscritosTotal(familia, cliente, anio){
     if(!familia) return inscritosCurso({inscritos: getInscritosTotalFor(app.meta), stats: app.meta.stats});
@@ -2731,6 +2758,68 @@ const db = firebase.firestore();
   // columnas (las de la plantilla descargable). No hay mapeo manual: si
   // falta una columna obligatoria el archivo se rechaza con un mensaje
   // claro, y las demás columnas del archivo se ignoran.
+
+  // ---------- entidad federativa ----------
+  // Se normaliza al nombre oficial para poder contar estados distintos. Lo
+  // que no se reconoce se guarda tal cual y no cuenta como estado.
+  const ENTIDADES = [
+    ["Aguascalientes", ["aguascalientes", "ags"]],
+    ["Baja California", ["baja california", "bc"]],
+    ["Baja California Sur", ["baja california sur", "bcs"]],
+    ["Campeche", ["campeche"]],
+    ["Chiapas", ["chiapas"]],
+    ["Chihuahua", ["chihuahua"]],
+    ["Ciudad de México", ["ciudad de mexico", "cdmx", "distrito federal", "df", "d f", "cd de mexico", "cd mx", "mexico city"]],
+    ["Coahuila", ["coahuila", "coahuila de zaragoza"]],
+    ["Colima", ["colima"]],
+    ["Durango", ["durango"]],
+    ["Estado de México", ["estado de mexico", "edo de mexico", "edomex", "edo mex", "estado mexico", "mexico", "mex"]],
+    ["Guanajuato", ["guanajuato", "gto"]],
+    ["Guerrero", ["guerrero"]],
+    ["Hidalgo", ["hidalgo"]],
+    ["Jalisco", ["jalisco"]],
+    ["Michoacán", ["michoacan", "michoacan de ocampo"]],
+    ["Morelos", ["morelos"]],
+    ["Nayarit", ["nayarit"]],
+    ["Nuevo León", ["nuevo leon", "nl"]],
+    ["Oaxaca", ["oaxaca"]],
+    ["Puebla", ["puebla"]],
+    ["Querétaro", ["queretaro", "queretaro de arteaga"]],
+    ["Quintana Roo", ["quintana roo", "q roo", "qroo"]],
+    ["San Luis Potosí", ["san luis potosi", "slp"]],
+    ["Sinaloa", ["sinaloa"]],
+    ["Sonora", ["sonora"]],
+    ["Tabasco", ["tabasco"]],
+    ["Tamaulipas", ["tamaulipas"]],
+    ["Tlaxcala", ["tlaxcala"]],
+    ["Veracruz", ["veracruz", "veracruz de ignacio de la llave"]],
+    ["Yucatán", ["yucatan"]],
+    ["Zacatecas", ["zacatecas"]]
+  ];
+  const ENTIDADES_VALIDAS = new Set(ENTIDADES.map(e => e[0]));
+  function normalizarEntidad(raw){
+    const n = normalize(raw).replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
+    if(!n) return "";
+    const hit = ENTIDADES.find(e => e[1].includes(n));
+    return hit ? hit[0] : String(raw).trim();
+  }
+  // Conteo de personas por entidad (inscritas y las que participan). Se
+  // guarda como texto JSON para que cada carga lo reemplace completo.
+  function contarEntidades(master){
+    const inscritos = {}, participan = {};
+    master.forEach(r => {
+      if(!r.entidad) return;
+      inscritos[r.entidad] = (inscritos[r.entidad] || 0) + 1;
+      if(r.estado === "En plataforma") participan[r.entidad] = (participan[r.entidad] || 0) + 1;
+    });
+    return {inscritos, participan};
+  }
+  function entidadesMeta(master){
+    const c = contarEntidades(master);
+    return {entidadesInscritosJson: JSON.stringify(c.inscritos), entidadesParticipanJson: JSON.stringify(c.participan)};
+  }
+  function leerJsonSeguro(t){ try{ return t ? JSON.parse(t) : null; }catch(e){ return null; } }
+
   const COLUMNAS_ESTANDAR = [
     {key:"nombres",    label:"Nombres",    alias:["nombres","nombre","nombre(s)","name","first name","firstname"]},
     {key:"apellidos",  label:"Apellidos",  alias:["apellidos","apellido","apellido(s)","last name","lastname"]},
@@ -2738,6 +2827,7 @@ const db = firebase.firestore();
     {key:"estatus",    label:"Estatus",    alias:["estatus","status"]},
     {key:"avance",     label:"Avance",     alias:["avance","progreso","% avance","progress","progreso del estudiante","progreso del curso","assessments completos"]},
     {key:"generacion", label:"Generación", alias:["generacion","etiqueta"]},
+    {key:"entidad",    label:"Entidad",    alias:["entidad","entidad federativa","selecciona tu entidad federativa","estado de residencia","estado donde vives","state"]},
     {key:"usuario",    label:"Usuario",    alias:["usuario","username","user name","nombre de usuario"]},
     {key:"inscripcion",label:"Fecha de inscripción", alias:["fecha de inscripcion","fecha inscripcion","inscripcion","enrolment date","enrollment date","time enrolled","enrolled","hora de creado","hora de inscripcion","fecha de creado","fecha de alta"]},
     {key:"grupo",      label:"Grupo",      alias:["grupo","grupos","group","groups","group name","nombre del grupo"]},
@@ -2798,18 +2888,24 @@ const db = firebase.firestore();
   // Lee el archivo subido con las columnas estándar y devuelve filas ya
   // limpias: una por correo, con nombre, estatus y avance. Lo que se omite
   // (sin correo válido, repetidos) queda contado y listado, nunca en silencio.
-  function detectStdCols(headers){
+  // En las bases de Santander "Estado" es la entidad federativa; en otros
+  // reportes (p. ej. Vocacción) "Estado" es el estatus de la cuenta, por eso
+  // solo se acepta como entidad cuando la carga es de Santander. Si hay varias
+  // columnas posibles, gana la que aparece antes en la lista de alias.
+  function detectStdCols(headers, kind){
     const norm = headers.map(normalize);
     const cols = {};
     COLUMNAS_ESTANDAR.forEach(c => {
-      const i = norm.findIndex(h => c.alias.includes(h));
+      const alias = (c.key === "entidad" && kind === "santander") ? c.alias.concat(["estado"]) : c.alias;
+      let i = -1;
+      for(const a of alias){ i = norm.indexOf(a); if(i !== -1) break; }
       cols[c.key] = i === -1 ? null : headers[i];
     });
     return cols;
   }
   function buildStd(kind, genValor, src){
     const p = src || app.pending[kind];
-    const cols = detectStdCols(p.headers);
+    const cols = detectStdCols(p.headers, kind);
     const std = {cols, errors:[], warnings:[], rows:[], total:p.rows.length, sinCorreo:[], excluidos:[], repetidos:[], genValues:[], genValor:"", scale:"percent"};
     const faltan = COLUMNAS_OBLIGATORIAS[kind].filter(k => !cols[k]).map(labelColumna);
     if(EXIGE_NOMBRE[kind] && !cols.nombres && !cols.apellidos) faltan.push("Nombres y/o Apellidos");
@@ -2874,7 +2970,8 @@ const db = firebase.firestore();
         inscripcion: cols.inscripcion ? fechaTexto(r[cols.inscripcion]) : "",
         ultima: cols.ultima ? fechaTexto(r[cols.ultima]) : "",
         cursocorto: cols.cursocorto ? txt(r[cols.cursocorto]) : "",
-        grupo: cols.grupo ? txt(r[cols.grupo]) : ""
+        grupo: cols.grupo ? txt(r[cols.grupo]) : "",
+        entidad: cols.entidad ? normalizarEntidad(txt(r[cols.entidad])) : ""
       };
       const prev = byEmail.get(email);
       if(prev){
@@ -3224,6 +3321,7 @@ const db = firebase.firestore();
         presenteUltimaCarga: true, ultimaActualizacionPlataforma: today
       };
       if(opts.marcarUltimaCarga) base.ultimaCargaSantander = today;
+      if(s.entidad) base.entidad = s.entidad;
       const old = oldByKey.get(key);
       if(old){
         master.push(Object.assign({}, old, base));
@@ -3263,6 +3361,7 @@ const db = firebase.firestore();
         santanderExtra: {"Estatus": s.estatusRaw},
         ultimaCargaSantander: today, presenteUltimaCarga: true
       };
+      if(s.entidad) base.entidad = s.entidad;
       const old = oldByKey.get(key);
       if(!old){
         nuevos++;
@@ -3290,6 +3389,7 @@ const db = firebase.firestore();
       becasSinCorreoTotal: std.sinCorreo.length,
       updatedAt: nowISO(),
       stats: computeMasterStats(master),
+      ...entidadesMeta(master),
       // La lista de "en plataforma, no en Santander" ya no aplica: se
       // recalcula con la siguiente carga de plataforma.
       lastRun: Object.assign({}, app.meta.lastRun, {revisar: []})
@@ -3329,6 +3429,7 @@ const db = firebase.firestore();
         pruebaKeys: Array.from(pruebaSet),
         updatedAt: nowISO(),
         stats: computeMasterStats(r.master),
+        ...entidadesMeta(r.master),
         lastRun: Object.assign({}, app.meta.lastRun, {revisar: [], nuevosCount: r.nuevosCount, pruebas: capForStorage(r.pruebasRows)})
       });
       let resumen = std.rows.length + " personas en el archivo, " + r.nuevosCount + " nuevas, " + (r.master.length - r.nuevosCount) + " ya estaban, " +
@@ -3351,6 +3452,7 @@ const db = firebase.firestore();
       const r = Object.assign({}, rec, {plataformaExtra: ex, estado: "En plataforma", progreso: s.avance || 0, ultimaActualizacionPlataforma: today});
       // Se recuerda el correo que usa en la plataforma para la próxima carga.
       if(porNombre) r.correoPlataforma = s.emailRaw;
+      if(s.entidad && !r.entidad) r.entidad = s.entidad;
       return r;
     };
     // 1) Por correo (el corregido a mano, el de plataforma recordado o el original).
@@ -3388,6 +3490,7 @@ const db = firebase.firestore();
       lastPlataformaFile: fileName,
       updatedAt: nowISO(),
       stats: computeMasterStats(master),
+      ...entidadesMeta(master),
       lastRun: Object.assign({}, app.meta.lastRun, {revisar: capForStorage(revisar)})
     });
     const altaCount = master.filter(r => r.estado !== "En plataforma").length;
@@ -3665,6 +3768,180 @@ const db = firebase.firestore();
   document.getElementById("btn-buscar-correo").addEventListener("click", ejecutarBusquedaCorreo);
   document.getElementById("buscar-correo").addEventListener("keydown", e => { if(e.key === "Enter") ejecutarBusquedaCorreo(); });
 
+  // ---------- Resumen de programas (solo Santander Open Academy) ----------
+  // Participaron = dados de alta en plataforma. Completaron = 80% o más.
+  // Estados = entidades distintas entre quienes participaron. Todo sale del
+  // resumen que cada curso guarda al cargar archivos, sin leer las tablas.
+  function datosResumen(){
+    const cursos = app.coursesIndex.filter(c => clienteDe(c) === "soa" && !esCapturaManual(c));
+    const porFamilia = new Map();
+    cursos.forEach(c => {
+      const fam = c.familia || inferFamiliaLegacy(c.slug, c.displayName) || c.displayName;
+      if(!porFamilia.has(fam)) porFamilia.set(fam, {familia: fam, cursos: [], participan: 0, completaron: 0, estados: new Set(), conEstado: 0, raros: new Set()});
+      const g = porFamilia.get(fam);
+      const st = c.stats || {};
+      g.cursos.push(c);
+      g.participan += Math.max((st.total || 0) - (st.alta || 0), 0);
+      g.completaron += st.p4 || 0;
+      const ent = c.entidadesParticipan || {};
+      Object.keys(ent).forEach(k => {
+        g.conEstado += ent[k];
+        if(ENTIDADES_VALIDAS.has(k)) g.estados.add(k); else g.raros.add(k);
+      });
+    });
+    return Array.from(porFamilia.values()).sort((a, b) => a.familia.localeCompare(b.familia));
+  }
+
+  function pintarResumen(unicos){
+    const body = document.getElementById("resumen-body");
+    body.innerHTML = "";
+    const grupos = datosResumen();
+    if(!grupos.length){
+      body.appendChild(el("div", {class:"muted"}, [document.createTextNode("No hay cursos de Santander Open Academy.")]));
+      return;
+    }
+    const tabla = el("table");
+    const hr = el("tr");
+    ["Programa", "Cursos", "Participaron", "Completaron", "% completó", "Estados con presencia"].forEach(t => hr.appendChild(el("th", {}, [document.createTextNode(t)])));
+    const thead = el("thead"); thead.appendChild(hr); tabla.appendChild(thead);
+    const tbody = el("tbody");
+    const fila = (valores, negrita) => {
+      const tr = el("tr");
+      valores.forEach(v => {
+        const td = el("td", {}, [document.createTextNode(String(v))]);
+        if(negrita) td.style.fontWeight = "700";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    };
+    const totalEstados = new Set();
+    let totP = 0, totC = 0, totSinEstado = 0;
+    grupos.forEach(g => {
+      g.estados.forEach(e => totalEstados.add(e));
+      totP += g.participan; totC += g.completaron; totSinEstado += Math.max(g.participan - g.conEstado, 0);
+      const u = unicos && unicos.porFamilia.get(g.familia);
+      fila([
+        g.familia, g.cursos.length,
+        g.participan + (u ? " (" + u.participan + " únicas)" : ""),
+        g.completaron + (u ? " (" + u.completaron + " únicas)" : ""),
+        (g.participan ? Math.round(g.completaron / g.participan * 1000) / 10 : 0) + "%",
+        g.estados.size + (g.estados.size ? " — " + Array.from(g.estados).sort().join(", ") : (g.conEstado ? "" : " (sin dato de estado)"))
+      ], false);
+    });
+    fila([
+      "Total", grupos.reduce((n, g) => n + g.cursos.length, 0),
+      totP + (unicos ? " (" + unicos.participan + " únicas)" : ""),
+      totC + (unicos ? " (" + unicos.completaron + " únicas)" : ""),
+      (totP ? Math.round(totC / totP * 1000) / 10 : 0) + "%",
+      totalEstados.size + " de 32"
+    ], true);
+    tabla.appendChild(tbody);
+    const wrap = el("div", {class:"table-scroll", style:"max-height:55vh;"});
+    wrap.appendChild(tabla);
+    body.appendChild(wrap);
+
+    const nota = (t, estilo) => body.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-top:6px;" + (estilo || "")}, [document.createTextNode(t)]));
+    nota("Participaron = dados de alta en plataforma. Completaron = 80% o más de avance. Solo cursos de Santander Open Academy" +
+      (app.coursesIndex.some(c => c.archived && clienteDe(c) === "soa") ? ", incluidos los archivados." : "."));
+    if(!unicos) nota("Las columnas suman por curso: una persona inscrita en dos cursos cuenta dos veces. Para contarla una sola vez usa «Calcular personas únicas».");
+    if(totSinEstado > 0) nota("Hay " + totSinEstado + " participante(s) sin dato de estado: los estados salen de la columna de entidad del archivo de Santander. Los cursos cargados antes de existir esa columna necesitan volver a cargar su base de Santander.", "color:#8a5a00;");
+    const raros = new Set();
+    grupos.forEach(g => g.raros.forEach(r => raros.add(r)));
+    if(raros.size) nota("Valores de estado que no se reconocen y no cuentan: " + Array.from(raros).slice(0, 8).join(", ") + ".", "color:#8a5a00;");
+  }
+
+  document.getElementById("btn-open-resumen").addEventListener("click", () => {
+    pintarResumen(null);
+    openModal("modal-resumen");
+  });
+
+  // Cuenta personas únicas leyendo la tabla madre de los cursos de SOA: une
+  // los registros que comparten cualquier correo.
+  document.getElementById("btn-resumen-unicos").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-resumen-unicos");
+    const estado = document.getElementById("resumen-status");
+    const cursos = app.coursesIndex.filter(c => clienteDe(c) === "soa" && !esCapturaManual(c));
+    const aprox = cursos.reduce((n, c) => n + ((c.stats && c.stats.total) || 0), 0);
+    if(!confirm("Se va a leer la base de " + cursos.length + " curso(s) de Santander Open Academy (unos " + aprox.toLocaleString("es-MX") + " registros).\n\n¿Continuar?")) return;
+    btn.disabled = true;
+    try{
+      const entradas = [];
+      for(let i = 0; i < cursos.length; i++){
+        const c = cursos[i];
+        estado.textContent = "Leyendo curso " + (i + 1) + " de " + cursos.length + ": " + c.displayName + "...";
+        const snap = await masterColl(c.slug).get();
+        const fam = c.familia || inferFamiliaLegacy(c.slug, c.displayName) || c.displayName;
+        snap.docs.forEach(d => {
+          const rec = d.data();
+          entradas.push({fam, emails: emailsDe(rec), part: rec.estado === "En plataforma", comp: (rec.progreso || 0) >= 80});
+        });
+      }
+      const padre = entradas.map((_, i) => i);
+      const raiz = i => { while(padre[i] !== i){ padre[i] = padre[padre[i]]; i = padre[i]; } return i; };
+      const porCorreo = new Map();
+      entradas.forEach((e, i) => e.emails.forEach(m => {
+        if(porCorreo.has(m)){ const a = raiz(porCorreo.get(m)), b = raiz(i); if(a !== b) padre[b] = a; }
+        else porCorreo.set(m, i);
+      }));
+      const global = {participan: new Set(), completaron: new Set()};
+      const porFamilia = new Map();
+      entradas.forEach((e, i) => {
+        const r = raiz(i);
+        if(!porFamilia.has(e.fam)) porFamilia.set(e.fam, {p: new Set(), c: new Set()});
+        const f = porFamilia.get(e.fam);
+        if(e.part){ f.p.add(r); global.participan.add(r); }
+        if(e.comp){ f.c.add(r); global.completaron.add(r); }
+      });
+      const resultado = {participan: global.participan.size, completaron: global.completaron.size, porFamilia: new Map()};
+      porFamilia.forEach((f, fam) => resultado.porFamilia.set(fam, {participan: f.p.size, completaron: f.c.size}));
+      pintarResumen(resultado);
+      estado.textContent = "Personas únicas calculadas con " + entradas.length.toLocaleString("es-MX") + " registros.";
+    }catch(err){
+      console.error(err);
+      estado.textContent = "No se pudo leer: " + (err && err.message ? err.message : err);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- UX del participante (una por cliente y programa) ----------
+  // La UX depende del cliente y del programa: la de Mi Prepa que ya existía es
+  // de UCLX (no de Santander Open Academy). Los demás se reconocen por nombre
+  // de archivo: ux-<cliente>-<programa>.html (cliente: soa, santander o uclx;
+  // por ejemplo ux-soa-matematicamente.html o ux-uclx-vocaaccion.html), sin
+  // tocar el código.
+  const UX_ARCHIVOS = {"alianza|miprepa": "experiencia-participante.html"};
+  const UX_PREFIJO_CLIENTE = {soa: "soa", santander: "santander", alianza: "uclx"};
+  function uxDelPrograma(){
+    const meta = app.meta || {};
+    const cliente = clienteDe(meta);
+    const familia = meta.familia || inferFamiliaLegacy(app.slug, meta.displayName) || meta.displayName || "";
+    const archivo = UX_ARCHIVOS[cliente + "|" + squash(familia)] || ("ux-" + (UX_PREFIJO_CLIENTE[cliente] || cliente) + "-" + slugify(familia) + ".html");
+    const clienteLabel = (CLIENTES.find(c => c.id === cliente) || {}).label || "";
+    return {familia, archivo, clienteLabel};
+  }
+  document.getElementById("btn-open-ux").addEventListener("click", async () => {
+    if(!app.slug || !app.meta) return;
+    const {familia, archivo, clienteLabel} = uxDelPrograma();
+    const body = document.getElementById("ux-body");
+    document.getElementById("ux-title").textContent = "UX del participante — " + familia + (clienteLabel ? " (" + clienteLabel + ")" : "");
+    body.innerHTML = "";
+    openModal("modal-ux");
+    let existe = false;
+    try{
+      const r = await fetch("./" + archivo, {method: "HEAD", cache: "no-store"});
+      existe = r.ok;
+    }catch(e){ existe = false; }
+    if(!existe){
+      body.appendChild(el("div", {class:"panel-note amber"}, [document.createTextNode(
+        "Este programa (" + familia + (clienteLabel ? ", " + clienteLabel : "") + ") todavía no tiene su UX del participante. Cuando exista, súbela al repositorio con el nombre " + archivo + " y aparecerá aquí sola."
+      )]));
+      return;
+    }
+    const marco = el("iframe", {src: "./" + archivo, title: "UX del participante — " + familia, style: "width:100%;height:75vh;border:1px solid var(--line);border-radius:8px;background:#fff;"});
+    body.appendChild(marco);
+  });
+
   // ---------- Lista final (cursos históricos) ----------
   document.getElementById("btn-process-listafinal").addEventListener("click", () => procesar("listafinal", "Actualizar lista final", async () => {
     const pend = app.pending.listafinal;
@@ -3681,6 +3958,7 @@ const db = firebase.firestore();
       lastCargaId: r.cargaId,
       updatedAt: nowISO(),
       stats: computeMasterStats(r.master),
+      ...entidadesMeta(r.master),
       lastRun: Object.assign({}, app.meta.lastRun, {nuevosCount: r.nuevosCount})
     });
     const logEntry = {
@@ -4240,6 +4518,7 @@ const db = firebase.firestore();
     row["Nombres"] = np.nombres;
     row["Apellidos"] = np.apellidos;
     row["Email"] = emailDe(record);
+    row["Entidad"] = record.entidad || "";
     const usedKeys = new Set(["Estado","Progreso","Nombres","Apellidos","Nombre","Email"]);
     // Primero lo de plataforma (lo que se revisa a diario) y luego lo de Santander.
     Object.keys(record.plataformaExtra || {}).forEach(c => {
