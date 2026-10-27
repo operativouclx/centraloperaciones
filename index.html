@@ -406,25 +406,6 @@
   <div id="gate-error"></div>
 </div>
 
-<!-- ======================= MENÚ (después de iniciar sesión) ======================= -->
-<div class="wrap hidden" id="menu">
-  <div class="top">
-    <div>
-      <h1>Central operativa</h1>
-    </div>
-    <div class="user-badge">
-      <span>Sesión: <b id="menu-user-email">—</b></span>
-      <a id="btn-signout-menu">Cerrar sesión</a>
-    </div>
-  </div>
-  <div class="menu-grid">
-    <button type="button" class="menu-card" id="menu-base">
-      <strong>Base datos madre</strong>
-      <span>Cursos, cruce de bases, avance de participantes, NPS, dashboard y UX del participante de cada programa.</span>
-    </button>
-  </div>
-</div>
-
 <!-- ======================= APP (oculta hasta iniciar sesión) ======================= -->
 <div class="wrap hidden" id="app-root">
 
@@ -433,7 +414,6 @@
       <h1>Central operativa - Base madre</h1>
     </div>
     <div class="top-actions">
-      <button type="button" class="btn btn-ghost btn-small" id="btn-back-menu">&larr; Menú</button>
       <div class="user-badge">
         <span>Sesión: <b id="user-email">—</b></span>
         <a id="btn-signout">Cerrar sesión</a>
@@ -1872,34 +1852,21 @@ const db = firebase.firestore();
   let baseIniciada = false;
   function cerrarSesion(){ baseIniciada = false; auth.signOut(); }
   document.getElementById("btn-signout").addEventListener("click", cerrarSesion);
-  document.getElementById("btn-signout-menu").addEventListener("click", cerrarSesion);
-
-  // Después del inicio de sesión se muestra el menú: "Base datos madre"
-  // abre la central (la base y los cursos se cargan la primera vez que se
-  // entra) y "UX participantes" abre la página de experiencia del participante.
-  function mostrarMenu(){
-    document.getElementById("gate").classList.add("hidden");
-    document.getElementById("app-root").classList.add("hidden");
-    document.getElementById("menu").classList.remove("hidden");
-  }
+  // Al iniciar sesión se entra directo a la base de datos (la base y los
+  // cursos se cargan la primera vez).
   function abrirBaseMadre(){
-    document.getElementById("menu").classList.add("hidden");
+    document.getElementById("gate").classList.add("hidden");
     document.getElementById("app-root").classList.remove("hidden");
     if(!baseIniciada){ baseIniciada = true; init(); }
   }
-  document.getElementById("menu-base").addEventListener("click", abrirBaseMadre);
-  document.getElementById("btn-back-menu").addEventListener("click", mostrarMenu);
 
   auth.onAuthStateChanged(user => {
     if(user){
       document.getElementById("user-email").textContent = user.email;
-      document.getElementById("menu-user-email").textContent = user.email;
-      const enMenu = !document.getElementById("menu").classList.contains("hidden");
-      const enBase = !document.getElementById("app-root").classList.contains("hidden");
-      if(!enMenu && !enBase) mostrarMenu();
+      abrirBaseMadre();
     } else {
+      baseIniciada = false;
       document.getElementById("app-root").classList.add("hidden");
-      document.getElementById("menu").classList.add("hidden");
       document.getElementById("gate").classList.remove("hidden");
     }
   });
@@ -2928,24 +2895,40 @@ const db = firebase.firestore();
     }
 
     let entries = p.rows.map((r, i) => ({r, fila: i + 2}));
-    if(cols.generacion){
-      // Las filas sin generación cuentan como un valor más ("(vacío)") cuando
-      // el archivo trae otras: así no se mezclan con las de una generación.
+    // La generación sale de la columna Generación; si el reporte no la trae,
+    // se usa la columna Grupo (en Moodle un mismo curso junta varias
+    // generaciones y grupos de institución: el grupo de la generación es el
+    // que define a quién se carga).
+    const colGen = cols.generacion || cols.grupo;
+    std.genOrigen = cols.generacion ? "generacion" : "grupo";
+    if(colGen){
+      // Las filas sin valor cuentan como uno más ("(vacío)") cuando el archivo
+      // trae otros: así no se mezclan con las de una generación.
       const VACIO = "(vacío)";
-      const valDe = e => { const t = String(e.r[cols.generacion] ?? "").trim(); return t || VACIO; };
-      const vals = Array.from(new Set(entries.map(valDe))).sort((a, b) => a.localeCompare(b));
+      const valDe = e => { const t = String(e.r[colGen] ?? "").trim(); return t || VACIO; };
+      const personasPor = new Map();
+      entries.forEach(e => {
+        const v = valDe(e);
+        if(!personasPor.has(v)) personasPor.set(v, new Set());
+        personasPor.get(v).add(normalize(e.r[cols.correo]));
+      });
+      const esGen = v => /^g\s*\d+/i.test(v);
+      const vals = Array.from(personasPor.keys()).sort((x, y) =>
+        (esGen(y) - esGen(x)) || (esGen(x) && esGen(y) ? x.localeCompare(y) : personasPor.get(y).size - personasPor.get(x).size));
+      std.genConteos = {};
+      vals.forEach(v => { std.genConteos[v] = personasPor.get(v).size; });
       std.genValues = vals.length > 1 ? vals : [];
       if(vals.length === 1){
         std.genValor = vals[0] === VACIO ? "" : vals[0];
       } else if(vals.length > 1){
         if(!genValor || !vals.includes(genValor)){
-          std.errors.push("El archivo trae varias generaciones (" + vals.join(", ") + "). Elige cuál vas a cargar.");
+          std.errors.push("El archivo trae " + (cols.generacion ? "varias generaciones" : "varios grupos") + " (" + vals.slice(0, 6).join(", ") + (vals.length > 6 ? ", y " + (vals.length - 6) + " más" : "") + "). Elige cuál vas a cargar.");
           return std;
         }
         std.genValor = genValor === VACIO ? "" : genValor;
         const antes = entries.length;
         entries = entries.filter(e => valDe(e) === genValor);
-        if(antes - entries.length) std.warnings.push((antes - entries.length) + " fila(s) de otras generaciones: se omiten.");
+        if(antes - entries.length) std.warnings.push((antes - entries.length) + " fila(s) de otros " + (cols.generacion ? "valores de generación" : "grupos") + ": se omiten.");
       }
     }
 
@@ -3127,7 +3110,8 @@ const db = firebase.firestore();
     p.std = buildStd(kind, p.genValor);
 
     const genWrap = el("div", {class:"field-row hidden"});
-    genWrap.appendChild(el("label", {}, [document.createTextNode("Generación a cargar (el archivo trae varias)")]));
+    const genLabel = el("label", {}, [document.createTextNode("Generación a cargar (el archivo trae varias)")]);
+    genWrap.appendChild(genLabel);
     const genSel = el("select");
     genSel.id = "map-" + kind + "-genval";
     genWrap.appendChild(genSel);
@@ -3139,9 +3123,12 @@ const db = firebase.firestore();
       genSel.innerHTML = "";
       if(p.std.genValues.length > 1){
         genWrap.classList.remove("hidden");
+        genLabel.textContent = p.std.genOrigen === "grupo"
+          ? "Grupo de esta generación (el reporte trae varios grupos: elige el que define a quién se carga)"
+          : "Generación a cargar (el archivo trae varias)";
         genSel.appendChild(el("option", {value:""}, [document.createTextNode("— elige una —")]));
         p.std.genValues.forEach(v => {
-          const opt = el("option", {value:v}, [document.createTextNode(v)]);
+          const opt = el("option", {value:v}, [document.createTextNode(v + " (" + (p.std.genConteos[v] || 0) + " personas)")]);
           if(v === p.genValor) opt.selected = true;
           genSel.appendChild(opt);
         });
