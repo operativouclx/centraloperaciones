@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi Prepa | Documentos para el registro al examen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #15487b;
+    --blue: #1567a5;
+    --sky: #259fd7;
+    --teal: #1f7a70;      /* verde azulado del manual (#61b3a9), oscurecido para texto y botones */
+    --teal-logo: #61b3a9;
+    --gold: #e7b750;
+    --gold-ink: #7a5200;
+    --bg: #f3f8fc;
+    --card: #ffffff;
+    --ink: #12263a;
+    --muted: #4f6479;
+    --line: #d7e3ee;
+    --ok: #1f7a70;   --ok-t: #e3f3f1;
+    --warn: #7a5200; --warn-t: #fbf1dc;
+    --err: #b3321f;  --err-t: #fbe9e5;
+    --info: #1669a9; --info-t: #e4f1fa;
+    --display: "Poppins", "Segoe UI", system-ui, sans-serif;
+    --texto: "Poppins", "Segoe UI", system-ui, sans-serif;
+    --r: 14px;
+    --sombra: 0 1px 2px rgba(16,74,124,.06), 0 6px 20px rgba(16,74,124,.07);
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--texto); font-size: 15px; line-height: 1.55; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
+  h1, h2, h3 { font-family: var(--display); color: var(--navy); margin: 0; line-height: 1.2; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* Barra de demo */
+  .demo { background: var(--navy); color: #fff; font-size: 13.5px; }
+  .demo .in { max-width: 1180px; margin: 0 auto; padding: 8px 20px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+  .demo b { font-family: var(--display); font-weight: 600; letter-spacing: .02em; }
+  .demo p { margin: 0; opacity: .9; }
+  .demo .acc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .seg { display: inline-flex; background: rgba(255,255,255,.14); border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; background: transparent; color: #fff; padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 13.5px; }
+  .seg button[aria-pressed="true"] { background: #fff; color: var(--navy); }
+  .link-btn { background: none; border: 0; color: #fff; text-decoration: underline; padding: 6px; font-size: 13.5px; }
+
+  /* Encabezado del sitio */
+  header.sitio { background: #fff; border-bottom: 1px solid var(--line); }
+  header.sitio .in { max-width: 1180px; margin: 0 auto; padding: 6px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  header.sitio img { height: 54px; width: auto; display: block; margin: -4px 0; }
+  header.sitio .quien { font-size: 14px; color: var(--muted); text-align: right; }
+  header.sitio .quien b { color: var(--ink); display: block; }
+
+  .banda-marca { background: var(--navy); color: #fff; position: relative; overflow: hidden; }
+  .banda-marca .in { max-width: 1180px; margin: 0 auto; padding: 26px 20px 30px; position: relative; z-index: 1; }
+  .banda-marca p { margin: 0; font-weight: 300; font-size: 15px; opacity: .92; }
+  .banda-marca h2 { color: #fff; font-weight: 500; font-size: clamp(20px, 3vw, 28px); margin-top: 2px; }
+  .banda-marca h2 b { font-weight: 700; }
+  .mosaico { position: absolute; right: 24px; top: 14px; bottom: -6px; display: grid; grid-template-columns: repeat(3, 38px); gap: 6px; opacity: .95; }
+  .mosaico i { display: block; width: 38px; height: 38px; }
+  .mosaico .a { background: var(--gold); border-radius: 0 14px 0 0; }
+  .mosaico .b { background: var(--blue); border-radius: 0; }
+  .mosaico .c { background: var(--sky); border-radius: 50%; }
+  .mosaico .d { background: var(--teal-logo); border-radius: 14px 0 0 0; }
+  .mosaico .e { background: var(--gold); border-radius: 50%; }
+  .mosaico .f { background: var(--teal-logo); border-radius: 0 0 14px 0; }
+  main { max-width: 1180px; margin: 0 auto; padding: 28px 20px 120px; }
+  .vista[hidden] { display: none; }
+
+  /* Tarjetas y piezas comunes */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sombra); padding: 22px; }
+  .card + .card { margin-top: 18px; }
+  .card > h2 { font-size: 20px; margin-bottom: 4px; }
+  .card > .lead { color: var(--muted); margin: 0 0 18px; font-size: 15px; }
+  .num { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: #fff; font: 600 14px var(--display); margin-right: 10px; vertical-align: 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; line-height: 1; padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .c-vacio { background: #eef2f6; color: var(--muted); }
+  .c-subido, .c-revision { background: var(--info-t); color: var(--info); }
+  .c-aprobado, .c-listo { background: var(--ok-t); color: var(--ok); }
+  .c-rechazado, .c-correcciones { background: var(--err-t); color: var(--err); }
+  .c-borrador { background: #eef2f6; color: var(--muted); }
+  .btn { border: 0; border-radius: 999px; padding: 11px 20px; font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+  .btn.prim { background: var(--teal); color: #fff; }
+  .btn.prim:hover { background: #165f57; }
+  .btn.sec { background: #fff; color: var(--navy); border: 1.5px solid var(--navy); }
+  .btn.sec:hover { background: var(--info-t); }
+  .btn.err { background: #fff; color: var(--err); border: 1.5px solid var(--err); }
+  .btn.err:hover { background: var(--err-t); }
+  .btn[disabled] { background: #dde6ee; color: #7d8fa1; border-color: transparent; cursor: not-allowed; }
+  .btn.sm { padding: 7px 14px; font-size: 13.5px; }
+  .aviso { border-radius: 12px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; font-size: 15px; }
+  .aviso b { display: block; font-family: var(--display); font-weight: 600; font-size: 15.5px; margin-bottom: 2px; }
+  .aviso svg { flex: none; margin-top: 2px; }
+  .aviso.info { background: var(--info-t); color: #0e4c7a; }
+  .aviso.ok { background: var(--ok-t); color: #0a5a52; }
+  .aviso.err { background: var(--err-t); color: #8c2515; }
+  .aviso.warn { background: var(--warn-t); color: var(--warn); }
+
+  /* Participante */
+  .hero { display: grid; gap: 18px; grid-template-columns: 1.4fr 1fr; align-items: stretch; margin-bottom: 22px; }
+  .hero h1 { font-size: clamp(26px, 4vw, 36px); margin-bottom: 6px; }
+  .hero .sub { color: var(--muted); margin: 0 0 16px; max-width: 54ch; }
+  .pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .pasos li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; color: var(--muted); }
+  .pasos li .pt { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 700; background: #fff; color: var(--muted); }
+  .pasos li.hecho .pt { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .pasos li.ahora .pt { border-color: var(--blue); color: var(--blue); }
+  .pasos li b { color: var(--ink); display: block; font-size: 15px; }
+  .pasos li.ahora b { color: var(--blue); }
+  .barra { height: 8px; background: #e3ecf4; border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+  .barra > span { display: block; height: 100%; background: linear-gradient(90deg, var(--sky), var(--teal-logo)); border-radius: 99px; transition: width .3s; }
+
+  .periodos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; border: 0; padding: 0; min-width: 0; }
+  .periodos legend { font-weight: 700; font-size: 14px; padding: 0; margin-bottom: 8px; }
+  .per { position: relative; }
+  .per input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; cursor: pointer; margin: 0; }
+  .per label { display: block; border: 1.5px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; height: 100%; }
+  .per label b { font-family: var(--display); font-weight: 600; color: var(--navy); display: block; }
+  .per label small { color: var(--muted); display: block; margin-top: 4px; line-height: 1.4; }
+  .per input:checked + label { border-color: var(--teal); background: var(--ok-t); box-shadow: 0 0 0 1px var(--teal) inset; }
+  .per input:focus-visible + label { outline: 3px solid var(--sky); outline-offset: 2px; }
+  .per input:disabled + label { opacity: .7; cursor: default; }
+
+  .campos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 16px; }
+  .campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .campo.ancho { grid-column: 1 / -1; }
+  .campo label { font-weight: 700; font-size: 14px; }
+  .campo .ayuda { font-size: 13px; color: var(--muted); }
+  .campo input, .campo select, .campo textarea { border: 1.5px solid #b9cadb; border-radius: 10px; padding: 10px 12px; background: #fff; width: 100%; min-width: 0; }
+  .campo input:focus, .campo select:focus, .campo textarea:focus { outline: 3px solid var(--sky); outline-offset: 0; border-color: var(--blue); }
+  .campo input[readonly], .campo input:disabled, .campo select:disabled, .campo textarea:disabled { background: #f0f5f9; color: var(--muted); }
+  .campo.mal input { border-color: var(--err); }
+  .campo .error { color: var(--err); font-size: 13px; font-weight: 600; }
+  .fijo { display: flex; align-items: center; gap: 10px; background: var(--info-t); border-radius: 10px; padding: 10px 14px; font-size: 14.5px; color: #0e4c7a; }
+
+  /* Documentos */
+  .reglas { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+  .reglas li { background: #eef4f9; border-radius: 999px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; color: var(--navy); }
+  .doc { border: 1.5px solid var(--line); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: 1fr auto; gap: 12px 16px; align-items: center; background: #fff; }
+  .doc + .doc { margin-top: 12px; }
+  .doc.est-aprobado { border-color: #8fd3c9; background: #fafefd; }
+  .doc.est-rechazado { border-color: #e6a99e; background: #fffafa; }
+  .doc h3 { font-size: 16.5px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .doc .desc { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+  .doc .arch { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
+  .doc .arch .pdf { flex: none; width: 34px; height: 42px; border-radius: 5px; background: #fff; border: 1.5px solid var(--blue); position: relative; display: grid; place-items: end center; padding-bottom: 5px; font: 700 9px var(--display); color: var(--blue); }
+  .doc .arch .pdf::before { content: ""; position: absolute; top: -1.5px; right: -1.5px; width: 10px; height: 10px; background: var(--bg); border-left: 1.5px solid var(--blue); border-bottom: 1.5px solid var(--blue); border-bottom-left-radius: 3px; }
+  .doc .arch small { color: var(--muted); display: block; }
+  .doc .acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .doc .motivo { grid-column: 1 / -1; }
+  .drop { grid-column: 1 / -1; border: 2px dashed #9db8cf; border-radius: 12px; padding: 18px; text-align: center; background: #f7fbfe; color: var(--muted); font-size: 14.5px; }
+  .drop.over { border-color: var(--teal); background: var(--ok-t); }
+  .drop .btn { margin: 4px 4px 0; }
+  .drop p { margin: 0 0 6px; }
+  .drop .err-txt { color: var(--err); font-weight: 700; margin-top: 8px; }
+
+  .barra-envio { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -6px 20px rgba(16,74,124,.08); z-index: 20; }
+  .barra-envio .in { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .barra-envio p { margin: 0; font-size: 14.5px; color: var(--muted); }
+  .barra-envio p b { color: var(--ink); }
+
+  /* Equipo UCLX */
+  .tablero { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+  .resumen { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .resumen button { border: 1.5px solid var(--line); background: #fff; border-radius: 12px; padding: 8px 12px; text-align: left; min-width: 0; }
+  .resumen button b { display: block; font: 700 22px var(--display); color: var(--navy); line-height: 1.1; }
+  .resumen button span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  .resumen button[aria-pressed="true"] { border-color: var(--blue); background: var(--info-t); }
+  .lista { padding: 0; overflow: hidden; }
+  .lista .tope { padding: 14px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+  .lista input[type=search] { border: 1.5px solid #b9cadb; border-radius: 10px; padding: 9px 12px; width: 100%; }
+  .fila { width: 100%; text-align: left; border: 0; background: #fff; padding: 14px; display: grid; gap: 6px; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
+  .fila:hover { background: #f5f9fd; }
+  .fila[aria-current="true"] { background: var(--info-t); border-left-color: var(--blue); }
+  .fila .nom { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .fila .met { font-size: 13px; color: var(--muted); display: flex; gap: 6px 12px; flex-wrap: wrap; align-items: center; }
+  .puntos { display: inline-flex; gap: 4px; }
+  .puntos i { width: 10px; height: 10px; border-radius: 50%; background: #d3dde7; }
+  .puntos i.aprobado { background: var(--teal-logo); }
+  .puntos i.subido { background: var(--sky); }
+  .puntos i.rechazado { background: #d9534f; }
+  .lote { padding: 12px 14px; background: #f7fbfe; border-top: 1px solid var(--line); }
+  .banda-marca h2, .hoja h4 { font-family: var(--display); }
+  .vacio-det { text-align: center; color: var(--muted); padding: 60px 20px; }
+  .det-cab { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .det-cab h2 { font-size: 22px; }
+  .datos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; margin: 0 0 18px; padding: 14px; background: #f5f9fd; border-radius: 12px; font-size: 14px; }
+  .datos dt { color: var(--muted); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .datos dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs button { border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: 14px; display: inline-flex; gap: 8px; align-items: center; }
+  .tabs button[aria-selected="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .tabs .pt { width: 10px; height: 10px; border-radius: 50%; background: #c6d3df; }
+  .tabs .pt.aprobado { background: var(--teal-logo); } .tabs .pt.subido { background: var(--sky); } .tabs .pt.rechazado { background: #e5645f; }
+  .revision { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
+  .visor { background: #dfe8f0; border-radius: 12px; padding: 18px; min-height: 420px; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: flex-start; overflow: auto; }
+  .visor iframe { width: 100%; height: 520px; border: 0; background: #fff; border-radius: 6px; }
+  .visor .falta { margin: auto; text-align: center; color: var(--muted); }
+  .hoja { background: #fff; width: 100%; max-width: 380px; aspect-ratio: 1 / 1.3; border-radius: 4px; box-shadow: 0 2px 10px rgba(16,74,124,.18); padding: 22px; font-size: 11px; color: #2c3f52; position: relative; overflow: hidden; }
+  .hoja .lado { position: absolute; top: 8px; right: 10px; font: 700 9.5px var(--display); letter-spacing: .08em; color: #8aa0b5; text-transform: uppercase; }
+  .hoja h4 { font: 600 12.5px var(--display); margin: 0 0 12px; color: var(--navy); text-transform: uppercase; letter-spacing: .03em; }
+  .hoja .ln { height: 7px; background: #e6edf4; border-radius: 3px; margin: 8px 0; }
+  .hoja .ln.c { width: 70%; } .hoja .ln.m { width: 45%; }
+  .hoja .dato { margin: 7px 0; } .hoja .dato b { font-weight: 700; }
+  .hoja .firma { margin-top: 26px; border-top: 1px solid #8aa0b5; width: 55%; padding-top: 3px; font-size: 9.5px; color: #6c8196; }
+  .hoja .firma svg { position: absolute; margin: -34px 0 0 14px; }
+  .hoja .foto { float: right; width: 70px; height: 84px; background: #d6e3ee; border-radius: 4px; margin: 0 0 8px 10px; }
+  .hoja.credencial { aspect-ratio: 1.58 / 1; max-width: 420px; padding: 16px; }
+  .hoja .sello { position: absolute; right: 18px; bottom: 16px; border: 2px solid #c8d5e1; color: #b4c4d3; font: 700 11px var(--display); padding: 3px 8px; border-radius: 4px; transform: rotate(-8deg); }
+  .criterios { margin: 0 0 14px; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .criterios label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; font-size: 14.5px; cursor: pointer; background: #fff; }
+  .criterios input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--teal); flex: none; }
+  .criterios label:has(input:checked) { border-color: #8fd3c9; background: #f4fcfb; }
+  .panel-rev h3 { font-size: 16px; margin-bottom: 8px; }
+  .rechazo { background: var(--err-t); border-radius: 12px; padding: 14px; margin-top: 12px; display: grid; gap: 10px; }
+  .rechazo .campo select, .rechazo .campo textarea { border-color: #e0a79d; }
+  .botones { display: flex; gap: 8px; flex-wrap: wrap; }
+  .atras { display: none; margin-bottom: 12px; }
+
+  dialog { border: 0; border-radius: 16px; padding: 0; width: min(560px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(10,40,70,.35); }
+  dialog::backdrop { background: rgba(10,30,50,.55); }
+  dialog .cuerpo { padding: 24px; }
+  dialog h2 { font-size: 20px; margin-bottom: 6px; }
+  dialog pre { background: #0f2538; color: #d7ecf8; border-radius: 10px; padding: 14px; font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace; overflow: auto; margin: 14px 0; max-height: 260px; }
+  dialog .pie { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+  #toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px; font-size: 14.5px; font-weight: 600; opacity: 0; pointer-events: none; transition: .25s; z-index: 60; max-width: calc(100vw - 32px); text-align: center; }
+  #toast.on { opacity: 1; transform: translateX(-50%); }
+
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: 1fr; }
+    .tablero { grid-template-columns: 1fr; }
+    .tablero.con-sel .lista-col { display: none; }
+    .tablero:not(.con-sel) .det-col { display: none; }
+    .atras { display: inline-flex; }
+    .revision { grid-template-columns: 1fr; }
+    .datos { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .mosaico { display: none; }
+    main { padding: 20px 16px 130px; }
+    .demo .in, header.sitio .in { padding-left: 16px; padding-right: 16px; }
+    header.sitio img { height: 44px; }
+    header.sitio .quien { font-size: 13px; }
+    .periodos, .campos { grid-template-columns: 1fr; }
+    .doc { grid-template-columns: 1fr; }
+    .doc .acciones { justify-content: flex-start; }
+    .card { padding: 18px 16px; }
+    .datos { grid-template-columns: 1fr; }
+    .barra-envio .btn { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="demo">
+  <div class="in">
+    <p><b>Prototipo de demostración.</b> Los datos son ficticios y nada se guarda en un servidor.</p>
+    <div class="acc">
+      <div class="seg" role="group" aria-label="Vista del prototipo">
+        <button type="button" data-vista="participante" aria-pressed="true">Participante</button>
+        <button type="button" data-vista="equipo" aria-pressed="false">Equipo UCLX</button>
+      </div>
+      <button type="button" class="link-btn" id="reiniciar">Reiniciar demo</button>
+    </div>
+  </div>
+</div>
+
+<header class="sitio">
+  <div class="in">
+    <img src="assets/course-logos/mi-prepa.png" alt="Mi Prepa">
+    <div class="quien" id="quien"></div>
+  </div>
+</header>
+
+<div class="banda-marca">
+  <div class="in">
+    <p>Un camino de oportunidades</p>
+    <h2>Registro al examen: <b>tus documentos</b></h2>
+  </div>
+  <div class="mosaico" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i><i class="e"></i><i class="f"></i></div>
+</div>
+
+<main>
+  <section id="v-participante" class="vista" aria-label="Vista del participante"></section>
+  <section id="v-equipo" class="vista" aria-label="Vista del equipo UCLX" hidden></section>
+</main>
+
+<div id="barra-envio" class="barra-envio" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg"></dialog>
+
+<script>
+/* ============ DATOS BASE ============ */
+const DOCS = [
+  { k: "curp", t: "CURP", d: "Descargada directo del portal de RENAPO y actualizada.",
+    crit: ["Se lee completa y con claridad", "Está actualizada y descargada del portal de RENAPO", "El nombre coincide con la identificación"] },
+  { k: "identificacion", t: "Identificación oficial vigente", d: "Por ambos lados si tu identificación los tiene.",
+    crit: ["Se lee completa y con claridad", "Está vigente y en buen estado", "El nombre coincide con el del registro"] },
+  { k: "certificado", t: "Certificado de secundaria", d: "Escaneado por ambos lados, en un solo archivo.",
+    crit: ["Se lee completo y con claridad", "Están los dos lados del certificado", "El nombre coincide con la identificación"] },
+  { k: "carta", t: "Carta de autenticidad", d: "Con tu firma en tinta azul.",
+    crit: ["Se lee completa y con claridad", "La firma está en tinta azul", "El nombre coincide con la identificación"] }
+];
+const MOTIVOS = [
+  "Varios documentos unidos en un solo PDF",
+  "Certificado escaneado de un solo lado",
+  "El nombre no coincide con la identificación",
+  "Identificación vencida o en mal estado",
+  "CURP desactualizada o no descargada del portal de RENAPO",
+  "El documento no se lee con claridad",
+  "La firma no está en tinta azul",
+  "Otro (explícalo en la nota)"
+];
+const PERIODOS = [
+  { id: "p1", t: "Primer periodo 2027", examen: "Examen: marzo 2027", plazo: "plazo para subir documentos: febrero 2027" },
+  { id: "p2", t: "Segundo periodo 2027", examen: "Examen: junio 2027", plazo: "plazo para subir documentos: mayo 2027" },
+  { id: "p3", t: "Tercer periodo 2027", examen: "Examen: octubre 2027", plazo: "plazo para subir documentos: septiembre 2027" }
+];
+const SEDES = {
+  "Ciudad de México": ["Sede Azcapotzalco", "Sede Coyoacán", "Sede Iztapalapa"],
+  "Jalisco": ["Sede Guadalajara Centro", "Sede Zapopan"],
+  "Nuevo León": ["Sede Monterrey Centro", "Sede San Nicolás"],
+  "Puebla": ["Sede Puebla Centro"],
+  "Yucatán": ["Sede Mérida Norte"]
+};
+const KEY = "mi-prepa-documentos-demo-v1";
+const ME = "yo";
+
+const d = (st, name, size, extra) => Object.assign({ st, name, size, sample: true }, extra || {});
+const docsDe = (e) => Object.assign({ curp: { st: "vacio" }, identificacion: { st: "vacio" }, certificado: { st: "vacio" }, carta: { st: "vacio" } }, e || {});
+
+function inicial() {
+  return {
+    vista: "participante",
+    sel: null, tab: "curp",
+    people: [
+      { id: ME, nombre: "Valeria", apellidos: "Ortega Núñez", curp: "OENV050312MDFRXL09", nacimiento: "2005-03-12", correo: "valeria.ortega@ejemplo.mx", telefono: "5512345678",
+        periodo: "", entidad: "", sede: "", req: "", enviado: false, enviadoEn: null, docs: docsDe() },
+      { id: "a1", nombre: "Andrea", apellidos: "Salgado Ruiz", curp: "SARA990714MJCLZN04", nacimiento: "1999-07-14", correo: "andrea.salgado@ejemplo.mx", telefono: "3311223344",
+        periodo: "p1", entidad: "Jalisco", sede: "Sede Zapopan", req: "", enviado: true, enviadoEn: "Hace 2 horas",
+        docs: docsDe({ curp: d("subido", "CURP_Salgado.pdf", 410), identificacion: d("subido", "INE_Salgado.pdf", 1320, { vig: 2030 }), certificado: d("subido", "Certificado_Salgado.pdf", 2210), carta: d("subido", "Carta_Salgado.pdf", 380) }) },
+      { id: "a2", nombre: "Jorge Luis", apellidos: "Medina Prieto", curp: "MEPJ980221HNLDRR07", nacimiento: "1998-02-21", correo: "jorge.medina@ejemplo.mx", telefono: "8187654321",
+        periodo: "p1", entidad: "Nuevo León", sede: "Sede Monterrey Centro", req: "", enviado: true, enviadoEn: "Ayer",
+        docs: docsDe({ curp: d("aprobado", "CURP_Medina.pdf", 390), identificacion: d("aprobado", "INE_Medina.pdf", 1180, { vig: 2029 }),
+          certificado: d("rechazado", "Certificado_Medina.pdf", 1650, { unLado: true, motivo: "Certificado escaneado de un solo lado", nota: "Falta el reverso del certificado. Escanéalo de nuevo con ambos lados en un solo PDF." }),
+          carta: d("aprobado", "Carta_Medina.pdf", 360) }) },
+      { id: "a3", nombre: "Mariana", apellidos: "Téllez Cruz", curp: "TECM020930MPLLRR02", nacimiento: "2002-09-30", correo: "mariana.tellez@ejemplo.mx", telefono: "2223344556",
+        periodo: "p1", entidad: "Puebla", sede: "Sede Puebla Centro", req: "Silla de ruedas", enviado: true, enviadoEn: "Hace 3 días",
+        docs: docsDe({ curp: d("aprobado", "CURP_Tellez.pdf", 402), identificacion: d("aprobado", "INE_Tellez.pdf", 1250, { vig: 2031 }), certificado: d("aprobado", "Certificado_Tellez.pdf", 2480), carta: d("aprobado", "Carta_Tellez.pdf", 395) }) },
+      { id: "a4", nombre: "Roberto", apellidos: "Sánchez Gil", curp: "SAGR950105HDFNLB08", nacimiento: "1995-01-05", correo: "roberto.sanchez@ejemplo.mx", telefono: "5598761234",
+        periodo: "p1", entidad: "Ciudad de México", sede: "Sede Coyoacán", req: "", enviado: true, enviadoEn: "Hace 5 horas",
+        docs: docsDe({ curp: d("aprobado", "CURP_Sanchez.pdf", 415), identificacion: d("subido", "Credencial_Sanchez.pdf", 1410, { vig: 2022 }), certificado: d("subido", "Certificado_Sanchez.pdf", 2390), carta: d("subido", "Carta_Sanchez.pdf", 372) }) },
+      { id: "a5", nombre: "Luz María", apellidos: "Herrera Domínguez", curp: "HEDL010618MYNRMZ05", nacimiento: "2001-06-18", correo: "luz.herrera@ejemplo.mx", telefono: "9993456789",
+        periodo: "p2", entidad: "Yucatán", sede: "Sede Mérida Norte", req: "", enviado: true, enviadoEn: "Hace 4 días",
+        docs: docsDe({ curp: d("aprobado", "CURP_Herrera.pdf", 398), identificacion: d("aprobado", "INE_Herrera.pdf", 1290, { vig: 2032 }), certificado: d("aprobado", "Certificado_Herrera.pdf", 2330), carta: d("aprobado", "Carta_Herrera.pdf", 388) }) },
+      { id: "a6", nombre: "Daniel", apellidos: "Ocampo Vera", curp: "OAVD000825HDFCRN03", nacimiento: "2000-08-25", correo: "daniel.ocampo@ejemplo.mx", telefono: "5544332211",
+        periodo: "p2", entidad: "Ciudad de México", sede: "Sede Azcapotzalco", req: "", enviado: false, enviadoEn: null,
+        docs: docsDe({ curp: d("subido", "CURP_Ocampo.pdf", 405) }) }
+    ]
+  };
+}
+
+/* ============ ESTADO ============ */
+let S;
+const archivos = {};   /* URL de archivos reales subidos en esta sesión: "persona|doc" -> blob URL */
+const ui = { errores: {}, drag: null, rechazando: false, filtro: "todos", busca: "" };
+
+function cargar() {
+  try { const t = localStorage.getItem(KEY); if (t) return JSON.parse(t); } catch (e) {}
+  return inicial();
+}
+function guardar() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+S = cargar();
+
+const yo = () => S.people.find(p => p.id === ME);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nombreCompleto = p => `${p.nombre} ${p.apellidos}`.trim();
+const per = id => PERIODOS.find(x => x.id === id);
+const ETQ = { vacio: "Falta", subido: "En revisión", aprobado: "Aprobado", rechazado: "Corregir" };
+const ETQ_P = { borrador: "Sin enviar", revision: "En revisión", correcciones: "Con correcciones", listo: "Listo" };
+
+function estado(p) {
+  if (!p.enviado) return "borrador";
+  const e = DOCS.map(x => p.docs[x.k].st);
+  if (e.includes("rechazado")) return "correcciones";
+  if (e.every(x => x === "aprobado")) return "listo";
+  return "revision";
+}
+const sizeTxt = kb => kb >= 1024 ? (kb / 1024).toFixed(1).replace(".0", "") + " MB" : Math.round(kb) + " KB";
+const curpOk = v => /^[A-Z0-9]{18}$/.test(String(v || "").trim().toUpperCase());
+
+function problemas(p) {
+  const e = {};
+  if (!p.nombre.trim()) e.nombre = "Escribe tu nombre.";
+  if (!p.apellidos.trim()) e.apellidos = "Escribe tus apellidos.";
+  if (!curpOk(p.curp)) e.curp = "La CURP debe tener 18 caracteres (ahora tiene " + p.curp.trim().length + ").";
+  if (!p.nacimiento) e.nacimiento = "Indica tu fecha de nacimiento.";
+  if (!/^\S+@\S+\.\S+$/.test(p.correo)) e.correo = "Escribe un correo válido.";
+  if (String(p.telefono).replace(/\D/g, "").length < 10) e.telefono = "Escribe un teléfono de 10 dígitos.";
+  if (!p.entidad) e.entidad = "Elige la entidad.";
+  if (!p.sede) e.sede = "Elige tu sede.";
+  return e;
+}
+function listoParaEnviar(p) {
+  return !!p.periodo && Object.keys(problemas(p)).length === 0 && DOCS.every(x => p.docs[x.k].st !== "vacio");
+}
+
+/* ============ UTILIDADES UI ============ */
+let toastT;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3200);
+}
+const chip = (cls, txt) => `<span class="chip c-${cls}"><i></i>${esc(txt)}</span>`;
+const ICO = {
+  info: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 11v6M12 7.5v.01"/></svg>',
+  ok: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.8 2.8L16 9.5"/></svg>',
+  err: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>',
+  up: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
+};
+
+/* ============ VISTA PARTICIPANTE ============ */
+function renderParticipante() {
+  const p = yo(), est = estado(p), er = problemas(p);
+  const subidos = DOCS.filter(x => p.docs[x.k].st !== "vacio").length;
+  const aprob = DOCS.filter(x => p.docs[x.k].st === "aprobado").length;
+  const bloq = p.enviado;            /* tras enviar, solo se corrigen los documentos rechazados */
+  const pct = !p.enviado ? Math.round(((p.periodo ? 1 : 0) + (p.sede ? 1 : 0) + subidos) / 6 * 70) : est === "listo" ? 100 : 70 + Math.round(aprob / 4 * 30);
+
+  let banner = "";
+  if (est === "borrador") banner = `<div class="aviso info">${ICO.info}<div><b>Te falta poco para registrarte al examen</b>Confirma tu periodo y sede, revisa tus datos y sube los 4 documentos. Después los revisamos nosotros.</div></div>`;
+  if (est === "revision") banner = `<div class="aviso info">${ICO.info}<div><b>Estamos revisando tus documentos</b>Enviado ${esc(p.enviadoEn || "hace un momento")}. Si algo necesita ajustarse, te avisamos por correo y aquí mismo.</div></div>`;
+  if (est === "correcciones") {
+    const n = DOCS.filter(x => p.docs[x.k].st === "rechazado").length;
+    banner = `<div class="aviso err">${ICO.err}<div><b>${n === 1 ? "Hay 1 documento que necesita corregirse" : "Hay " + n + " documentos que necesitan corregirse"}</b>Tienes alrededor de 5 días hábiles. Si no se atiende, tu registro no avanza.</div></div>`;
+  }
+  if (est === "listo") banner = `<div class="aviso ok">${ICO.ok}<div><b>¡Tus documentos están listos!</b>Ya puedes olvidarte de este paso. UCLX hará tu registro con Ceneval y te enviará tu CREX por correo unas semanas antes del examen.</div></div>`;
+
+  const paso = (n, t, s, hecho, ahora) => `<li class="${hecho ? "hecho" : ahora ? "ahora" : ""}"><span class="pt">${hecho ? "✓" : n}</span><span><b>${t}</b>${s}</span></li>`;
+  const hero = `
+    <div class="card">
+      <h1>Hola, ${esc(p.nombre)}</h1>
+      <p class="sub">Aquí confirmas la fecha en que quieres presentar tu examen y subes tus documentos. Tu curso sigue a tu ritmo mientras tanto.</p>
+      ${banner}
+    </div>
+    <div class="card">
+      <h2 style="font-size:17px">Tu avance en el registro</h2>
+      <div class="barra" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Avance del registro"><span style="width:${pct}%"></span></div>
+      <p style="margin:0 0 14px;font-size:13.5px;color:var(--muted)">${pct}% completo</p>
+      <ol class="pasos">
+        ${paso(1, "Confirma tus datos y documentos", "Periodo, sede y 4 PDF.", p.enviado, !p.enviado)}
+        ${paso(2, "Revisión de UCLX", "Legibilidad, firma, vigencia y nombre.", est === "listo", est === "revision" || est === "correcciones")}
+        ${paso(3, "Registro con Ceneval y tu CREX", "Lo hacemos nosotros; el CREX llega por correo.", false, est === "listo")}
+        ${paso(4, "Presentas tu examen", "Examen Global de ACREDITA-BACH.", false, false)}
+      </ol>
+    </div>`;
+
+  const periodos = `
+    <fieldset class="periodos" ${bloq ? "disabled" : ""}>
+      <legend>Periodo nacional en el que quieres presentar</legend>
+      ${PERIODOS.map(x => `<div class="per"><input type="radio" name="periodo" id="${x.id}" value="${x.id}" ${p.periodo === x.id ? "checked" : ""} ${bloq ? "disabled" : ""}><label for="${x.id}"><b>${x.t}</b><small>${x.examen}<br>${x.plazo}</small></label></div>`).join("")}
+    </fieldset>`;
+
+  const campo = (id, lab, tipo, extra) => {
+    const bad = ui.errores.mostrar && er[id];
+    return `<div class="campo ${bad ? "mal" : ""} ${extra && extra.ancho ? "ancho" : ""}">
+      <label for="f-${id}">${lab}</label>
+      <input id="f-${id}" data-campo="${id}" type="${tipo}" value="${esc(p[id])}" ${bloq ? "disabled" : ""} ${id === "curp" ? 'maxlength="18" autocapitalize="characters" style="text-transform:uppercase"' : ""} ${bad ? 'aria-invalid="true"' : ""} ${extra && extra.auto ? `autocomplete="${extra.auto}"` : ""}>
+      ${extra && extra.ayuda ? `<span class="ayuda">${extra.ayuda}</span>` : ""}
+      ${bad ? `<span class="error">${er[id]}</span>` : ""}
+    </div>`;
+  };
+  const selEntidad = `<div class="campo ${ui.errores.mostrar && er.entidad ? "mal" : ""}"><label for="f-entidad">Entidad de tu sede</label>
+    <select id="f-entidad" data-campo="entidad" ${bloq ? "disabled" : ""}><option value="">Elige una entidad</option>${Object.keys(SEDES).map(e => `<option ${p.entidad === e ? "selected" : ""}>${e}</option>`).join("")}</select>
+    ${ui.errores.mostrar && er.entidad ? `<span class="error">${er.entidad}</span>` : ""}</div>`;
+  const selSede = `<div class="campo ${ui.errores.mostrar && er.sede ? "mal" : ""}"><label for="f-sede">Sede de aplicación</label>
+    <select id="f-sede" data-campo="sede" ${bloq || !p.entidad ? "disabled" : ""}><option value="">${p.entidad ? "Elige una sede" : "Primero elige la entidad"}</option>${(SEDES[p.entidad] || []).map(s => `<option ${p.sede === s ? "selected" : ""}>${s}</option>`).join("")}</select>
+    ${ui.errores.mostrar && er.sede ? `<span class="error">${er.sede}</span>` : ""}</div>`;
+
+  const c1 = `
+    <div class="card">
+      <h2><span class="num">1</span>Confirma tu periodo y sede</h2>
+      <p class="lead">Los periodos son nacionales. Elige cuándo te sientes lista o listo para presentar.</p>
+      ${periodos}
+      <div class="fijo" style="margin-bottom:14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5z"/><path d="M8 7h6"/></svg><span>Examen: <b>Examen Global de ACREDITA-BACH</b>. Es el mismo para todas las personas.</span></div>
+      <div class="campos">${selEntidad}${selSede}</div>
+    </div>`;
+
+  const c2 = `
+    <div class="card">
+      <h2><span class="num">2</span>Revisa tus datos</h2>
+      <p class="lead">Deben coincidir con tu identificación. Con ellos se arma tu registro en Ceneval.</p>
+      <div class="campos">
+        ${campo("nombre", "Nombre(s)", "text", { auto: "given-name" })}
+        ${campo("apellidos", "Apellidos", "text", { auto: "family-name" })}
+        ${campo("curp", "CURP", "text", { ayuda: "18 caracteres, tal como aparece en tu CURP." })}
+        ${campo("nacimiento", "Fecha de nacimiento", "date", { auto: "bday" })}
+        ${campo("correo", "Correo electrónico", "email", { auto: "email" })}
+        ${campo("telefono", "Teléfono", "tel", { auto: "tel" })}
+        <div class="campo ancho"><label for="f-req">¿Necesitas algún apoyo para presentar? <span style="font-weight:400;color:var(--muted)">(opcional)</span></label>
+          <textarea id="f-req" data-campo="req" rows="2" ${bloq ? "disabled" : ""} placeholder="Por ejemplo: acceso para silla de ruedas, apoyo visual…">${esc(p.req)}</textarea></div>
+      </div>
+    </div>`;
+
+  const filaDoc = (x) => {
+    const dc = p.docs[x.k], st = dc.st, err = ui.errores[x.k];
+    const puedeSubir = st === "vacio" || st === "rechazado" || (!bloq && st === "subido");
+    const motivo = st === "rechazado" ? `<div class="motivo aviso err">${ICO.err}<div><b>${esc(dc.motivo || "Hay que corregirlo")}</b>${esc(dc.nota || "")}</div></div>` : "";
+    const archivo = st !== "vacio" ? `<div class="arch"><span class="pdf" aria-hidden="true">PDF</span><span>${esc(dc.name)}<small>${sizeTxt(dc.size)}${dc.sample ? " · archivo de ejemplo" : ""}</small></span></div>` : "";
+    const zona = puedeSubir ? `
+      <div class="drop ${ui.drag === x.k ? "over" : ""}" data-drop="${x.k}">
+        <p>${st === "rechazado" ? "<b>Sube el documento corregido</b>" : "Arrastra tu PDF aquí"}</p>
+        <label class="btn sec sm" style="cursor:pointer">${ICO.up} Elegir archivo<input class="sr" type="file" accept="application/pdf,.pdf" data-archivo="${x.k}"></label>
+        <button type="button" class="btn sec sm" data-act="ejemplo" data-doc="${x.k}">Usar archivo de ejemplo</button>
+        ${err ? `<p class="err-txt" role="alert">${esc(err)}</p>` : ""}
+      </div>` : "";
+    const quitar = st === "subido" && !bloq ? `<button type="button" class="btn err sm" data-act="quitar" data-doc="${x.k}">Quitar</button>` : "";
+    return `<div class="doc est-${st}">
+      <div><h3>${x.t} ${chip(st, ETQ[st])}</h3><p class="desc">${x.d}</p>${archivo}</div>
+      <div class="acciones">${quitar}</div>
+      ${motivo}${zona}
+    </div>`;
+  };
+
+  const c3 = `
+    <div class="card">
+      <h2><span class="num">3</span>Sube tus documentos</h2>
+      <p class="lead">Son 4 documentos. Cada uno en su propio archivo.</p>
+      <ul class="reglas"><li>Solo PDF</li><li>Un archivo por documento</li><li>Máximo 3 MB cada uno</li></ul>
+      ${DOCS.map(filaDoc).join("")}
+    </div>`;
+
+  document.getElementById("v-participante").innerHTML = `<div class="hero">${hero}</div>${c1}${c2}${c3}`;
+  renderBarraEnvio();
+}
+
+function renderBarraEnvio() {
+  const el = document.getElementById("barra-envio"), p = yo(), est = estado(p);
+  if (S.vista !== "participante") { el.hidden = true; return; }
+  el.hidden = false;
+  const subidos = DOCS.filter(x => p.docs[x.k].st !== "vacio").length;
+  if (!p.enviado) {
+    const ok = listoParaEnviar(p);
+    el.innerHTML = `<div class="in"><p><b>${subidos} de 4</b> documentos${p.periodo ? " · periodo elegido" : " · falta elegir periodo"}${ok ? "" : ""}</p>
+      <button type="button" class="btn prim" id="enviar" data-act="enviar" ${ok ? "" : "disabled"}>Enviar a revisión</button></div>`;
+  } else if (est === "correcciones") {
+    const pend = DOCS.some(x => p.docs[x.k].st === "rechazado");
+    el.innerHTML = `<div class="in"><p>Corrige los documentos marcados y vuelve a subirlos.</p>
+      <button type="button" class="btn prim" disabled>${pend ? "Esperando tus correcciones" : "Enviado"}</button></div>`;
+  } else if (est === "revision") {
+    el.innerHTML = `<div class="in"><p><b>Enviado.</b> Te avisamos por correo cuando termine la revisión.</p></div>`;
+  } else {
+    el.innerHTML = `<div class="in"><p><b>Listo.</b> No necesitas hacer nada más en este paso.</p></div>`;
+  }
+}
+
+function refrescarEnvio() { renderBarraEnvio(); }
+
+/* ============ SUBIDA DE ARCHIVOS ============ */
+function subirArchivo(doc, file) {
+  const p = yo();
+  ui.errores[doc] = "";
+  if (!file) return;
+  const esPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  if (!esPdf) { ui.errores[doc] = "Solo se aceptan archivos PDF."; return render(); }
+  if (file.size > 3 * 1024 * 1024) { ui.errores[doc] = `Pesa ${(file.size / 1048576).toFixed(1)} MB y el máximo es 3 MB. Comprímelo e inténtalo de nuevo.`; return render(); }
+  if (archivos[ME + "|" + doc]) URL.revokeObjectURL(archivos[ME + "|" + doc]);
+  archivos[ME + "|" + doc] = URL.createObjectURL(file);
+  p.docs[doc] = { st: "subido", name: file.name, size: file.size / 1024, sample: false };
+  if (p.enviado) { toast("Documento corregido. UCLX lo revisará de nuevo."); }
+  guardar(); render();
+}
+function ejemplo(doc) {
+  const p = yo(), nom = { curp: "CURP", identificacion: "Identificacion", certificado: "Certificado_secundaria", carta: "Carta_autenticidad" }[doc];
+  delete archivos[ME + "|" + doc];
+  ui.errores[doc] = "";
+  p.docs[doc] = { st: "subido", name: `${nom}_${p.apellidos.split(" ")[0]}.pdf`, size: { curp: 420, identificacion: 1280, certificado: 2260, carta: 365 }[doc], sample: true, vig: 2031 };
+  if (p.enviado) toast("Documento corregido. UCLX lo revisará de nuevo.");
+  guardar(); render();
+}
+
+/* ============ VISTA EQUIPO UCLX ============ */
+function filtrar() {
+  const q = ui.busca.trim().toLowerCase();
+  return S.people.filter(p => {
+    const e = estado(p);
+    if (ui.filtro !== "todos" && e !== ui.filtro) return false;
+    if (q && !(nombreCompleto(p) + " " + p.curp).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderEquipo() {
+  const el = document.getElementById("v-equipo");
+  const cuenta = k => S.people.filter(p => estado(p) === k).length;
+  const filtros = [["todos", "Todos", S.people.length], ["revision", "Por revisar", cuenta("revision")], ["correcciones", "Con correcciones", cuenta("correcciones")], ["listo", "Listos", cuenta("listo")], ["borrador", "Sin enviar", cuenta("borrador")]];
+  const lista = filtrar();
+  const listos = S.people.filter(p => estado(p) === "listo").length;
+  const sel = S.people.find(p => p.id === S.sel);
+
+  const filas = lista.map(p => {
+    const e = estado(p);
+    return `<button type="button" class="fila" data-act="abrir" data-id="${p.id}" ${p.id === S.sel ? 'aria-current="true"' : ""}>
+      <span class="nom"><span>${esc(nombreCompleto(p))}${p.id === ME ? ' <small style="color:var(--blue)">(demo: tú)</small>' : ""}</span>${chip(e, ETQ_P[e])}</span>
+      <span class="met"><span class="puntos" aria-label="Estado de los 4 documentos">${DOCS.map(x => `<i class="${p.docs[x.k].st}" title="${x.t}: ${ETQ[p.docs[x.k].st]}"></i>`).join("")}</span>
+      <span>${p.periodo ? per(p.periodo).t.replace(" 2027", "") : "Sin periodo"}</span><span>${p.enviadoEn ? esc(p.enviadoEn) : ""}</span></span>
+    </button>`;
+  }).join("") || `<p class="vacio-det" style="padding:30px 14px">Nadie coincide con este filtro.</p>`;
+
+  el.innerHTML = `
+    <div style="margin-bottom:18px">
+      <h1 style="font-size:clamp(24px,3.4vw,32px)">Revisión de documentos</h1>
+      <p style="color:var(--muted);margin:4px 0 0">Mi Prepa · Registro al Examen Global de ACREDITA-BACH</p>
+    </div>
+    <div class="resumen" role="group" aria-label="Filtrar por estado">
+      ${filtros.map(f => `<button type="button" data-act="filtro" data-f="${f[0]}" aria-pressed="${ui.filtro === f[0]}"><b>${f[2]}</b><span>${f[1]}</span></button>`).join("")}
+    </div>
+    <div class="tablero ${sel ? "con-sel" : ""}">
+      <div class="lista-col"><div class="card lista">
+        <div class="tope"><label class="sr" for="busca">Buscar por nombre o CURP</label><input id="busca" type="search" placeholder="Buscar por nombre o CURP" value="${esc(ui.busca)}"></div>
+        <div>${filas}</div>
+        <div class="lote"><button type="button" class="btn sec sm" style="width:100%" data-act="lote" ${listos ? "" : "disabled"}>Generar Excel y carpetas (${listos} ${listos === 1 ? "lista" : "listas"})</button></div>
+      </div></div>
+      <div class="det-col">${sel ? detalle(sel) : `<div class="card vacio-det"><h2 style="font-size:18px;margin-bottom:6px">Elige a una persona</h2>Verás sus datos y podrás revisar cada documento.</div>`}</div>
+    </div>`;
+}
+
+function mockDoc(p, k, dc) {
+  const nom = esc(nombreCompleto(p).toUpperCase());
+  const lineas = '<div class="ln"></div><div class="ln c"></div><div class="ln"></div><div class="ln m"></div>';
+  if (k === "curp") return `<div class="hoja"><div class="lado">Ejemplo</div><h4>Clave Única de Registro de Población</h4><div class="foto" style="display:none"></div>
+      <div class="dato">CURP<br><b style="font-size:15px;letter-spacing:.06em">${esc(p.curp)}</b></div><div class="dato">Nombre<br><b>${nom}</b></div><div class="dato">Fecha de nacimiento<br><b>${esc(p.nacimiento)}</b></div>${lineas}</div>`;
+  if (k === "identificacion") {
+    const vig = dc.vig || 2031, vencida = vig < 2027;
+    return `<div class="hoja credencial"><div class="lado">Frente · ejemplo</div><h4>Credencial para votar</h4><div class="foto"></div>
+      <div class="dato">Nombre<br><b>${nom}</b></div><div class="dato">CURP <b>${esc(p.curp)}</b></div><div class="dato">Vigencia <b style="${vencida ? "color:#b3321f" : ""}">${vig}</b></div></div>
+      <div class="hoja credencial"><div class="lado">Reverso · ejemplo</div>${lineas}${lineas}</div>`;
+  }
+  if (k === "certificado") {
+    const a = `<div class="hoja"><div class="lado">Anverso · ejemplo</div><h4>Certificado de educación secundaria</h4><div class="dato">Se certifica que<br><b>${nom}</b></div><div class="dato">acreditó los estudios de educación secundaria</div>${lineas}<div class="firma">Director(a)</div></div>`;
+    const b = `<div class="hoja"><div class="lado">Reverso · ejemplo</div><h4>Calificaciones</h4>${lineas}${lineas}${lineas}<div class="sello">SELLO</div></div>`;
+    return dc.unLado ? a : a + b;
+  }
+  const firmaAzul = '<svg width="120" height="40" viewBox="0 0 120 40" aria-hidden="true"><path d="M4 28c10-24 16-26 14-10-2 14 8 6 14-6 4 10 12 10 18-2-2 12 6 12 12 2 6-8 12-6 22 0" fill="none" stroke="#1b4fd6" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  return `<div class="hoja"><div class="lado">Ejemplo</div><h4>Carta de autenticidad</h4><p style="margin:0 0 10px">Manifiesto bajo protesta de decir verdad que los documentos que entrego son auténticos.</p>${lineas}
+    <div class="dato"><b>${nom}</b></div><div class="firma">${firmaAzul}Firma</div></div>`;
+}
+
+function detalle(p) {
+  const e = estado(p), k = S.tab, dc = p.docs[k], def = DOCS.find(x => x.k === k);
+  const url = archivos[p.id + "|" + k];
+  let visor;
+  if (dc.st === "vacio") visor = `<div class="falta"><b>Todavía no sube este documento.</b></div>`;
+  else if (url) visor = `<iframe src="${url}" title="Vista previa de ${esc(def.t)}"></iframe>`;
+  else visor = mockDoc(p, k, dc);
+
+  const puedeRevisar = p.enviado && dc.st === "subido";
+  const crit = `<ul class="criterios">${def.crit.map((c, i) => `<li><label><input type="checkbox" data-crit ${dc.st === "aprobado" ? "checked disabled" : ""} ${puedeRevisar ? "" : "disabled"}> <span>${c}</span></label></li>`).join("")}</ul>`;
+  let acc = "";
+  if (!p.enviado) acc = `<div class="aviso info">${ICO.info}<div>Esta persona aún no envía su registro. Podrás revisar cuando lo envíe.</div></div>`;
+  else if (dc.st === "aprobado") acc = `<div class="aviso ok">${ICO.ok}<div><b>Documento aprobado</b><button type="button" class="link-btn" style="color:var(--blue);padding:0" data-act="deshacer">Deshacer</button></div></div>`;
+  else if (dc.st === "rechazado") acc = `<div class="aviso err">${ICO.err}<div><b>${esc(dc.motivo)}</b>${esc(dc.nota || "")}<br><small>Esperando que la persona suba la corrección.</small></div></div>`;
+  else if (dc.st === "subido") {
+    acc = ui.rechazando ? `<div class="rechazo">
+        <div class="campo"><label for="mot">Motivo del rechazo</label><select id="mot"><option value="">Elige un motivo</option>${MOTIVOS.map(m => `<option>${m}</option>`).join("")}</select></div>
+        <div class="campo"><label for="nota">Nota para la persona</label><textarea id="nota" rows="3" placeholder="Explícale qué debe corregir, con palabras sencillas."></textarea></div>
+        <div class="botones"><button type="button" class="btn err" data-act="rechazar">Enviar rechazo</button><button type="button" class="btn sec" data-act="cancelar">Cancelar</button></div></div>`
+      : `<div class="botones"><button type="button" class="btn prim" id="aprobar" data-act="aprobar" disabled>Aprobar documento</button><button type="button" class="btn err" data-act="pedir-rechazo">Rechazar…</button></div>
+         <p style="font-size:13px;color:var(--muted);margin:10px 0 0">Para aprobar, marca los 3 puntos de arriba.</p>`;
+  }
+  const pr = p.periodo ? per(p.periodo).t : "Sin elegir";
+  return `<div class="card">
+    <button type="button" class="btn sec sm atras" data-act="atras">← Volver a la lista</button>
+    <div class="det-cab"><div><h2>${esc(nombreCompleto(p))}</h2><span style="color:var(--muted);font-size:14px">Envío: ${esc(p.enviadoEn || "Aún sin enviar")}</span></div>${chip(e, ETQ_P[e])}</div>
+    <dl class="datos">
+      <div><dt>CURP</dt><dd>${esc(p.curp)}</dd></div><div><dt>Nacimiento</dt><dd>${esc(p.nacimiento)}</dd></div><div><dt>Periodo</dt><dd>${pr}</dd></div>
+      <div><dt>Sede</dt><dd>${esc(p.sede || "—")}${p.entidad ? ", " + esc(p.entidad) : ""}</dd></div><div><dt>Correo</dt><dd>${esc(p.correo)}</dd></div><div><dt>Apoyo requerido</dt><dd>${esc(p.req || "Ninguno")}</dd></div>
+    </dl>
+    <div class="tabs" role="tablist" aria-label="Documentos">${DOCS.map(x => `<button type="button" role="tab" aria-selected="${x.k === k}" data-act="tab" data-k="${x.k}"><span class="pt ${p.docs[x.k].st}"></span>${x.t}</button>`).join("")}</div>
+    <div class="revision" role="tabpanel">
+      <div class="visor">${visor}</div>
+      <div class="panel-rev"><h3>${def.t}</h3><p style="margin:0 0 12px;color:var(--muted);font-size:14px">${dc.st !== "vacio" ? esc(dc.name) + " · " + sizeTxt(dc.size) : "Sin archivo"}</p>
+        <div style="margin-bottom:12px"><span class="chip c-info" style="background:var(--info-t);color:var(--info)">La página ya validó: PDF · máx. 3 MB${k === "curp" ? "" : ""}</span></div>
+        <h3 style="font-size:14.5px">Revisión de UCLX</h3>${crit}${acc}</div>
+    </div>
+  </div>`;
+}
+
+function revisarAvance(p) {
+  /* Si ya no quedan documentos por revisar y no hay rechazos, queda listo; se avisa a la persona */
+  const e = estado(p);
+  if (e === "listo") toast("Todo aprobado. Se marcó como listo y se avisó a la persona.");
+}
+
+function modalLote() {
+  const listos = S.people.filter(p => estado(p) === "listo");
+  const dlg = document.getElementById("dlg");
+  const arbol = ["Registro_Ceneval_2027/", "├─ PreRegistro_Mi_Prepa.xlsx"].concat(listos.map((p, i) => `${i === listos.length - 1 ? "└─" : "├─"} ${p.curp}_${p.apellidos.split(" ")[0].toUpperCase()}/\n${i === listos.length - 1 ? "   " : "│  "}   CURP.pdf · IDENTIFICACION.pdf · CERTIFICADO.pdf · CARTA.pdf`));
+  dlg.innerHTML = `<div class="cuerpo"><h2>Excel y carpetas listos</h2>
+    <p style="color:var(--muted);margin:0">Se generan solas con las personas marcadas como listas (${listos.length}). En el sistema real seguirán la estructura y los nombres del manual de Ceneval.</p>
+    <pre>${esc(arbol.join("\n"))}</pre>
+    <div class="aviso warn">${ICO.info}<div>Ejemplo ilustrativo. Aquí no se descarga ningún archivo.</div></div>
+    <div class="pie" style="margin-top:16px"><button class="btn prim" type="button" data-act="cerrar">Entendido</button></div></div>`;
+  dlg.showModal();
+}
+
+/* ============ EVENTOS ============ */
+const raiz = document.body;
+
+raiz.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-act],[data-vista]");
+  if (!b) return;
+  if (b.dataset.vista) { S.vista = b.dataset.vista; ui.rechazando = false; guardar(); return render(); }
+  const p = yo(), a = b.dataset.act;
+  if (a === "ejemplo") return ejemplo(b.dataset.doc);
+  if (a === "quitar") { p.docs[b.dataset.doc] = { st: "vacio" }; delete archivos[ME + "|" + b.dataset.doc]; guardar(); return render(); }
+  if (a === "enviar") {
+    if (!listoParaEnviar(p)) { ui.errores.mostrar = true; return render(); }
+    p.enviado = true; p.enviadoEn = "Hace un momento"; guardar(); render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return toast("Listo, enviamos tus documentos a revisión.");
+  }
+  if (a === "filtro") { ui.filtro = b.dataset.f; return render(); }
+  if (a === "abrir") { S.sel = b.dataset.id; ui.rechazando = false; const q = S.people.find(x => x.id === S.sel); S.tab = DOCS.find(x => q.docs[x.k].st === "subido" || q.docs[x.k].st === "rechazado")?.k || "curp"; guardar(); render(); return window.scrollTo({ top: 0 }); }
+  if (a === "atras") { S.sel = null; guardar(); return render(); }
+  if (a === "tab") { S.tab = b.dataset.k; ui.rechazando = false; guardar(); return render(); }
+  if (a === "lote") return modalLote();
+  if (a === "cerrar") return document.getElementById("dlg").close();
+  const sel = S.people.find(x => x.id === S.sel);
+  if (!sel) return;
+  const dc = sel.docs[S.tab];
+  if (a === "aprobar") { dc.st = "aprobado"; delete dc.motivo; delete dc.nota; guardar(); render(); const nx = DOCS.find(x => sel.docs[x.k].st === "subido"); if (nx) { S.tab = nx.k; guardar(); render(); } return revisarAvance(sel); }
+  if (a === "deshacer") { dc.st = "subido"; guardar(); return render(); }
+  if (a === "pedir-rechazo") { ui.rechazando = true; return render(); }
+  if (a === "cancelar") { ui.rechazando = false; return render(); }
+  if (a === "rechazar") {
+    const m = document.getElementById("mot").value;
+    if (!m) { document.getElementById("mot").focus(); return toast("Elige un motivo para poder rechazar."); }
+    dc.st = "rechazado"; dc.motivo = m; dc.nota = document.getElementById("nota").value.trim();
+    ui.rechazando = false; guardar(); render();
+    return toast("Se avisó a " + sel.nombre.split(" ")[0] + " por correo para que lo corrija.");
+  }
+});
+
+/* Campos del participante: se guarda al escribir, sin volver a pintar para no perder el cursor */
+raiz.addEventListener("input", ev => {
+  const t = ev.target;
+  if (t.id === "busca") { ui.busca = t.value; const pos = t.selectionStart; renderEquipo(); const n = document.getElementById("busca"); n.focus(); n.setSelectionRange(pos, pos); return; }
+  if (t.dataset.campo && !["entidad", "sede"].includes(t.dataset.campo)) {
+    const p = yo();
+    p[t.dataset.campo] = t.dataset.campo === "curp" ? t.value.toUpperCase() : t.value;
+    guardar(); refrescarEnvio();
+  }
+});
+raiz.addEventListener("change", ev => {
+  const t = ev.target, p = yo();
+  if (t.name === "periodo") { p.periodo = t.value; guardar(); return render(); }
+  if (t.dataset.campo === "entidad") { p.entidad = t.value; p.sede = ""; guardar(); return render(); }
+  if (t.dataset.campo === "sede") { p.sede = t.value; guardar(); return render(); }
+  if (t.dataset.campo) { guardar(); return render(); }
+  if (t.dataset.archivo) { return subirArchivo(t.dataset.archivo, t.files[0]); }
+  if (t.hasAttribute("data-crit")) {
+    const todos = [...document.querySelectorAll("[data-crit]")].every(c => c.checked);
+    const bt = document.getElementById("aprobar"); if (bt) bt.disabled = !todos;
+  }
+});
+/* Arrastrar y soltar */
+["dragover", "dragleave", "drop"].forEach(n => raiz.addEventListener(n, ev => {
+  const z = ev.target.closest("[data-drop]");
+  if (!z) return;
+  ev.preventDefault();
+  if (n === "dragover") z.classList.add("over");
+  if (n === "dragleave") z.classList.remove("over");
+  if (n === "drop") { z.classList.remove("over"); subirArchivo(z.dataset.drop, ev.dataTransfer.files[0]); }
+}));
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => e.preventDefault());
+
+document.getElementById("reiniciar").addEventListener("click", () => {
+  Object.keys(archivos).forEach(k => { URL.revokeObjectURL(archivos[k]); delete archivos[k]; });
+  const v = S.vista; S = inicial(); S.vista = v; ui.errores = {}; ui.rechazando = false; ui.filtro = "todos"; ui.busca = "";
+  guardar(); render(); toast("Demo reiniciada.");
+});
+/* Si el prototipo está abierto en dos pestañas, ambas se mantienen al día */
+window.addEventListener("storage", e => { if (e.key === KEY && e.newValue) { S = JSON.parse(e.newValue); render(); } });
+
+/* ============ RENDER ============ */
+function render() {
+  const vp = S.vista === "participante";
+  document.querySelectorAll("[data-vista]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.vista === S.vista)));
+  document.getElementById("v-participante").hidden = !vp;
+  document.getElementById("v-equipo").hidden = vp;
+  const q = document.getElementById("quien");
+  q.innerHTML = vp ? `<b>${esc(nombreCompleto(yo()))}</b>Participante` : `<b>Equipo UCLX</b>Revisión de documentos`;
+  if (vp) renderParticipante(); else { renderEquipo(); document.getElementById("barra-envio").hidden = true; }
+}
+render();
+</script>
+</body>
+</html>
