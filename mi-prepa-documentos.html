@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mi Prepa | Documentos para el registro al examen</title>
+<link rel="icon" type="image/png" href="assets/mi-prepa/isotipo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -57,11 +58,13 @@
   header.sitio .quien { font-size: 14px; color: var(--muted); text-align: right; }
   header.sitio .quien b { color: var(--ink); display: block; }
 
+  .logo-iso { height: 46px !important; margin: 4px 0 !important; display: none !important; }
   .banda-marca { background: var(--navy); color: #fff; position: relative; overflow: hidden; }
   .banda-marca .in { max-width: 1180px; margin: 0 auto; padding: 26px 20px 30px; position: relative; z-index: 1; }
   .banda-marca p { margin: 0; font-weight: 300; font-size: 15px; opacity: .92; }
   .banda-marca h2 { color: #fff; font-weight: 500; font-size: clamp(20px, 3vw, 28px); margin-top: 2px; }
   .banda-marca h2 b { font-weight: 700; }
+  .banda-marca::after { content: ""; position: absolute; right: 60px; top: -40px; width: 300px; height: 300px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.18); }
   .mosaico { position: absolute; right: 24px; top: 14px; bottom: -6px; display: grid; grid-template-columns: repeat(3, 38px); gap: 6px; opacity: .95; }
   .mosaico i { display: block; width: 38px; height: 38px; }
   .mosaico .a { background: var(--gold); border-radius: 0 14px 0 0; }
@@ -105,6 +108,9 @@
 
   /* Participante */
   .hero { display: grid; gap: 18px; grid-template-columns: 1.4fr 1fr; align-items: stretch; margin-bottom: 22px; }
+  .hero-bienvenida { display: flex; gap: 22px; align-items: center; justify-content: space-between; overflow: hidden; }
+  .hero-bienvenida .hb-texto { flex: 1; min-width: 0; }
+  .retratos { width: 190px; height: auto; flex: none; display: block; margin: -8px -4px -8px 0; }
   .hero h1 { font-size: clamp(26px, 4vw, 36px); margin-bottom: 6px; }
   .hero .sub { color: var(--muted); margin: 0 0 16px; max-width: 54ch; }
   .pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
@@ -235,6 +241,7 @@
   #toast.on { opacity: 1; transform: translateX(-50%); }
 
   @media (max-width: 960px) {
+    .retratos { display: none; }
     .hero { grid-template-columns: 1fr; }
     .tablero { grid-template-columns: 1fr; }
     .tablero.con-sel .lista-col { display: none; }
@@ -244,7 +251,9 @@
     .datos { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 640px) {
-    .mosaico { display: none; }
+    .mosaico, .banda-marca::after { display: none; }
+    .logo-full { display: none !important; }
+    .logo-iso { display: block !important; }
     main { padding: 20px 16px 130px; }
     .demo .in, header.sitio .in { padding-left: 16px; padding-right: 16px; }
     header.sitio img { height: 44px; }
@@ -276,7 +285,7 @@
 
 <header class="sitio">
   <div class="in">
-    <img src="assets/course-logos/mi-prepa.png" alt="Mi Prepa">
+    <img class="logo-full" src="assets/course-logos/mi-prepa.png" alt="Mi Prepa"><img class="logo-iso" src="assets/mi-prepa/isotipo.png" alt="Mi Prepa">
     <div class="quien" id="quien"></div>
   </div>
 </header>
@@ -448,11 +457,11 @@ function renderParticipante() {
 
   const paso = (n, t, s, hecho, ahora) => `<li class="${hecho ? "hecho" : ahora ? "ahora" : ""}"><span class="pt">${hecho ? "✓" : n}</span><span><b>${t}</b>${s}</span></li>`;
   const hero = `
-    <div class="card">
+    <div class="card hero-bienvenida"><div class="hb-texto">
       <h1>Hola, ${esc(p.nombre)}</h1>
       <p class="sub">Aquí confirmas la fecha en que quieres presentar tu examen y subes tus documentos. Tu curso sigue a tu ritmo mientras tanto.</p>
       ${banner}
-    </div>
+    </div><img class="retratos" src="assets/mi-prepa/retratos.jpg" alt="Personas que estudian con Mi Prepa" width="190" height="281"></div>
     <div class="card">
       <h2 style="font-size:17px">Tu avance en el registro</h2>
       <div class="barra" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Avance del registro"><span style="width:${pct}%"></span></div>
