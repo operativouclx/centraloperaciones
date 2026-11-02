@@ -1,0 +1,142 @@
+{
+ "Matemáticamente": {
+  "insc": 2501,
+  "beca": 2501,
+  "plat": 2501,
+  "falta": 0,
+  "act": 1153,
+  "inact": 1348,
+  "b1": 790,
+  "b2": 138,
+  "b3": 40,
+  "b4": 40,
+  "fin": 145,
+  "nps": {
+   "promotores": 123,
+   "pasivos": 28,
+   "detractores": 6
+  },
+  "convocatoria": "EN PROGRESO"
+ },
+ "Mi Prepa Santander": {
+  "insc": 2068,
+  "beca": 2062,
+  "plat": 2043,
+  "falta": 19,
+  "act": 1011,
+  "inact": 1032,
+  "b1": 756,
+  "b2": 155,
+  "b3": 37,
+  "b4": 17,
+  "fin": 46,
+  "nps": {
+   "promotores": 46,
+   "pasivos": 5,
+   "detractores": 0
+  },
+  "convocatoria": "FINALIZADA"
+ },
+ "No+Violencia III": {
+  "insc": 3269,
+  "beca": 1271,
+  "plat": 3265,
+  "falta": 0,
+  "act": 689,
+  "inact": 2576,
+  "b1": 107,
+  "b2": 59,
+  "b3": 26,
+  "b4": 19,
+  "fin": 478,
+  "nps": {
+   "promotores": 412,
+   "pasivos": 55,
+   "detractores": 19
+  },
+  "convocatoria": "FINALIZADA"
+ },
+ "No+Violencia IV": {
+  "insc": 1808,
+  "beca": 1801,
+  "plat": 1797,
+  "falta": 0,
+  "act": 729,
+  "inact": 1068,
+  "b1": 178,
+  "b2": 63,
+  "b3": 37,
+  "b4": 30,
+  "fin": 421,
+  "nps": {
+   "promotores": 370,
+   "pasivos": 45,
+   "detractores": 14
+  },
+  "convocatoria": "FINALIZADA"
+ },
+ "No+Violencia V": {
+  "insc": 159,
+  "beca": 159,
+  "plat": 159,
+  "falta": 0,
+  "act": 6,
+  "inact": 153,
+  "b1": 2,
+  "b2": 1,
+  "b3": 1,
+  "b4": 0,
+  "fin": 2,
+  "nps": null,
+  "convocatoria": "EN PROGRESO"
+ },
+ "Crianza Responsable III": {
+  "insc": 878,
+  "beca": 872,
+  "plat": 631,
+  "falta": 0,
+  "act": 397,
+  "inact": 234,
+  "b1": 91,
+  "b2": 84,
+  "b3": 36,
+  "b4": 11,
+  "fin": 175,
+  "nps": {
+   "promotores": 126,
+   "pasivos": 18,
+   "detractores": 5
+  },
+  "convocatoria": "FINALIZADA"
+ },
+ "VocaAcción 2026": {
+  "insc": 562,
+  "beca": 562,
+  "plat": 562,
+  "falta": 0,
+  "act": 150,
+  "inact": 412,
+  "b1": 0,
+  "b2": 8,
+  "b3": 15,
+  "b4": 0,
+  "fin": 127,
+  "nps": null,
+  "convocatoria": "FINALIZADA"
+ },
+ "VocaAcción CECYTE": {
+  "insc": 188,
+  "beca": 188,
+  "plat": 187,
+  "falta": 1,
+  "act": 10,
+  "inact": 177,
+  "b1": 0,
+  "b2": 0,
+  "b3": 2,
+  "b4": 0,
+  "fin": 8,
+  "nps": null,
+  "convocatoria": "EN PROGRESO"
+ }
+}
