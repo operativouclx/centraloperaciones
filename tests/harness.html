@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><base href="/"><title>Harness reporte mensual (datos inventados)</title>
+<style>:root{--ink:#1B2340;--ink-soft:#5B6478;--paper:#F3F5FC;--line:#DCE1F2;--line-soft:#E9ECF8;--teal:#4069BC;--teal-dark:#2E4F91;--teal-bg:#E8EDF9;--amber:#B4761E;--amber-bg:#FBF1E0;--amber-line:#E9CE9C;--rust:#A8493C}
+body{font-family:system-ui;background:var(--paper);color:var(--ink);margin:0}.hidden{display:none!important}
+.btn{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}.btn-primary{background:var(--teal);color:#fff}.btn:disabled{opacity:.5}
+.input-text{padding:5px 8px;border:1px solid var(--line);border-radius:6px}h1,h3{margin:0}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="reporte/metricas.js"></script><script src="reporte/dashboard.js"></script><script src="reporte/correo.js"></script>
+<script src="reporte/export-xlsx.js"></script><script src="reporte/export-pdf.js"></script><script src="reporte/ui.js"></script>
+</head><body>
+<button class="btn btn-primary" id="go">Abrir Reporte mensual</button>
+<script>
+(async function(){
+  const oct = await (await fetch("tests/estado-octubre.json")).json();
+  const claveSlug = k => k.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-");
+  const cursos = Object.keys(oct).map(k => ({slug: claveSlug(k), displayName: k, archived: false, nps: null}));
+  cursos.push({slug: "mi-prepa-2", displayName: "Mi Prepa 2", archived: false, nps: null});
+  const masters = {};
+  Object.entries(oct).forEach(([k, c]) => {
+    const rows = []; let n = 0;
+    const add = (cnt, estado, prog) => { for(let i=0;i<cnt;i++){ n++; rows.push({estado, progreso: prog, nombres: "Persona" + n, apellidos: "Prueba  " + k.split(" ")[0], email: "p" + n + "@ejemplo.test",
+      ultimaActualizacionPlataforma: estado === "En plataforma" ? (k.startsWith("Crianza") ? "2026-10-12" : "2026-10-29") : null}); } };
+    add(c.b1,"En plataforma",10.5); add(c.b2,"En plataforma",40); add(c.b3,"En plataforma",60); add(c.b4,"En plataforma",85); add(c.fin,"En plataforma",100);
+    add(c.inact,"En plataforma",0); add(c.falta,"Falta registrar",0);
+    masters[claveSlug(k)] = rows;
+  });
+  masters["mi-prepa-2"] = [];
+  const cierres = [{id:"2026-09", cursos:{matematicamente:{insc:2185,beca:2185,plat:2036,falta:0,act:930,inact:1106,b1:725,b2:73,b3:22,b4:null,fin:110}}}];
+  const cfgs = {};
+  window.__cfgs = cfgs;
+  ReporteUI._setStore({
+    usuario: () => ({email: "prueba@uclx.media", displayName: "Usuaria de Prueba"}),
+    listCursos: async () => cursos, getConfigs: async () => cfgs, saveConfig: async (s,d) => { cfgs[s] = Object.assign(cfgs[s]||{}, d); },
+    getMaster: async s => masters[s] || [], listCierres: async () => cierres,
+    saveCierre: async (p,m,c) => { window.__cierre = {p,m,c}; cierres.push(Object.assign({id:p},m,{cursos:c})); }
+  });
+  document.getElementById("go").onclick = () => { ReporteUI._S.corte = "2026-10-30"; ReporteUI.abrir(); };
+  window.__masters = masters;
+})();
+</script></body></html>
