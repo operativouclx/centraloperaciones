@@ -2302,14 +2302,14 @@ const db = firebase.firestore();
   }
 
   // ---------- Totales por cliente (cuando no hay un curso abierto) ----------
-  // Suma todos los cursos no archivados del cliente (de todos los años). Las
+  // Suma los cursos no archivados del cliente del año actual. Las
   // metas solo existen para Santander Open Academy. Tasa de término = misma
   // definición que el dashboard del curso: 80% o más de avance sobre inscritos.
   const METAS_CLIENTE = {soa: {inscritos: 17200, tasa: 30, nps: 85}};
   function escH(s){ return String(s === null || s === undefined ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-  function resumenCliente(clienteId){
+  function resumenCliente(clienteId, anio){
     const cursos = app.coursesIndex
-      .filter(c => !c.archived && clienteDe(c) === clienteId)
+      .filter(c => !c.archived && clienteDe(c) === clienteId && (c.anio || inferAnioLegacy(c.slug, c.displayName)) === anio)
       .sort((a, b) => a.displayName.localeCompare(b.displayName))
       .map(c => {
         const insc = inscritosCurso(c), fin = (c.stats && c.stats.p4) || 0;
@@ -2324,7 +2324,8 @@ const db = firebase.firestore();
     const box = document.getElementById("cliente-resumen");
     if(!box) return;
     const cli = CLIENTES.find(c => c.id === app.selectedCliente);
-    const r = resumenCliente(app.selectedCliente);
+    const anio = new Date().getFullYear();
+    const r = resumenCliente(app.selectedCliente, anio);
     if(!cli || !r.cursos.length){ box.classList.add("hidden"); return; }
     const metas = METAS_CLIENTE[app.selectedCliente] || null;
     const f1 = x => (Math.round(x * 10) / 10).toLocaleString("es-MX");
@@ -2354,11 +2355,11 @@ const db = firebase.firestore();
     const filas = r.cursos.map(c => '<tr><td ' + td + '>' + escH(c.nombre) + '</td><td ' + tdr + '>' + c.insc.toLocaleString("es-MX") + '</td><td ' + tdr + '>' + c.fin.toLocaleString("es-MX") +
       '</td><td ' + tdr + '>' + f1(c.tasa) + '%</td><td ' + tdr + '>' + (c.nps && c.nps.total ? signo(c.nps.score) + ' <span style="color:var(--ink-soft);font-size:12px;">(' + c.nps.total.toLocaleString("es-MX") + ' resp.)</span>' : '—') + '</td></tr>').join("");
     const tot = 'style="padding:7px 10px;font-weight:700;background:var(--teal-bg);font-size:13.5px;"', totr = 'style="padding:7px 10px;font-weight:700;background:var(--teal-bg);font-size:13.5px;text-align:right;"';
-    box.innerHTML = '<div style="margin:14px 0 6px;font-weight:700;font-size:16px;">' + escH(cli.label) + ' — totales de todos los cursos</div>' +
+    box.innerHTML = '<div style="margin:14px 0 6px;font-weight:700;font-size:16px;">' + escH(cli.label) + ' — totales ' + anio + '</div>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">' + tarjetas + '</div>' +
       '<div style="overflow:auto;"><table style="border-collapse:collapse;width:100%;"><thead><tr><th ' + th + '>Curso</th><th ' + thr + '>Inscritos</th><th ' + thr + '>Terminaron (≥80%)</th><th ' + thr + '>Tasa de término</th><th ' + thr + '>NPS</th></tr></thead><tbody>' + filas +
       '<tr><td ' + tot + '>Total global</td><td ' + totr + '>' + r.insc.toLocaleString("es-MX") + '</td><td ' + totr + '>' + r.fin.toLocaleString("es-MX") + '</td><td ' + totr + '>' + f1(r.tasa) + '%</td><td ' + totr + '>' + (r.npsScore === null ? "—" : signo(r.npsScore)) + '</td></tr></tbody></table></div>' +
-      '<div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Tasa de término = personas con 80% o más de avance entre inscritos. El NPS global junta las respuestas de todos los cursos.</div>';
+      '<div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Tasa de término = personas con 80% o más de avance entre inscritos. El NPS global junta las respuestas de todos los cursos de ' + anio + '.</div>';
     box.classList.remove("hidden");
   }
 
