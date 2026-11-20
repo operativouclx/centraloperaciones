@@ -235,7 +235,13 @@
       cals.push(n); tipos.push(cTipo ? norm(r[cTipo]) : null); emails.push(cEmail ? norm(r[cEmail]) : ""); noms.push(cNom ? norm(r[cNom]) : "");
     });
     if(!cals.length) throw new Error("No hay calificaciones de 0 a 10.");
-    const cuenta = M.npsDesdeCalificaciones(cals), av = [];
+    const av = [];
+    // VocaAcción califica del 1 al 5: se recalcula a 1–10 (1→1, 2→3, 3→6, 4→8, 5→10).
+    if(/voca+c+ion/.test(norm(x.c.slug + " " + x.cfg.nombre)) && Math.max(...cals) <= 5){
+      cals.forEach((c, i) => { cals[i] = Math.round(1 + (Math.max(1, c) - 1) * 9 / 4); });
+      av.push("Las calificaciones venían del 1 al 5 y se recalcularon al 1–10.");
+    }
+    const cuenta = M.npsDesdeCalificaciones(cals);
     if(cTipo){
       const dif = cals.filter((c, i) => tipos[i] && tipos[i] !== norm(M.tipoNps(c))).length;
       if(dif) av.push(dif + " filas tienen un Tipo distinto al que sale de la calificación. Se usó la calificación.");

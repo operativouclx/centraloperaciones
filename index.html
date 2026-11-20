@@ -4467,6 +4467,10 @@ const db = firebase.firestore();
   function npsTipo(n){
     return n >= 9 ? "Promotor" : n >= 7 ? "Pasivo" : "Detractor";
   }
+  // La encuesta de VocaAcción se califica del 1 al 5. Se recalcula a la
+  // escala 1–10 del NPS (1→1, 2→3, 3→6, 4→8, 5→10) para que promotores,
+  // pasivos y detractores se midan igual que en los demás cursos.
+  function npsDe5a10(n){ return Math.round(1 + (Math.max(1, n) - 1) * 9 / 4); }
 
   document.getElementById("btn-open-nps").addEventListener("click", () => {
     openModal("modal-nps");
@@ -4488,8 +4492,13 @@ const db = firebase.firestore();
     const distribucion = new Array(11).fill(0);
     let promotores = 0, pasivos = 0, detractores = 0, sinCalificacion = 0;
     const comentarios = [];
+    // VocaAcción califica del 1 al 5: si todas las respuestas válidas caben
+    // en esa escala, se recalculan a 1–10.
+    const crudas = rows.map(row => parseNpsScore(row[scoreCol])).filter(v => v !== null);
+    const escala5 = esVocaccion(app.meta) && crudas.length > 0 && Math.max(...crudas) <= 5;
     rows.forEach(row => {
-      const n = parseNpsScore(row[scoreCol]);
+      const cruda = parseNpsScore(row[scoreCol]);
+      const n = cruda !== null && escala5 ? npsDe5a10(cruda) : cruda;
       if(n === null){ sinCalificacion++; }
       else {
         distribucion[n]++;
@@ -4500,6 +4509,7 @@ const db = firebase.firestore();
         const fila = {};
         if(nameCol) fila["Nombre"] = row[nameCol] || "";
         fila["Calificación"] = n === null ? "" : n;
+        if(escala5) fila["Calificación original (1-5)"] = cruda === null ? "" : cruda;
         fila["Tipo"] = n === null ? "" : npsTipo(n);
         fila["Comentario"] = com;
         comentarios.push(fila);
@@ -4529,7 +4539,7 @@ const db = firebase.firestore();
     const score = Math.round(((promotores - detractores) / total) * 100);
     const nps = {
       score, total, promotores, pasivos, detractores, sinCalificacion, distribucion,
-      pregunta: scoreCol, estrellas,
+      pregunta: scoreCol, estrellas, escalaOriginal: escala5 ? "1-5" : "0-10",
       comentarios: capForStorage(comentarios), comentariosTotal: comentarios.length,
       archivo: app.pending.nps.fileName, fecha: nowISO(),
       por: (auth.currentUser && auth.currentUser.email) || ""
@@ -4541,6 +4551,7 @@ const db = firebase.firestore();
     const logEntry = {
       date: nowISO(), tipo:"NPS", archivo: app.pending.nps.fileName,
       resumen: "NPS " + score + " — " + total + " respuestas (" + promotores + " promotores, " + pasivos + " pasivos, " + detractores + " detractores)" +
+        (escala5 ? " — calificación 1-5 recalculada a 1-10" : "") +
         (nps.filtro ? " — filtrado por " + nps.filtro : ""),
       por: nps.por
     };
