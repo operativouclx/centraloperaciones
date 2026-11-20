@@ -436,7 +436,6 @@
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <input id="buscar-correo" class="input-text" type="search" placeholder="Buscar un correo en todo el portal..." style="min-width:240px;flex:1;max-width:340px;">
         <button class="btn btn-ghost btn-small" id="btn-buscar-correo" type="button">Buscar</button>
-        <button class="btn btn-ghost btn-small" id="btn-open-resumen" type="button" title="Participaron, completaron y estados con presencia por programa (Santander Open Academy)">Resumen de programas</button>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-primary btn-small" id="btn-open-reporte" type="button" title="Dashboards en PDF, base completa, correo para Santander y cierre del mes">Reporte mensual</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
@@ -696,19 +695,6 @@
       <button class="modal-close" type="button" data-close-modal="modal-ux">&times;</button>
       <h3 class="modal-title" id="ux-title">UX del participante</h3>
       <div id="ux-body"></div>
-    </div>
-  </div>
-
-  <!-- ======================= MODAL: resumen de programas ======================= -->
-  <div class="modal-overlay hidden" id="modal-resumen">
-    <div class="modal-box" style="max-width:1000px;">
-      <button class="modal-close" type="button" data-close-modal="modal-resumen">&times;</button>
-      <h3 class="modal-title">Resumen de programas — Santander Open Academy</h3>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;">
-        <button class="btn btn-primary btn-small" id="btn-resumen-unicos" type="button">Calcular personas únicas</button>
-        <span class="status-line" id="resumen-status"></span>
-      </div>
-      <div id="resumen-body"></div>
     </div>
   </div>
 
@@ -3906,142 +3892,6 @@ const db = firebase.firestore();
   }
   document.getElementById("btn-buscar-correo").addEventListener("click", ejecutarBusquedaCorreo);
   document.getElementById("buscar-correo").addEventListener("keydown", e => { if(e.key === "Enter") ejecutarBusquedaCorreo(); });
-
-  // ---------- Resumen de programas (solo Santander Open Academy) ----------
-  // Participaron = dados de alta en plataforma. Completaron = 80% o más.
-  // Estados = entidades distintas entre quienes participaron. Todo sale del
-  // resumen que cada curso guarda al cargar archivos, sin leer las tablas.
-  function datosResumen(){
-    const cursos = app.coursesIndex.filter(c => clienteDe(c) === "soa" && !esCapturaManual(c));
-    const porFamilia = new Map();
-    cursos.forEach(c => {
-      const fam = c.familia || inferFamiliaLegacy(c.slug, c.displayName) || c.displayName;
-      if(!porFamilia.has(fam)) porFamilia.set(fam, {familia: fam, cursos: [], participan: 0, completaron: 0, estados: new Set(), conEstado: 0, raros: new Set()});
-      const g = porFamilia.get(fam);
-      const st = c.stats || {};
-      g.cursos.push(c);
-      g.participan += Math.max((st.total || 0) - (st.alta || 0), 0);
-      g.completaron += st.p4 || 0;
-      const ent = c.entidadesParticipan || {};
-      Object.keys(ent).forEach(k => {
-        g.conEstado += ent[k];
-        if(ENTIDADES_VALIDAS.has(k)) g.estados.add(k); else g.raros.add(k);
-      });
-    });
-    return Array.from(porFamilia.values()).sort((a, b) => a.familia.localeCompare(b.familia));
-  }
-
-  function pintarResumen(unicos){
-    const body = document.getElementById("resumen-body");
-    body.innerHTML = "";
-    const grupos = datosResumen();
-    if(!grupos.length){
-      body.appendChild(el("div", {class:"muted"}, [document.createTextNode("No hay cursos de Santander Open Academy.")]));
-      return;
-    }
-    const tabla = el("table");
-    const hr = el("tr");
-    ["Programa", "Cursos", "Participaron", "Completaron", "% completó", "Estados con presencia"].forEach(t => hr.appendChild(el("th", {}, [document.createTextNode(t)])));
-    const thead = el("thead"); thead.appendChild(hr); tabla.appendChild(thead);
-    const tbody = el("tbody");
-    const fila = (valores, negrita) => {
-      const tr = el("tr");
-      valores.forEach(v => {
-        const td = el("td", {}, [document.createTextNode(String(v))]);
-        if(negrita) td.style.fontWeight = "700";
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    };
-    const totalEstados = new Set();
-    let totP = 0, totC = 0, totSinEstado = 0;
-    grupos.forEach(g => {
-      g.estados.forEach(e => totalEstados.add(e));
-      totP += g.participan; totC += g.completaron; totSinEstado += Math.max(g.participan - g.conEstado, 0);
-      const u = unicos && unicos.porFamilia.get(g.familia);
-      fila([
-        g.familia, g.cursos.length,
-        g.participan + (u ? " (" + u.participan + " únicas)" : ""),
-        g.completaron + (u ? " (" + u.completaron + " únicas)" : ""),
-        (g.participan ? Math.round(g.completaron / g.participan * 1000) / 10 : 0) + "%",
-        g.estados.size + (g.estados.size ? " — " + Array.from(g.estados).sort().join(", ") : (g.conEstado ? "" : " (sin dato de estado)"))
-      ], false);
-    });
-    fila([
-      "Total", grupos.reduce((n, g) => n + g.cursos.length, 0),
-      totP + (unicos ? " (" + unicos.participan + " únicas)" : ""),
-      totC + (unicos ? " (" + unicos.completaron + " únicas)" : ""),
-      (totP ? Math.round(totC / totP * 1000) / 10 : 0) + "%",
-      totalEstados.size + " de 32"
-    ], true);
-    tabla.appendChild(tbody);
-    const wrap = el("div", {class:"table-scroll", style:"max-height:55vh;"});
-    wrap.appendChild(tabla);
-    body.appendChild(wrap);
-
-    const nota = (t, estilo) => body.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-top:6px;" + (estilo || "")}, [document.createTextNode(t)]));
-    nota("Participaron = dados de alta en plataforma. Completaron = 80% o más de avance. Solo cursos de Santander Open Academy" +
-      (app.coursesIndex.some(c => c.archived && clienteDe(c) === "soa") ? ", incluidos los archivados." : "."));
-    if(!unicos) nota("Las columnas suman por curso: una persona inscrita en dos cursos cuenta dos veces. Para contarla una sola vez usa «Calcular personas únicas».");
-    if(totSinEstado > 0) nota("Hay " + totSinEstado + " participante(s) sin dato de estado: los estados salen de la columna de entidad del archivo de Santander. Los cursos cargados antes de existir esa columna necesitan volver a cargar su base de Santander.", "color:#8a5a00;");
-    const raros = new Set();
-    grupos.forEach(g => g.raros.forEach(r => raros.add(r)));
-    if(raros.size) nota("Valores de estado que no se reconocen y no cuentan: " + Array.from(raros).slice(0, 8).join(", ") + ".", "color:#8a5a00;");
-  }
-
-  document.getElementById("btn-open-resumen").addEventListener("click", () => {
-    pintarResumen(null);
-    openModal("modal-resumen");
-  });
-
-  // Cuenta personas únicas leyendo la tabla madre de los cursos de SOA: une
-  // los registros que comparten cualquier correo.
-  document.getElementById("btn-resumen-unicos").addEventListener("click", async () => {
-    const btn = document.getElementById("btn-resumen-unicos");
-    const estado = document.getElementById("resumen-status");
-    const cursos = app.coursesIndex.filter(c => clienteDe(c) === "soa" && !esCapturaManual(c));
-    const aprox = cursos.reduce((n, c) => n + ((c.stats && c.stats.total) || 0), 0);
-    if(!confirm("Se va a leer la base de " + cursos.length + " curso(s) de Santander Open Academy (unos " + aprox.toLocaleString("es-MX") + " registros).\n\n¿Continuar?")) return;
-    btn.disabled = true;
-    try{
-      const entradas = [];
-      for(let i = 0; i < cursos.length; i++){
-        const c = cursos[i];
-        estado.textContent = "Leyendo curso " + (i + 1) + " de " + cursos.length + ": " + c.displayName + "...";
-        const snap = await masterColl(c.slug).get();
-        const fam = c.familia || inferFamiliaLegacy(c.slug, c.displayName) || c.displayName;
-        snap.docs.forEach(d => {
-          const rec = d.data();
-          entradas.push({fam, emails: emailsDe(rec), part: rec.estado === "En plataforma", comp: (rec.progreso || 0) >= 80});
-        });
-      }
-      const padre = entradas.map((_, i) => i);
-      const raiz = i => { while(padre[i] !== i){ padre[i] = padre[padre[i]]; i = padre[i]; } return i; };
-      const porCorreo = new Map();
-      entradas.forEach((e, i) => e.emails.forEach(m => {
-        if(porCorreo.has(m)){ const a = raiz(porCorreo.get(m)), b = raiz(i); if(a !== b) padre[b] = a; }
-        else porCorreo.set(m, i);
-      }));
-      const global = {participan: new Set(), completaron: new Set()};
-      const porFamilia = new Map();
-      entradas.forEach((e, i) => {
-        const r = raiz(i);
-        if(!porFamilia.has(e.fam)) porFamilia.set(e.fam, {p: new Set(), c: new Set()});
-        const f = porFamilia.get(e.fam);
-        if(e.part){ f.p.add(r); global.participan.add(r); }
-        if(e.comp){ f.c.add(r); global.completaron.add(r); }
-      });
-      const resultado = {participan: global.participan.size, completaron: global.completaron.size, porFamilia: new Map()};
-      porFamilia.forEach((f, fam) => resultado.porFamilia.set(fam, {participan: f.p.size, completaron: f.c.size}));
-      pintarResumen(resultado);
-      estado.textContent = "Personas únicas calculadas con " + entradas.length.toLocaleString("es-MX") + " registros.";
-    }catch(err){
-      console.error(err);
-      estado.textContent = "No se pudo leer: " + (err && err.message ? err.message : err);
-    }finally{
-      btn.disabled = false;
-    }
-  });
 
   // ---------- UX del participante (una por cliente y programa) ----------
   // La UX depende del cliente y del programa: la de Mi Prepa que ya existía es
