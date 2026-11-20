@@ -438,6 +438,8 @@
         <select id="course-year-select" class="input-text" style="flex:1;min-width:220px;"></select>
         <input id="buscar-correo" class="input-text" type="search" placeholder="Buscar un correo en todo el portal..." style="min-width:240px;flex:1;max-width:340px;">
         <button class="btn btn-ghost btn-small" id="btn-buscar-correo" type="button">Buscar</button>
+        <button class="btn btn-primary btn-small" id="btn-open-lote" type="button" title="Sube varios archivos de Santander y de plataforma a la vez, eligiendo el curso de cada uno">Carga múltiple</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-brevopass" type="button" title="Trae a la central las contraseñas de tu descarga de Brevo, por participante">Contraseñas desde Brevo</button>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
         <button class="btn btn-ghost btn-small" id="btn-open-reporte" type="button" title="Dashboards en PDF, base completa, correo para Santander y cierre del mes">Reporte mensual</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
@@ -692,6 +694,51 @@
       <div class="cross-cta hidden" id="cta-plataforma">
         <button class="btn btn-primary" id="btn-process-plataforma" disabled>Cruzar con tabla madre</button>
         <div class="status-line" id="plataforma-hint">Configura las columnas para continuar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: carga múltiple ======================= -->
+  <div class="modal-overlay hidden" id="modal-lote">
+    <div class="modal-box" style="max-width:1100px;">
+      <button class="modal-close" type="button" data-close-modal="modal-lote">&times;</button>
+      <h3 class="modal-title">Carga múltiple</h3>
+      <div class="panel-note teal">Sube varios archivos a la vez (Santander y plataforma/Moodle). Para cada uno elige <strong>tipo</strong> y <strong>curso</strong>. Cada archivo se procesa con las mismas reglas de siempre: <strong>Santander reemplaza la lista del curso</strong> (quien no venga se quita) y plataforma actualiza el avance. Por eso, los archivos de Santander que traigan <strong>bastantes menos personas</strong> que el curso hoy quedan sin marcar: revísalos antes de aplicar. Los archivos que traen varias generaciones se omiten y se suben por separado.</div>
+      <div class="drop" id="drop-lote">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra los archivos o haz clic</div>
+        <div class="drop-sub">.xlsx o .csv, todos los que quieras</div>
+      </div>
+      <input type="file" id="file-lote" accept=".xlsx,.xls,.csv" multiple>
+      <div id="lote-tabla" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-lote">
+        <button class="btn btn-primary" id="btn-lote-aplicar" type="button" disabled>Aplicar lo marcado</button>
+        <div class="status-line" id="lote-hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL: contraseñas desde Brevo ======================= -->
+  <div class="modal-overlay hidden" id="modal-brevopass">
+    <div class="modal-box">
+      <button class="modal-close" type="button" data-close-modal="modal-brevopass">&times;</button>
+      <h3 class="modal-title">Traer contraseñas desde Brevo</h3>
+      <div class="panel-note teal">Sube la descarga de contactos de Brevo. Necesita una columna de correo (<strong>EMAIL</strong> o CORREO) y una de contraseña (<strong>PASSWORD</strong>, CONTRASENA o CONTRASEÑA). Se cruza por correo con <strong>todos los cursos</strong> y guarda la contraseña de cada participante. <strong>No agrega ni quita a nadie</strong> y no toca avance ni estatus. Primero se revisa y después confirmas.</div>
+      <div class="panel-head">
+        <h3>Descarga de Brevo</h3>
+        <span class="file-tag hidden" id="tag-brevopass"></span>
+      </div>
+      <div class="drop" id="drop-brevopass">
+        <div class="drop-icon">&#8593;</div>
+        <div class="drop-main">Arrastra el archivo o haz clic</div>
+        <div class="drop-sub">.xlsx o .csv</div>
+      </div>
+      <input type="file" id="file-brevopass" accept=".xlsx,.xls,.csv">
+      <div id="brevopass-preview" class="hidden" style="margin-top:16px;"></div>
+      <div class="cross-cta hidden" id="cta-brevopass">
+        <button class="btn btn-ghost" id="btn-brevopass-revisar" type="button" disabled>Revisar contra la central</button>
+        <button class="btn btn-primary hidden" id="btn-brevopass-aplicar" type="button" disabled>Guardar contraseñas</button>
+        <div class="status-line" id="brevopass-hint"></div>
       </div>
     </div>
   </div>
@@ -3361,6 +3408,8 @@ const db = firebase.firestore();
 
   async function procesar(kind, etiqueta, fn){
     const btn = document.getElementById("btn-process-" + kind);
+    // La carga múltiple espera a que termine esta promesa.
+    let _fin; app.procDone = new Promise(r => { _fin = r; });
     btn.disabled = true; btn.textContent = "Procesando...";
     try{
       await fn();
@@ -3371,6 +3420,7 @@ const db = firebase.firestore();
     }finally{
       btn.textContent = etiqueta;
       checkReady();
+      _fin();
     }
   }
 
@@ -3643,6 +3693,369 @@ const db = firebase.firestore();
     document.querySelector('.tab[data-tab="' + (r.solo ? "nuevos" : "madre") + '"]').click();
     closeModal("modal-plataforma");
   }));
+
+  // ---------- Carga múltiple ----------
+  // Maneja la pantalla de siempre, archivo por archivo: abre el curso, sube el
+  // archivo en su carga (Santander o plataforma) y pulsa su botón de procesar.
+  // Así se usan exactamente las mismas reglas y validaciones de las cargas
+  // individuales. Durante el lote los avisos de la pantalla (alert/confirm)
+  // no se muestran: se recogen y salen en el resultado de cada archivo.
+  const lote = {filas: [], corriendo: false, seq: 0};
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function esperar(cond, ms, paso){
+    const fin = Date.now() + ms;
+    while(Date.now() < fin){ if(cond()) return true; await sleep(paso || 80); }
+    return cond();
+  }
+  function cursosElegibles(tipo){
+    return app.coursesIndex
+      .filter(c => !c.archived && c.tipo !== "historico" && !esCapturaManual(c) && (tipo !== "santander" || !esSoloPlataforma(c)))
+      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName), "es"));
+  }
+  function adivinarTipo(nombre){
+    const n = squash(nombre);
+    if(n.indexOf("santander") !== -1) return "santander";
+    if(/moodle|plataforma|avance/.test(n)) return "plataforma";
+    return "";
+  }
+  function adivinarCurso(f){
+    const lista = cursosElegibles(f.tipo || "plataforma");
+    const corto = normalize(f.corto);
+    if(corto){
+      const hit = lista.find(c => c.moodleCurso && normalize(c.moodleCurso) === corto);
+      if(hit) return hit.slug;
+    }
+    const nombre = squash(f.file.name);
+    const hits = lista.filter(c => { const d = squash(c.displayName); return d.length >= 5 && nombre.indexOf(d) !== -1; });
+    return hits.length === 1 ? hits[0].slug : "";
+  }
+  function lotePrepararFila(f){
+    const cursoIdx = app.coursesIndex.find(c => c.slug === f.slug);
+    f.inscritosHoy = cursoIdx ? (cursoIdx.inscritos || 0) : 0;
+    f.recorte = f.tipo === "santander" && f.inscritosHoy > 0 && f.filas < f.inscritosHoy * 0.8;
+  }
+  function loteAgregarArchivos(files){
+    Array.from(files).forEach(file => {
+      readWorkbook(file, wb => {
+        const {headers, rows} = sheetToRows(wb, wb.SheetNames[0], true);
+        const colCorto = headers.find(h => normalize(h) === "nombre corto del curso");
+        const corto = colCorto ? ((rows.find(r => r[colCorto] !== null && String(r[colCorto]).trim() !== "") || {})[colCorto] || "") : "";
+        const f = {id: ++lote.seq, file, filas: rows.length, nHojas: wb.SheetNames.length, corto: String(corto).trim(),
+                   tipo: adivinarTipo(file.name), slug: "", incluir: true, estado: "", ok: null};
+        f.slug = adivinarCurso(f);
+        lotePrepararFila(f);
+        f.incluir = !!(f.tipo && f.slug) && !f.recorte;
+        lote.filas.push(f);
+        lotePintar();
+      });
+    });
+  }
+  function loteProblema(f){
+    if(!f.tipo) return "Elige el tipo";
+    if(!f.slug) return "Elige el curso";
+    if(f.tipo === "santander" && !cursosElegibles("santander").some(c => c.slug === f.slug)) return "Este curso no usa base de Santander";
+    if(!f.filas) return "Archivo vacío";
+    const repetido = lote.filas.some(o => o !== f && o.incluir && f.incluir && o.slug === f.slug && o.tipo === f.tipo);
+    if(repetido) return "Hay otro archivo del mismo tipo para este curso";
+    return "";
+  }
+  function lotePintar(){
+    const cont = document.getElementById("lote-tabla");
+    const cta = document.getElementById("cta-lote");
+    cont.innerHTML = "";
+    if(!lote.filas.length){ cont.classList.add("hidden"); cta.classList.add("hidden"); return; }
+    cont.classList.remove("hidden"); cta.classList.remove("hidden");
+    const wrap = document.createElement("div"); wrap.className = "table-scroll";
+    const t = document.createElement("table");
+    t.innerHTML = "<thead><tr><th></th><th>Archivo</th><th>Tipo</th><th>Curso</th><th style=\"text-align:right\">Filas</th><th style=\"text-align:right\">Hoy en el curso</th><th>Estado</th><th></th></tr></thead>";
+    const tb = document.createElement("tbody");
+    lote.filas.forEach(f => {
+      const tr = document.createElement("tr");
+      const prob = loteProblema(f);
+      const celda = (n) => { const td = document.createElement("td"); tr.appendChild(td); return td; };
+      // marcar
+      const cInc = celda(); const chk = document.createElement("input"); chk.type = "checkbox"; chk.checked = !!f.incluir; chk.disabled = lote.corriendo || f.ok !== null;
+      chk.addEventListener("change", () => { f.incluir = chk.checked; lotePintar(); });
+      cInc.appendChild(chk);
+      // archivo
+      const cArc = celda(); cArc.textContent = f.file.name; cArc.style.maxWidth = "260px"; cArc.style.overflowWrap = "anywhere";
+      if(f.nHojas > 1){ const sm = document.createElement("div"); sm.style.cssText = "font-size:11px;color:var(--ink-soft)"; sm.textContent = "Trae " + f.nHojas + " hojas: se usa la primera"; cArc.appendChild(sm); }
+      // tipo
+      const cTipo = celda(); const selT = document.createElement("select"); selT.disabled = lote.corriendo || f.ok !== null;
+      [["", "— elige —"], ["santander", "Santander"], ["plataforma", "Plataforma / Moodle"]].forEach(([v, l]) => {
+        const o = document.createElement("option"); o.value = v; o.textContent = l; if(v === f.tipo) o.selected = true; selT.appendChild(o);
+      });
+      selT.addEventListener("change", () => { f.tipo = selT.value; if(!f.slug) f.slug = adivinarCurso(f); lotePrepararFila(f); f.incluir = !!(f.tipo && f.slug) && !f.recorte; lotePintar(); });
+      cTipo.appendChild(selT);
+      // curso
+      const cCur = celda(); const selC = document.createElement("select"); selC.disabled = lote.corriendo || f.ok !== null;
+      const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "— elige —"; selC.appendChild(o0);
+      cursosElegibles(f.tipo || "plataforma").forEach(c => {
+        const o = document.createElement("option"); o.value = c.slug; o.textContent = c.displayName; if(c.slug === f.slug) o.selected = true; selC.appendChild(o);
+      });
+      selC.addEventListener("change", () => { f.slug = selC.value; lotePrepararFila(f); f.incluir = !!(f.tipo && f.slug) && !f.recorte; lotePintar(); });
+      cCur.appendChild(selC);
+      if(f.corto){ const sm = document.createElement("div"); sm.style.cssText = "font-size:11px;color:var(--ink-soft)"; sm.textContent = "Archivo dice: " + f.corto; cCur.appendChild(sm); }
+      // números
+      const cF = celda(); cF.style.textAlign = "right"; cF.textContent = f.filas;
+      const cH = celda(); cH.style.textAlign = "right"; cH.textContent = f.slug ? f.inscritosHoy : "—";
+      // estado
+      const cE = celda();
+      if(f.estado){ cE.textContent = f.estado; cE.style.color = f.ok === true ? "var(--teal, #1b7f6b)" : f.ok === false ? "var(--rust)" : "inherit"; }
+      else if(prob && f.incluir){ cE.textContent = prob; cE.style.color = "var(--rust)"; }
+      else if(f.recorte){ cE.textContent = "⚠ Trae " + (f.inscritosHoy - f.filas) + " personas menos que el curso hoy: se quitarían. Revísalo y márcalo si es correcto."; cE.style.color = "var(--rust)"; }
+      else cE.textContent = f.incluir ? "Listo para aplicar" : "Sin marcar";
+      // quitar
+      const cX = celda(); if(!lote.corriendo && f.ok === null){
+        const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-ghost btn-small"; b.textContent = "Quitar";
+        b.addEventListener("click", () => { lote.filas = lote.filas.filter(o => o !== f); lotePintar(); });
+        cX.appendChild(b);
+      }
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); wrap.appendChild(t); cont.appendChild(wrap);
+    const marcadas = lote.filas.filter(f => f.incluir && f.ok === null);
+    const malas = marcadas.filter(f => loteProblema(f));
+    const btn = document.getElementById("btn-lote-aplicar");
+    btn.disabled = lote.corriendo || !marcadas.length || malas.length > 0;
+    document.getElementById("lote-hint").textContent = lote.corriendo ? "" :
+      (malas.length ? "Hay " + malas.length + " archivo(s) marcados con algo por corregir." :
+       marcadas.length ? marcadas.length + " archivo(s) listos para aplicar." : "Marca al menos un archivo.");
+  }
+
+  // Procesa UN archivo con la pantalla de siempre. Devuelve {ok, msg}.
+  async function loteProcesarFila(f, avisos){
+    const kind = f.tipo;
+    await loadCourse(f.slug);
+    if(app.slug !== f.slug) return {ok: false, msg: "No se pudo abrir el curso"};
+    app.pending[kind] = null;
+    const solo = document.getElementById("santander-solo-completar"); if(solo) solo.checked = false;
+    handleFile(kind, f.file);
+    if(!(await esperar(() => app.pending[kind] && app.pending[kind].fileName === f.file.name && app.pending[kind].std, 20000)))
+      return {ok: false, msg: "No se pudo leer el archivo" + (avisos.length ? ": " + avisos[avisos.length - 1] : "")};
+    const p = app.pending[kind];
+    if(p.std.errors && p.std.errors.length) return {ok: false, msg: "El archivo no cumple el formato: " + p.std.errors[0]};
+    if(p.std.genValues && p.std.genValues.length > 1 && !p.genValor)
+      return {ok: false, msg: "Trae varias generaciones: súbelo por separado y elige la generación"};
+    const btn = document.getElementById("btn-process-" + kind);
+    if(!(await esperar(() => !btn.disabled, 240000, 150))) return {ok: false, msg: "El curso no terminó de cargar a tiempo"};
+    const antes = app.log.length ? app.log[0].date : null;
+    avisos.length = 0;
+    btn.click();
+    await app.procDone;
+    const despues = app.log.length ? app.log[0].date : null;
+    const huboError = avisos.some(a => /no se pudo|incompleto|no se guard/i.test(a));
+    const resumen = avisos.length ? avisos[avisos.length - 1].split("\n").filter(Boolean).slice(0, 2).join(" ") : "";
+    if(despues && despues !== antes && !huboError) return {ok: true, msg: (app.log[0].resumen || resumen || "Listo")};
+    return {ok: false, msg: resumen || "No se guardó nada"};
+  }
+
+  async function loteAplicar(){
+    if(lote.corriendo) return;
+    const cola = lote.filas.filter(f => f.incluir && f.ok === null && !loteProblema(f))
+      .sort((a, b) => a.slug === b.slug ? (a.tipo === "santander" ? -1 : 1) : (a.slug < b.slug ? -1 : 1));
+    if(!cola.length) return;
+    const quita = cola.filter(f => f.tipo === "santander").length;
+    if(!confirm("Se van a procesar " + cola.length + " archivo(s)" + (quita ? ", " + quita + " de Santander (reemplazan la lista de su curso y quitan a quien no venga)" : "") + ".\n\n¿Continuar?")) return;
+    lote.corriendo = true;
+    const avisos = [];
+    const _alert = window.alert, _confirm = window.confirm;
+    window.alert = m => { avisos.push(String(m)); };
+    window.confirm = m => { avisos.push(String(m)); return true; };
+    try{
+      for(let i = 0; i < cola.length; i++){
+        const f = cola[i];
+        f.estado = "Procesando (" + (i + 1) + " de " + cola.length + ")..."; f.ok = null; lotePintar();
+        document.getElementById("lote-hint").textContent = "Procesando " + (i + 1) + " de " + cola.length + ": " + f.file.name;
+        let r;
+        try{ r = await loteProcesarFila(f, avisos); }
+        catch(err){ console.error(err); r = {ok: false, msg: "Error: " + (err && err.message ? err.message : err)}; }
+        f.ok = r.ok; f.estado = (r.ok ? "✓ " : "✗ ") + r.msg; lotePintar();
+      }
+    }finally{
+      window.alert = _alert; window.confirm = _confirm;
+      lote.corriendo = false;
+      try{ app.coursesIndex = await fetchCoursesIndex(); renderCourseTabs(); }catch(e){ console.error(e); }
+      lotePintar();
+      const ok = lote.filas.filter(f => f.ok === true).length, mal = lote.filas.filter(f => f.ok === false).length;
+      document.getElementById("lote-hint").textContent = "Terminó: " + ok + " archivo(s) bien" + (mal ? ", " + mal + " con problema (los marcados en rojo no se guardaron)" : "") + ".";
+    }
+  }
+  (function(){
+    const drop = document.getElementById("drop-lote");
+    const input = document.getElementById("file-lote");
+    drop.addEventListener("click", () => input.click());
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("drag"); if(e.dataTransfer.files.length) loteAgregarArchivos(e.dataTransfer.files); });
+    input.addEventListener("change", e => { if(e.target.files.length) loteAgregarArchivos(e.target.files); input.value = ""; });
+    document.getElementById("btn-open-lote").addEventListener("click", () => { if(!lote.corriendo){ lote.filas = []; lotePintar(); } openModal("modal-lote"); });
+    document.getElementById("btn-lote-aplicar").addEventListener("click", loteAplicar);
+  })();
+
+  // ---------- Contraseñas desde Brevo → participantes de todos los cursos ----------
+  // La descarga de Brevo trae correo + contraseña. Se cruza por correo con la
+  // tabla madre de TODOS los cursos y la contraseña queda guardada en cada
+  // participante (campo "password"). Solo se escribe ese campo, con merge:
+  // no se agrega ni se quita a nadie y no se toca updatedAt del curso, así
+  // no choca con las cargas de Santander/plataforma.
+  const brevoPass = {mapa: null, fileName: "", plan: null, duplicadosDistintos: 0, sinPassword: 0};
+  const COLS_CORREO = ["email", "correo", "correoelectronico", "emailaddress", "mail"];
+  const COLS_PASS = ["password", "contrasena", "contrasenia", "clave"];
+  function colPorNombre(headers, candidatos){
+    const norm = headers.map(h => normalize(h).replace(/[^a-z0-9]/g, ""));
+    for(const c of candidatos){ const i = norm.indexOf(c); if(i !== -1) return headers[i]; }
+    return null;
+  }
+  function brevoPassReset(){
+    brevoPass.mapa = null; brevoPass.plan = null;
+    document.getElementById("tag-brevopass").classList.add("hidden");
+    document.getElementById("brevopass-preview").classList.add("hidden");
+    document.getElementById("brevopass-preview").innerHTML = "";
+    document.getElementById("btn-brevopass-aplicar").classList.add("hidden");
+    document.getElementById("btn-brevopass-aplicar").disabled = true;
+    document.getElementById("btn-brevopass-revisar").disabled = true;
+    document.getElementById("cta-brevopass").classList.add("hidden");
+    document.getElementById("brevopass-hint").textContent = "";
+  }
+  function brevoPassCargarArchivo(file){
+    brevoPassReset();
+    readWorkbook(file, wb => {
+      const {headers, rows} = sheetToRows(wb, wb.SheetNames[0], true);
+      const cCorreo = colPorNombre(headers, COLS_CORREO);
+      const cPass = colPorNombre(headers, COLS_PASS);
+      const hint = document.getElementById("brevopass-hint");
+      document.getElementById("cta-brevopass").classList.remove("hidden");
+      if(!cCorreo || !cPass){
+        hint.textContent = "No encontré " + (!cCorreo ? "la columna de correo (EMAIL o CORREO)" : "la columna de contraseña (PASSWORD o CONTRASENA)") + ". Columnas del archivo: " + headers.filter(Boolean).join(", ");
+        return;
+      }
+      const mapa = new Map();
+      let sinPassword = 0, duplicadosDistintos = 0;
+      rows.forEach(r => {
+        const email = String(r[cCorreo] === null || r[cCorreo] === undefined ? "" : r[cCorreo]).trim().toLowerCase();
+        const pass = String(r[cPass] === null || r[cPass] === undefined ? "" : r[cPass]).trim();
+        if(!email || email.indexOf("@") === -1) return;
+        if(!pass){ sinPassword++; return; }
+        if(mapa.has(email) && mapa.get(email) !== pass) duplicadosDistintos++;
+        mapa.set(email, pass);
+      });
+      brevoPass.mapa = mapa; brevoPass.fileName = file.name;
+      brevoPass.sinPassword = sinPassword; brevoPass.duplicadosDistintos = duplicadosDistintos;
+      const tag = document.getElementById("tag-brevopass");
+      tag.textContent = file.name + " — " + mapa.size + " correos con contraseña";
+      tag.classList.remove("hidden");
+      hint.textContent = mapa.size + " correos con contraseña" +
+        (sinPassword ? "; " + sinPassword + " sin contraseña (se omiten)" : "") +
+        (duplicadosDistintos ? "; " + duplicadosDistintos + " correos repetidos con contraseñas distintas (se usa la última fila)" : "") + ".";
+      document.getElementById("btn-brevopass-revisar").disabled = !mapa.size;
+    });
+  }
+  (function(){
+    const drop = document.getElementById("drop-brevopass");
+    const input = document.getElementById("file-brevopass");
+    drop.addEventListener("click", () => input.click());
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("drag"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+    drop.addEventListener("drop", e => {
+      e.preventDefault(); drop.classList.remove("drag");
+      if(e.dataTransfer.files.length) brevoPassCargarArchivo(e.dataTransfer.files[0]);
+    });
+    input.addEventListener("change", e => { if(e.target.files.length) brevoPassCargarArchivo(e.target.files[0]); });
+    document.getElementById("btn-open-brevopass").addEventListener("click", () => { brevoPassReset(); input.value = ""; openModal("modal-brevopass"); });
+  })();
+
+  // Revisión: lee la tabla madre de cada curso (solo lectura) y calcula, por
+  // curso, a quién se le guardaría contraseña. No escribe nada.
+  document.getElementById("btn-brevopass-revisar").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-brevopass-revisar");
+    const hint = document.getElementById("brevopass-hint");
+    const aplicar = document.getElementById("btn-brevopass-aplicar");
+    btn.disabled = true; aplicar.classList.add("hidden"); aplicar.disabled = true;
+    try{
+      const cursos = app.coursesIndex.slice();
+      const plan = [], encontrados = new Set();
+      for(let i = 0; i < cursos.length; i++){
+        const c = cursos[i];
+        hint.textContent = "Revisando curso " + (i + 1) + " de " + cursos.length + ": " + c.displayName + "...";
+        const snap = await masterColl(c.slug).get();
+        const cambios = []; let coinciden = 0, yaIguales = 0;
+        snap.docs.forEach(d => {
+          const data = d.data() || {};
+          const hit = emailsDe(data).find(e => brevoPass.mapa.has(e));
+          if(!hit) return;
+          coinciden++; encontrados.add(hit);
+          const pass = brevoPass.mapa.get(hit);
+          if(data.password === pass) yaIguales++;
+          else cambios.push({id: d.id, pass, tenia: !!data.password});
+        });
+        plan.push({slug: c.slug, nombre: c.displayName, total: snap.size, coinciden, yaIguales, cambios});
+      }
+      brevoPass.plan = plan;
+      const nuevos = plan.reduce((n, p) => n + p.cambios.filter(x => !x.tenia).length, 0);
+      const reemplazos = plan.reduce((n, p) => n + p.cambios.filter(x => x.tenia).length, 0);
+      const sinCurso = brevoPass.mapa.size - encontrados.size;
+      const filas = plan.filter(p => p.coinciden).map(p =>
+        "<tr><td>" + p.nombre.replace(/</g, "&lt;") + "</td><td style=\"text-align:right\">" + p.total + "</td><td style=\"text-align:right\">" + p.coinciden +
+        "</td><td style=\"text-align:right\">" + p.cambios.length + "</td><td style=\"text-align:right\">" + p.yaIguales + "</td></tr>").join("");
+      const prev = document.getElementById("brevopass-preview");
+      prev.innerHTML =
+        "<div class=\"panel-note\"><strong>" + (nuevos + reemplazos) + "</strong> participante(s) van a guardar contraseña (" + nuevos + " sin contraseña hoy" +
+        (reemplazos ? ", <strong style=\"color:var(--rust)\">" + reemplazos + " ya tenían otra y se reemplazan</strong>" : "") + "). " +
+        sinCurso + " correo(s) de Brevo no están en ningún curso de la central y se ignoran.</div>" +
+        (filas ? "<div style=\"overflow:auto;max-height:260px;margin-top:8px;\"><table><thead><tr><th>Curso</th><th>En el curso</th><th>En Brevo</th><th>Se guardan</th><th>Ya iguales</th></tr></thead><tbody>" + filas + "</tbody></table></div>" : "");
+      prev.classList.remove("hidden");
+      hint.textContent = (nuevos + reemplazos) ? "Revisa la tabla y confirma." : "No hay nada que guardar: todos ya tienen la misma contraseña.";
+      if(nuevos + reemplazos){ aplicar.classList.remove("hidden"); aplicar.disabled = false; }
+    }catch(err){
+      console.error(err);
+      hint.textContent = "No se pudo revisar: " + (err && err.message ? err.message : err);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  // Aplicar: escribe SOLO el campo password (merge) en cada participante.
+  document.getElementById("btn-brevopass-aplicar").addEventListener("click", async () => {
+    const aplicar = document.getElementById("btn-brevopass-aplicar");
+    const hint = document.getElementById("brevopass-hint");
+    if(!brevoPass.plan) return;
+    const plan = brevoPass.plan.filter(p => p.cambios.length);
+    const total = plan.reduce((n, p) => n + p.cambios.length, 0);
+    if(!confirm("Se va a guardar la contraseña de " + total + " participante(s) en " + plan.length + " curso(s). No se agrega ni se quita a nadie.\n\n¿Continuar?")) return;
+    aplicar.disabled = true;
+    let guardados = 0; const fallidos = [];
+    try{
+      for(let i = 0; i < plan.length; i++){
+        const p = plan[i];
+        hint.textContent = "Guardando curso " + (i + 1) + " de " + plan.length + ": " + p.nombre + "...";
+        let okCurso = 0;
+        for(const chunk of chunkArray(p.cambios, 400)){
+          try{
+            const batch = db.batch();
+            chunk.forEach(c => batch.set(masterColl(p.slug).doc(c.id), {password: c.pass}, {merge: true}));
+            await batch.commit();
+            okCurso += chunk.length;
+          }catch(err){
+            console.error("Fallo guardando contraseñas de " + p.slug, err);
+            fallidos.push(p.nombre + " (" + chunk.length + ")");
+          }
+        }
+        guardados += okCurso;
+        if(okCurso){
+          try{
+            await addLogRemote(p.slug, {date: nowISO(), tipo: "Contraseñas (Brevo)", archivo: brevoPass.fileName,
+              resumen: okCurso + " participante(s) con contraseña guardada desde Brevo", por: quien()});
+          }catch(err){ console.error(err); }
+        }
+      }
+    }finally{
+      hint.textContent = "Listo: " + guardados + " contraseña(s) guardadas" + (fallidos.length ? ". Fallaron: " + fallidos.join(", ") + ". Vuelve a subir el archivo para completarlo." : ".");
+      aplicar.classList.add("hidden");
+      brevoPass.plan = null;
+      if(app.slug && plan.some(p => p.slug === app.slug)) await loadCourse(app.slug);
+    }
+  });
 
   // ---------- "Faltan por dar de alta" → archivo para la subida de usuarios de Moodle ----------
   // Columnas del CSV de Moodle: username, password, firstname, lastname,
