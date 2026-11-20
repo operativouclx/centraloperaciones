@@ -4326,11 +4326,13 @@ const db = firebase.firestore();
       const info = npsColumnInfo(rows, col);
       let text = info.validas + " de " + rows.length + " respuestas con calificación válida";
       if(info.validas){
-        const p = info.scores.filter(n => n >= 9).length, d = info.scores.filter(n => n <= 6).length;
-        text += " — NPS preliminar: " + Math.round((p - d) / info.validas * 100);
+        const e5 = npsEsEscala5(info.scores, col), u = umbralesNps(e5);
+        const sc = e5 ? info.scores.map(npsDe5a10) : info.scores;
+        const p = sc.filter(n => n >= u.p).length, d = sc.filter(n => n < u.s).length;
+        text += " — NPS preliminar: " + Math.round((p - d) / info.validas * 100) + (e5 ? " (calificación 1–5 recalculada a 1–10)" : "");
       }
       preview.appendChild(el("div", {class:"muted"}, [document.createTextNode(text + ".")]));
-      if(!info.validas || !info.numerica || info.max <= 5){
+      if(!info.validas || !info.numerica || (info.max <= 5 && !npsEsEscala5(info.scores, col))){
         preview.appendChild(el("div", {style:"color:var(--rust);margin-top:4px;"}, [document.createTextNode(
           "Ojo: esta columna no parece de 0 a 10 (" + (info.estrellas ? "trae estrellas / escala 1–5" : !info.validas ? "no tiene números" : "el valor más alto es " + info.max) + "). Revisa que sea la pregunta de recomendación."
         )]));
@@ -4471,13 +4473,27 @@ const db = firebase.firestore();
     });
     return bestScore >= 3 ? best : "";
   }
-  function npsTipo(n){
-    return n >= 9 ? "Promotor" : n >= 7 ? "Pasivo" : "Detractor";
+  // Cortes de promotor y pasivo. En la escala normal (0–10): 9–10 promotor,
+  // 7–8 pasivo. En VocaAcción, ya recalculada (1=2, 2=4, 3=6, 4=8, 5=10):
+  // 8–10 promotor, 6–7 pasivo, 0–5 detractor.
+  function umbralesNps(escala5){ return escala5 ? {p: 8, s: 6} : {p: 9, s: 7}; }
+  function npsTipo(n, u){
+    u = u || umbralesNps(false);
+    return n >= u.p ? "Promotor" : n >= u.s ? "Pasivo" : "Detractor";
   }
   // La encuesta de VocaAcción se califica del 1 al 5. Se recalcula a la
   // escala 1–10 del NPS (1→2, 2→4, 3→6, 4→8, 5→10) para que promotores,
   // pasivos y detractores se midan igual que en los demás cursos.
   function npsDe5a10(n){ return n * 2; }
+  // ¿Estas calificaciones vienen del 1 al 5? Sí si el curso es de VocaAcción
+  // (cualquier nombre con "voca") o la pregunta dice "1-5" / "1 a 5", y
+  // ninguna respuesta pasa de 5.
+  function npsEsEscala5(scores, encabezado){
+    if(!scores.length || Math.max(...scores) > 5) return false;
+    const pareceVoca = /voca/.test(squash((app.slug || "") + " " + ((app.meta && app.meta.displayName) || "") + " " + ((app.meta && app.meta.familia) || "")));
+    const dice1a5 = /(^|[^0-9])1\s*(-|a|al)\s*5([^0-9]|$)/.test(normalize(encabezado));
+    return esVocaccion(app.meta) || pareceVoca || dice1a5;
+  }
 
   document.getElementById("btn-open-nps").addEventListener("click", () => {
     openModal("modal-nps");
@@ -4502,18 +4518,15 @@ const db = firebase.firestore();
     // VocaAcción califica del 1 al 5: si todas las respuestas válidas caben
     // en esa escala, se recalculan a 1–10.
     const crudas = rows.map(row => parseNpsScore(row[scoreCol])).filter(v => v !== null);
-    // Se reconoce por el curso (cualquier nombre con "voca": VocaAcción 2026, UNAM,
-    // CECYTE...) o porque la pregunta dice "1-5" / "1 a 5" en su encabezado.
-    const pareceVoca = /voca/.test(squash((app.slug || "") + " " + ((app.meta && app.meta.displayName) || "") + " " + ((app.meta && app.meta.familia) || "")));
-    const dice1a5 = /(^|[^0-9])1\s*(-|a|al)\s*5([^0-9]|$)/.test(normalize(scoreCol));
-    const escala5 = (esVocaccion(app.meta) || pareceVoca || dice1a5) && crudas.length > 0 && Math.max(...crudas) <= 5;
+    const escala5 = npsEsEscala5(crudas, scoreCol);
+    const umbral = umbralesNps(escala5);
     rows.forEach(row => {
       const cruda = parseNpsScore(row[scoreCol]);
       const n = cruda !== null && escala5 ? npsDe5a10(cruda) : cruda;
       if(n === null){ sinCalificacion++; }
       else {
         distribucion[n]++;
-        if(n >= 9) promotores++; else if(n >= 7) pasivos++; else detractores++;
+        if(n >= umbral.p) promotores++; else if(n >= umbral.s) pasivos++; else detractores++;
       }
       const com = commentCol ? String(row[commentCol] ?? "").trim() : "";
       if(com){
@@ -4521,7 +4534,7 @@ const db = firebase.firestore();
         if(nameCol) fila["Nombre"] = row[nameCol] || "";
         fila["Calificación"] = n === null ? "" : n;
         if(escala5) fila["Calificación original (1-5)"] = cruda === null ? "" : cruda;
-        fila["Tipo"] = n === null ? "" : npsTipo(n);
+        fila["Tipo"] = n === null ? "" : npsTipo(n, umbral);
         fila["Comentario"] = com;
         comentarios.push(fila);
       }
@@ -4616,10 +4629,14 @@ const db = firebase.firestore();
     card.appendChild(big);
 
     const mid = el("div", {style:"flex:1;min-width:260px;"});
+    const e5 = nps.escalaOriginal === "1-5", u = umbralesNps(e5);
+    const rangoD = "(0–" + (u.s - 1) + ")", rangoP = "(" + u.s + "–" + (u.p - 1) + ")", rangoPr = "(" + u.p + "–10)";
+    const chipTxt = {promotor: "Promotores " + rangoPr, pasivo: "Pasivos " + rangoP, detractor: "Detractores " + rangoD};
+    document.querySelectorAll('.filter-chip[data-filter-key="nps"]').forEach(b => { if(chipTxt[b.dataset.filterValue]) b.textContent = chipTxt[b.dataset.filterValue]; });
     const segs = [
-      ["Detractores (0–6)", nps.detractores, "var(--rust)"],
-      ["Pasivos (7–8)", nps.pasivos, "#C7C9E0"],
-      ["Promotores (9–10)", nps.promotores, "var(--teal)"]
+      ["Detractores " + rangoD, nps.detractores, "var(--rust)"],
+      ["Pasivos " + rangoP, nps.pasivos, "#C7C9E0"],
+      ["Promotores " + rangoPr, nps.promotores, "var(--teal)"]
     ];
     const bar = el("div", {style:"display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--line-soft);"});
     segs.forEach(([, count, color]) => {
@@ -4643,7 +4660,7 @@ const db = firebase.firestore();
     const maxD = Math.max(1, ...(nps.distribucion || []));
     const dist = el("div", {style:"display:flex;align-items:flex-end;gap:4px;height:70px;margin-top:14px;"});
     (nps.distribucion || []).forEach((count, i) => {
-      const color = i >= 9 ? "var(--teal)" : i >= 7 ? "#C7C9E0" : "var(--rust)";
+      const color = i >= u.p ? "var(--teal)" : i >= u.s ? "#C7C9E0" : "var(--rust)";
       const col = el("div", {style:"flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:2px;", title: i + ": " + count});
       col.appendChild(el("div", {style:"font-size:10px;color:var(--ink-soft);"}, [document.createTextNode(count ? String(count) : "")]));
       const b = el("div", {style:"width:100%;border-radius:3px 3px 0 0;background:" + color + ";"});
@@ -4685,7 +4702,7 @@ const db = firebase.firestore();
       "NPS de este curso" + (nps.filtro ? " (" + nps.filtro + ")" : "")
     )]));
     if(nps.pregunta){
-      root.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:4px;"}, [document.createTextNode("Pregunta usada: " + nps.pregunta + (nps.escalaOriginal === "1-5" ? " — calificación del 1 al 5 recalculada a 1–10 (5 = 10 promotor)" : ""))]));
+      root.appendChild(el("div", {class:"muted", style:"font-size:12px;margin-bottom:4px;"}, [document.createTextNode("Pregunta usada: " + nps.pregunta + (nps.escalaOriginal === "1-5" ? " — calificación del 1 al 5 recalculada a 1–10 (1=2, 2=4, 3=6, 4=8, 5=10; promotor 8–10, pasivo 6–7)" : ""))]));
     }
     let nota = "Última carga: " + fmtDate(nps.fecha) + (nps.archivo ? " — " + nps.archivo : "") + (nps.por ? " (" + nps.por + ")" : "") + ".";
     if(nps.comentariosTotal > (nps.comentarios || []).length){
@@ -5704,9 +5721,9 @@ const db = firebase.firestore();
       npsLeft.appendChild(el("div", {style:"font-size:11px;color:#5c5c7a"}, [document.createTextNode(n.total + " respuestas")]));
       npsCard.appendChild(npsLeft);
       const npsStats = el("div", {style:"display:flex;gap:24px;flex-wrap:wrap;flex:1"});
-      npsStats.appendChild(dashStatRow("Promotores (9–10)", n.promotores/n.total*100, n.promotores, "#6884fd"));
-      npsStats.appendChild(dashStatRow("Pasivos (7–8)", n.pasivos/n.total*100, n.pasivos, "#8a8aab"));
-      npsStats.appendChild(dashStatRow("Detractores (0–6)", n.detractores/n.total*100, n.detractores, "#A8493C"));
+      npsStats.appendChild(dashStatRow("Promotores (" + (n.escalaOriginal === "1-5" ? 8 : 9) + "–10)", n.promotores/n.total*100, n.promotores, "#6884fd"));
+      npsStats.appendChild(dashStatRow(n.escalaOriginal === "1-5" ? "Pasivos (6–7)" : "Pasivos (7–8)", n.pasivos/n.total*100, n.pasivos, "#8a8aab"));
+      npsStats.appendChild(dashStatRow(n.escalaOriginal === "1-5" ? "Detractores (0–5)" : "Detractores (0–6)", n.detractores/n.total*100, n.detractores, "#A8493C"));
       npsCard.appendChild(npsStats);
       wrap.appendChild(npsCard);
 

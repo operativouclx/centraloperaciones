@@ -237,11 +237,14 @@
     if(!cals.length) throw new Error("No hay calificaciones de 0 a 10.");
     const av = [];
     // VocaAcción califica del 1 al 5: se recalcula a 1–10 (1→2, 2→4, 3→6, 4→8, 5→10).
-    if((/voca/.test(norm(x.c.slug + " " + x.cfg.nombre)) || /(^|[^0-9])1\s*(-|a|al)\s*5([^0-9]|$)/.test(norm(cCal))) && Math.max(...cals) <= 5){
+    const voca5 = (/voca/.test(norm(x.c.slug + " " + x.cfg.nombre)) || /(^|[^0-9])1\s*(-|a|al)\s*5([^0-9]|$)/.test(norm(cCal))) && Math.max(...cals) <= 5;
+    if(voca5){
       cals.forEach((c, i) => { cals[i] = c * 2; });
       av.push("Las calificaciones venían del 1 al 5 y se recalcularon al 1–10.");
     }
-    const cuenta = M.npsDesdeCalificaciones(cals);
+    // Con la escala de VocaAcción recalculada: 8–10 promotor, 6–7 pasivo, 0–5 detractor.
+    const cuenta = voca5 ? {promotores: cals.filter(c => c >= 8).length, pasivos: cals.filter(c => c >= 6 && c < 8).length, detractores: cals.filter(c => c < 6).length}
+      : M.npsDesdeCalificaciones(cals);
     if(cTipo){
       const dif = cals.filter((c, i) => tipos[i] && tipos[i] !== norm(M.tipoNps(c))).length;
       if(dif) av.push(dif + " filas tienen un Tipo distinto al que sale de la calificación. Se usó la calificación.");
