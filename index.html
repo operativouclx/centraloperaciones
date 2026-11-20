@@ -588,6 +588,12 @@
       <div class="tab-panel" data-panel="nps">
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar en comentarios..." data-search="nps">
+          <div class="quick-filters" id="filters-nps">
+            <button type="button" class="filter-chip active" data-filter-key="nps" data-filter-value="all">Todos</button>
+            <button type="button" class="filter-chip" data-filter-key="nps" data-filter-value="promotor">Promotores (9–10)</button>
+            <button type="button" class="filter-chip" data-filter-key="nps" data-filter-value="pasivo">Pasivos (7–8)</button>
+            <button type="button" class="filter-chip" data-filter-key="nps" data-filter-value="detractor">Detractores (0–6)</button>
+          </div>
           <button class="btn btn-ghost btn-small" data-download="nps">Descargar Excel</button>
         </div>
         <div id="nps-summary"></div>
@@ -2494,6 +2500,7 @@ const db = firebase.firestore();
     app.selectedAnio = app.meta.anio || inferAnioLegacy(app.slug, app.meta.displayName) || SIN_ANIO;
     renderCourseTabs();
     resetTableFilter("madre");
+    resetTableFilter("nps");
 
     const esHistorico = app.meta.tipo === "historico";
     // Alianza no sube base de Santander ni tiene meta de convocatoria —
@@ -5755,6 +5762,9 @@ const db = firebase.firestore();
     if(!filterValue || filterValue === "all") return true;
     if(filterValue === "enplat") return row["Estado"] === "En plataforma";
     if(filterValue === "falta") return row["Estado"] !== "En plataforma";
+    if(filterValue === "promotor" || filterValue === "pasivo" || filterValue === "detractor"){
+      return normalize(row["Tipo"]) === filterValue;
+    }
     if(filterValue === "p0" || filterValue === "p1" || filterValue === "p2" || filterValue === "p3" || filterValue === "p4"){
       const pct = parseFloat(row["Progreso"]);
       if(isNaN(pct)) return false;
