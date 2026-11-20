@@ -2323,6 +2323,7 @@ const db = firebase.firestore();
   function renderClienteResumen(){
     const box = document.getElementById("cliente-resumen");
     if(!box) return;
+    if(app.slug){ box.classList.add("hidden"); return; }
     const cli = CLIENTES.find(c => c.id === app.selectedCliente);
     const anio = new Date().getFullYear();
     const r = resumenCliente(app.selectedCliente, anio);
