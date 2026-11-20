@@ -3984,10 +3984,27 @@ const db = firebase.firestore();
       try{
         await courseDoc(app.slug).set({passwordInicial: password}, {merge: true});
         app.meta.passwordInicial = password;
-        setSaveStatus("Contraseña guardada para este curso.");
       }catch(err){
         console.error("No se pudo guardar la contraseña del curso:", err);
         alert("El archivo se descargó, pero no se pudo guardar la contraseña en el curso: " + (err && err.message ? err.message : err));
+      }
+    }
+    // La contraseña también queda en la tabla madre, en cada persona exportada.
+    const pendientes = records.filter(r => r.password !== password);
+    if(pendientes.length){
+      setSaveStatus("Guardando contraseña en la tabla madre...");
+      try{
+        for(const chunk of chunkArray(pendientes, 400)){
+          const batch = db.batch();
+          chunk.forEach(r => batch.set(masterColl(app.slug).doc(sanitizeDocId(r._key)), {password}, {merge: true}));
+          await batch.commit();
+        }
+        pendientes.forEach(r => { r.password = password; });
+        renderMasterTable();
+        setSaveStatus("Contraseña guardada en la tabla madre (" + pendientes.length + " persona(s)).");
+      }catch(err){
+        console.error("No se pudo guardar la contraseña en la tabla madre:", err);
+        alert("El archivo se descargó, pero no se pudo guardar la contraseña en la tabla madre: " + (err && err.message ? err.message : err));
       }
     }
   });
@@ -4805,7 +4822,8 @@ const db = firebase.firestore();
     row["Apellidos"] = np.apellidos;
     row["Email"] = emailDe(record);
     row["Entidad"] = record.entidad || "";
-    const usedKeys = new Set(["Estado","Progreso","Nombres","Apellidos","Nombre","Email"]);
+    row["Contraseña"] = record.password || "";
+    const usedKeys = new Set(["Estado","Progreso","Nombres","Apellidos","Nombre","Email","Contraseña"]);
     // Primero lo de plataforma (lo que se revisa a diario) y luego lo de Santander.
     Object.keys(record.plataformaExtra || {}).forEach(c => {
       const label = usedKeys.has(c) ? c + " (Plataforma)" : c;
