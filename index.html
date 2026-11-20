@@ -443,6 +443,8 @@
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
       <select id="course-select" class="hidden"><option value="">Cargando...</option></select>
 
+      <div id="cliente-resumen" class="hidden"></div>
+
       <div id="course-head" class="course-head hidden">
         <div>
           <h2 id="course-name-display" style="display:inline"></h2>
@@ -2249,6 +2251,7 @@ const db = firebase.firestore();
     document.getElementById("course-head").classList.add("hidden");
     document.getElementById("course-dependent").classList.add("hidden");
     document.getElementById("course-family-meta-panel").innerHTML = "";
+    renderClienteResumen();
   }
 
   // Renderiza, para el año actualmente seleccionado, el desplegable
@@ -2293,6 +2296,68 @@ const db = firebase.firestore();
     if(app.slug) sel.value = app.slug;
   }
 
+  // ---------- Totales por cliente (cuando no hay un curso abierto) ----------
+  // Suma todos los cursos no archivados del cliente (de todos los años). Las
+  // metas solo existen para Santander Open Academy. Tasa de término = misma
+  // definición que el dashboard del curso: 80% o más de avance sobre inscritos.
+  const METAS_CLIENTE = {soa: {inscritos: 17200, tasa: 30, nps: 85}};
+  function escH(s){ return String(s === null || s === undefined ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function resumenCliente(clienteId){
+    const cursos = app.coursesIndex
+      .filter(c => !c.archived && clienteDe(c) === clienteId)
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .map(c => {
+        const insc = inscritosCurso(c), fin = (c.stats && c.stats.p4) || 0;
+        return {nombre: c.displayName, insc, fin, tasa: insc ? fin / insc * 100 : 0, nps: c.nps};
+      });
+    const insc = cursos.reduce((a, c) => a + c.insc, 0), fin = cursos.reduce((a, c) => a + c.fin, 0);
+    const n = cursos.reduce((a, c) => { const q = c.nps; return q ? {p: a.p + q.promotores, s: a.s + q.pasivos, d: a.d + q.detractores} : a; }, {p: 0, s: 0, d: 0});
+    const resp = n.p + n.s + n.d;
+    return {cursos, insc, fin, tasa: insc ? fin / insc * 100 : 0, npsScore: resp ? Math.round((n.p - n.d) / resp * 100) : null, npsResp: resp};
+  }
+  function renderClienteResumen(){
+    const box = document.getElementById("cliente-resumen");
+    if(!box) return;
+    if(app.slug){ box.classList.add("hidden"); return; }
+    const cli = CLIENTES.find(c => c.id === app.selectedCliente);
+    const r = resumenCliente(app.selectedCliente);
+    if(!cli || !r.cursos.length){ box.classList.add("hidden"); return; }
+    const metas = METAS_CLIENTE[app.selectedCliente] || null;
+    const f1 = x => (Math.round(x * 10) / 10).toLocaleString("es-MX");
+    const signo = x => (x >= 0 ? "+" : "") + x;
+    const kpi = (titulo, valor, meta, detalle, ok) => {
+      const color = meta === null ? "var(--ink)" : (ok ? "#17835a" : "#c23a56");
+      return '<div style="flex:1;min-width:210px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;">' +
+        '<div style="font-size:12px;color:var(--ink-soft);font-weight:600;">' + titulo + '</div>' +
+        '<div style="font-size:30px;font-weight:700;color:' + color + ';line-height:1.2;">' + valor + '</div>' +
+        (meta !== null ? '<div style="font-size:12.5px;color:var(--ink-soft);">Meta: <b>' + meta + '</b></div>' +
+          '<div style="font-size:12.5px;font-weight:600;color:' + color + ';">' + detalle + '</div>' : '') + '</div>';
+    };
+    let tarjetas;
+    if(metas){
+      const okI = r.insc >= metas.inscritos, okT = r.tasa >= metas.tasa, okN = r.npsScore !== null && r.npsScore >= metas.nps;
+      tarjetas = kpi("Inscritos (total global)", r.insc.toLocaleString("es-MX"), metas.inscritos.toLocaleString("es-MX"),
+          Math.round(r.insc / metas.inscritos * 100) + "% de la meta · " + (okI ? "meta cumplida" : "faltan " + (metas.inscritos - r.insc).toLocaleString("es-MX")), okI) +
+        kpi("Tasa de término (total global)", f1(r.tasa) + "%", metas.tasa + "%", signo(f1(r.tasa - metas.tasa)) + " pp contra la meta", okT) +
+        kpi("NPS (total global)", r.npsScore === null ? "—" : signo(r.npsScore), metas.nps,
+          r.npsScore === null ? "sin respuestas cargadas" : signo(r.npsScore - metas.nps) + " puntos contra la meta · " + r.npsResp.toLocaleString("es-MX") + " respuestas", okN);
+    } else {
+      tarjetas = kpi("Inscritos (total global)", r.insc.toLocaleString("es-MX"), null) + kpi("Tasa de término (total global)", f1(r.tasa) + "%", null) +
+        kpi("NPS (total global)", r.npsScore === null ? "—" : signo(r.npsScore), null);
+    }
+    const th = 'style="text-align:left;padding:6px 10px;background:var(--teal);color:#fff;font-size:12.5px;"', thr = 'style="text-align:right;padding:6px 10px;background:var(--teal);color:#fff;font-size:12.5px;"';
+    const td = 'style="padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:13.5px;"', tdr = 'style="padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:13.5px;text-align:right;"';
+    const filas = r.cursos.map(c => '<tr><td ' + td + '>' + escH(c.nombre) + '</td><td ' + tdr + '>' + c.insc.toLocaleString("es-MX") + '</td><td ' + tdr + '>' + c.fin.toLocaleString("es-MX") +
+      '</td><td ' + tdr + '>' + f1(c.tasa) + '%</td><td ' + tdr + '>' + (c.nps && c.nps.total ? signo(c.nps.score) + ' <span style="color:var(--ink-soft);font-size:12px;">(' + c.nps.total.toLocaleString("es-MX") + ' resp.)</span>' : '—') + '</td></tr>').join("");
+    const tot = 'style="padding:7px 10px;font-weight:700;background:var(--teal-bg);font-size:13.5px;"', totr = 'style="padding:7px 10px;font-weight:700;background:var(--teal-bg);font-size:13.5px;text-align:right;"';
+    box.innerHTML = '<div style="margin:14px 0 6px;font-weight:700;font-size:16px;">' + escH(cli.label) + ' — totales de todos los cursos</div>' +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">' + tarjetas + '</div>' +
+      '<div style="overflow:auto;"><table style="border-collapse:collapse;width:100%;"><thead><tr><th ' + th + '>Curso</th><th ' + thr + '>Inscritos</th><th ' + thr + '>Terminaron (≥80%)</th><th ' + thr + '>Tasa de término</th><th ' + thr + '>NPS</th></tr></thead><tbody>' + filas +
+      '<tr><td ' + tot + '>Total global</td><td ' + totr + '>' + r.insc.toLocaleString("es-MX") + '</td><td ' + totr + '>' + r.fin.toLocaleString("es-MX") + '</td><td ' + totr + '>' + f1(r.tasa) + '%</td><td ' + totr + '>' + (r.npsScore === null ? "—" : signo(r.npsScore)) + '</td></tr></tbody></table></div>' +
+      '<div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Tasa de término = personas con 80% o más de avance entre inscritos. El NPS global junta las respuestas de todos los cursos.</div>';
+    box.classList.remove("hidden");
+  }
+
   function renderCourseTabs(){
     const visibleCliente = app.coursesIndex.filter(c =>
       !c.archived && (c.cliente || inferClienteLegacy(c.displayName)) === app.selectedCliente
@@ -2306,6 +2371,7 @@ const db = firebase.firestore();
     }
     renderAnioTabs(anios);
     renderCourseGroups();
+    renderClienteResumen();
   }
 
   document.getElementById("course-select").addEventListener("change", async (e) => {
@@ -2313,6 +2379,7 @@ const db = firebase.firestore();
   });
   document.getElementById("course-year-select").addEventListener("change", async (e) => {
     if(e.target.value && e.target.value !== app.slug) await loadCourse(e.target.value);
+    else if(!e.target.value && app.slug) closeOpenCourse();
   });
 
   document.getElementById("btn-new-course").addEventListener("click", async () => {
@@ -2377,6 +2444,7 @@ const db = firebase.firestore();
     if(loadToken !== app.courseLoadToken) return; // el usuario ya cambió de curso
 
     app.slug = slug;
+    renderClienteResumen();
     app.meta = meta;
     app.loadedUpdatedAt = meta.updatedAt || null;
     app.baseline = baseline;
