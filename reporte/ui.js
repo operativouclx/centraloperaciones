@@ -237,7 +237,7 @@
     if(!cals.length) throw new Error("No hay calificaciones de 0 a 10.");
     const av = [];
     // VocaAcción califica del 1 al 5: se recalcula a 1–10 (1→1, 2→3, 3→6, 4→8, 5→10).
-    if(/voca+c+ion/.test(norm(x.c.slug + " " + x.cfg.nombre)) && Math.max(...cals) <= 5){
+    if((/voca/.test(norm(x.c.slug + " " + x.cfg.nombre)) || /(^|[^0-9])1\s*(-|a|al)\s*5([^0-9]|$)/.test(norm(cCal))) && Math.max(...cals) <= 5){
       cals.forEach((c, i) => { cals[i] = Math.round(1 + (Math.max(1, c) - 1) * 9 / 4); });
       av.push("Las calificaciones venían del 1 al 5 y se recalcularon al 1–10.");
     }
