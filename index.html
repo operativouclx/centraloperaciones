@@ -348,6 +348,8 @@
   .tab[data-tab="historial"] .badge{background:#E3E9E7;color:var(--ink-soft);}
 
   .tab-panel{display:none;}
+  /* La tabla madre (pestañas y tablas) solo se ve en la ventana de "Ver tabla madre". */
+  #section-results > #madre-wrap{display:none;}
   .tab-panel.active{display:block;}
 
   .panel-note{font-size:13.5px;padding:12px 14px;border-radius:8px;margin-bottom:14px;}
@@ -437,7 +439,7 @@
         <input id="buscar-correo" class="input-text" type="search" placeholder="Buscar un correo en todo el portal..." style="min-width:240px;flex:1;max-width:340px;">
         <button class="btn btn-ghost btn-small" id="btn-buscar-correo" type="button">Buscar</button>
         <button class="btn btn-ghost btn-small" id="btn-export-full-db" type="button">Exportar base completa (Excel)</button>
-        <button class="btn btn-primary btn-small" id="btn-open-reporte" type="button" title="Dashboards en PDF, base completa, correo para Santander y cierre del mes">Reporte mensual</button>
+        <button class="btn btn-ghost btn-small" id="btn-open-reporte" type="button" title="Dashboards en PDF, base completa, correo para Santander y cierre del mes">Reporte mensual</button>
         <button class="btn btn-primary btn-small" id="btn-open-new-course" type="button">+ Nuevo curso</button>
       </div>
       <div id="courses-load-error" class="panel-note rust hidden" style="margin-top:10px;"></div>
@@ -454,16 +456,16 @@
           <button type="button" id="btn-delete-course" class="btn-rename-course" title="Eliminar este curso por completo" style="color:var(--rust);">🗑 eliminar curso</button>
           <button type="button" id="btn-undo-today" class="btn-rename-course" title="Quita los registros nuevos que se agregaron hoy" style="color:var(--rust);">↩ quitar carga de hoy</button>
           <div class="course-head-actions" style="margin-top:10px;">
-            <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">1. Actualizar base de Santander</button>
-            <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">2. Actualizar plataforma</button>
-            <button class="btn btn-primary btn-small" id="btn-open-nps" type="button" title="Sube la encuesta de satisfacción: calcula el NPS y el promedio de estrellas por pregunta.">Cargar NPS</button>
+            <button class="btn btn-primary btn-small" id="btn-open-santander" type="button" title="Se compara contra la tabla madre: solo se destacan los nuevos y los que cambiaron.">Subir Base Santander</button>
+            <button class="btn btn-primary btn-small" id="btn-open-plataforma" type="button" title="Se cruza contra toda la tabla madre y se refresca el progreso de todos.">Subir Plataforma</button>
+            <button class="btn btn-primary btn-small" id="btn-open-nps" type="button" title="Sube la encuesta de satisfacción: calcula el NPS y el promedio de estrellas por pregunta.">Subir NPS</button>
             <button class="btn btn-primary btn-small hidden" id="btn-open-listafinal" type="button" title="Curso histórico: sube la lista final y actualiza nombre, correo y % de avance de cada quien.">Actualizar lista final</button>
           </div>
           <div class="course-head-actions" style="margin-top:6px;">
-            <button class="btn btn-ghost btn-small" data-vista="dashboard" type="button">Dashboard</button>
+            <button class="btn btn-ghost btn-small" data-vista="madre" type="button">Ver tabla madre</button>
             <button class="btn btn-ghost btn-small" data-vista="nps" type="button">Ver NPS</button>
+            <button class="btn btn-ghost btn-small" id="btn-open-ux" type="button" title="Recorrido del participante de este programa">Ver UX del participante</button>
             <button class="btn btn-ghost btn-small" data-vista="historial" type="button">Historial de cargas</button>
-            <button class="btn btn-ghost btn-small" id="btn-open-ux" type="button" title="Recorrido del participante de este programa">UX del participante</button>
           </div>
           <div class="save-status" id="save-status"></div>
         </div>
@@ -488,6 +490,7 @@
 
       <div id="course-progress-summary" class="progress-summary"></div>
 
+      <div id="madre-wrap">
       <div class="tabs">
         <button class="tab active" data-tab="madre">Tabla madre <span class="badge" id="badge-madre">0</span></button>
         <button class="tab" data-tab="alta">Faltan por dar de alta <span class="badge" id="badge-alta">0</span></button>
@@ -570,21 +573,23 @@
         <div id="manual-root"></div>
       </div>
 
-      <div class="tab-panel" data-panel="nps">
-        <div class="table-toolbar">
-          <input class="search-box" placeholder="Buscar en comentarios..." data-search="nps">
-          <button class="btn btn-ghost btn-small" data-download="nps">Descargar Excel</button>
-        </div>
-        <div id="nps-summary"></div>
-        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
-      </div>
-
       <div class="tab-panel" data-panel="duplicados">
         <div class="panel-note amber">Personas que aparecen más de una vez en la base (mismo correo o mismo nombre). Cada grupo trae el mismo número en la columna "Grupo". Estos registros no salen en "Faltan por dar de alta" ni en "Nuevos en la última carga".</div>
         <div class="table-toolbar">
           <input class="search-box" placeholder="Buscar por nombre o correo..." data-search="duplicados">
           <button class="btn btn-ghost btn-small" data-download="duplicados">Descargar Excel</button>
         </div>
+        <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      </div><!-- /madre-wrap -->
+
+      <div class="tab-panel" data-panel="nps">
+        <div class="table-toolbar">
+          <input class="search-box" placeholder="Buscar en comentarios..." data-search="nps">
+          <button class="btn btn-ghost btn-small" data-download="nps">Descargar Excel</button>
+        </div>
+        <div id="nps-summary"></div>
         <div class="table-scroll"><table><thead></thead><tbody></tbody></table></div>
       </div>
 
@@ -1061,7 +1066,7 @@ const db = firebase.firestore();
   // desde botones del encabezado del curso. El panel se mueve a una ventana
   // mientras está abierta y regresa a su lugar al cerrarla, así todo lo que
   // ya lo dibuja sigue funcionando igual.
-  const VISTAS = {dashboard: "Dashboard del curso", nps: "NPS", historial: "Historial de cargas"};
+  const VISTAS = {madre: "Tabla madre", dashboard: "Dashboard del curso", nps: "NPS", historial: "Historial de cargas"};
   const vistaAbierta = {panel: null, padre: null, siguiente: null};
   function devolverVista(){
     if(!vistaAbierta.panel) return;
@@ -1070,7 +1075,7 @@ const db = firebase.firestore();
     vistaAbierta.panel = null;
   }
   function abrirVista(key){
-    const panel = document.querySelector('.tab-panel[data-panel="' + key + '"]');
+    const panel = key === "madre" ? document.getElementById("madre-wrap") : document.querySelector('.tab-panel[data-panel="' + key + '"]');
     if(!panel || !VISTAS[key]) return;
     devolverVista();
     vistaAbierta.panel = panel;
@@ -2318,7 +2323,6 @@ const db = firebase.firestore();
   function renderClienteResumen(){
     const box = document.getElementById("cliente-resumen");
     if(!box) return;
-    if(app.slug){ box.classList.add("hidden"); return; }
     const cli = CLIENTES.find(c => c.id === app.selectedCliente);
     const r = resumenCliente(app.selectedCliente);
     if(!cli || !r.cursos.length){ box.classList.add("hidden"); return; }
