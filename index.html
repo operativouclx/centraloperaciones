@@ -4475,9 +4475,9 @@ const db = firebase.firestore();
     return n >= 9 ? "Promotor" : n >= 7 ? "Pasivo" : "Detractor";
   }
   // La encuesta de VocaAcción se califica del 1 al 5. Se recalcula a la
-  // escala 1–10 del NPS (1→1, 2→3, 3→6, 4→8, 5→10) para que promotores,
+  // escala 1–10 del NPS (1→2, 2→4, 3→6, 4→8, 5→10) para que promotores,
   // pasivos y detractores se midan igual que en los demás cursos.
-  function npsDe5a10(n){ return Math.round(1 + (Math.max(1, n) - 1) * 9 / 4); }
+  function npsDe5a10(n){ return n * 2; }
 
   document.getElementById("btn-open-nps").addEventListener("click", () => {
     openModal("modal-nps");
@@ -4562,7 +4562,7 @@ const db = firebase.firestore();
     const logEntry = {
       date: nowISO(), tipo:"NPS", archivo: app.pending.nps.fileName,
       resumen: "NPS " + score + " — " + total + " respuestas (" + promotores + " promotores, " + pasivos + " pasivos, " + detractores + " detractores)" +
-        (escala5 ? " — calificación 1-5 recalculada a 1-10" : "") +
+        (escala5 ? " — calificación 1-5 recalculada a 1-10 (1=2, 2=4, 3=6, 4=8, 5=10)" : "") +
         (nps.filtro ? " — filtrado por " + nps.filtro : ""),
       por: nps.por
     };
