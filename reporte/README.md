@@ -15,13 +15,8 @@ node --test tests/metricas.test.js
 
 ## Firestore
 Colecciones nuevas (no se tocó la estructura existente): `config_reporte/{slug}` y
-`cierres/{AAAA-MM}/cursos/{slug}`. Reglas necesarias (ajusta a las que ya tengas):
-
-```
-match /config_reporte/{doc} { allow read, write: if request.auth != null && request.auth.token.email.matches('.*@uclx[.]media'); }
-match /cierres/{periodo} { allow read, write: if request.auth != null && request.auth.token.email.matches('.*@uclx[.]media');
-  match /cursos/{curso} { allow read, write: if request.auth != null && request.auth.token.email.matches('.*@uclx[.]media'); } }
-```
+`cierres/{AAAA-MM}/cursos/{slug}`. No necesitan reglas nuevas: la regla comodín actual
+(`match /{document=**}` con `esDelEquipo()`, solo cuentas @uclx.media) ya las cubre.
 
 El NPS cargado desde el reporte vive en `config_reporte/{slug}.nps_actual` (solo conteos);
 si no existe se usa el NPS que ya tenga el curso en `courses/{slug}.nps`.
